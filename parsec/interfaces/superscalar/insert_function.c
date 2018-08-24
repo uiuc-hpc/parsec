@@ -36,7 +36,7 @@
 #include "parsec/parsec_config.h"
 #include "parsec/parsec_internal.h"
 #include "parsec/scheduling.h"
-#include "parsec/remote_dep.h"
+#include "parsec/parsec_remote_dep.h"
 #include "parsec/mca/device/device.h"
 #include "parsec/constants.h"
 #include "parsec/vpmap.h"

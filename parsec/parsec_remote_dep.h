@@ -1,22 +1,29 @@
 /*
- * Copyright (c) 2009-2019 The University of Tennessee and The University
+ * Copyright (c) 2009-2018 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  */
-#ifndef __PARSEC_USE_REMOTE_DEP_H__
-#define __PARSEC_USE_REMOTE_DEP_H__
+#ifndef __USE_REMOTE_DEP_H__
+#define __USE_REMOTE_DEP_H__
 
 /** @addtogroup parsec_internal_communication
  *  @{
  */
 
+#include "parsec/bindthread.h"
+#include "parsec/class/dequeue.h"
 #include "parsec/class/lifo.h"
 #include "parsec/parsec_description_structures.h"
+#include "parsec/parsec_internal.h"
 #include "parsec/parsec_comm_engine.h"
-
-BEGIN_C_DECLS
+#include "parsec/scheduling.h"
 
 typedef unsigned long remote_dep_datakey_t;
+
+#define PARSEC_DTD_SKIP_SAVING -1
+
+char **dep_activate_buff;
+
 
 #define PARSEC_ACTION_DEPS_MASK                  0x00FFFFFF
 #define PARSEC_ACTION_RELEASE_LOCAL_DEPS         0x01000000
@@ -31,18 +38,19 @@ typedef struct remote_dep_wire_activate_s
 {
     remote_dep_datakey_t deps;         /**< a pointer to the dep structure on the source */
     remote_dep_datakey_t output_mask;  /**< the mask of the output dependencies satisfied by this activation message */
-    remote_dep_datakey_t tag;
     uint32_t             taskpool_id;
     uint32_t             task_class_id;
     uint32_t             length;
-    parsec_assignment_t  locals[MAX_LOCAL_COUNT];
+    parsec_assignment_t         locals[MAX_LOCAL_COUNT];
 } remote_dep_wire_activate_t;
 
 typedef struct remote_dep_wire_get_s
 {
-    remote_dep_datakey_t deps;
+    remote_dep_datakey_t source_deps;
+    remote_dep_datakey_t remote_callback_data;
     remote_dep_datakey_t output_mask;
-    remote_dep_datakey_t tag;
+    uintptr_t callback_fn;
+    parsec_ce_mem_reg_handle_t remote_memory_handle;
 } remote_dep_wire_get_t;
 
 /**
@@ -58,8 +66,8 @@ struct parsec_dep_data_description_s {
     struct parsec_arena_s     *arena;
     struct parsec_data_copy_s *data;
     parsec_datatype_t          layout;
-    uint64_t                   count;
-    int64_t                    displ;
+    uint64_t                  count;
+    int64_t                   displ;
 };
 
 struct remote_dep_output_param_s {
@@ -70,12 +78,12 @@ struct remote_dep_output_param_s {
     parsec_list_item_t                    super;
     parsec_remote_deps_t                 *parent;
     struct parsec_dep_data_description_s  data;        /**< The data propagated by this message. */
-    uint32_t                              deps_mask;   /**< A bitmask of all the output dependencies
-                                                            propagated by this message. The bitmask uses
-                                                            depedencies indexes not flow indexes. */
-    int32_t                               priority;    /**< the priority of the message */
-    uint32_t                              count_bits;  /**< The number of participants */
-    uint32_t*                             rank_bits;   /**< The array of bits representing the propagation path */
+    uint32_t                             deps_mask;   /**< A bitmask of all the output dependencies
+                                                       propagated by this message. The bitmask uses
+                                                       depedencies indexes not flow indexes. */
+    int32_t                              priority;    /**< the priority of the message */
+    uint32_t                             count_bits;  /**< The number of participants */
+    uint32_t*                            rank_bits;   /**< The array of bits representing the propagation path */
 };
 
 struct parsec_remote_deps_s {
@@ -88,6 +96,7 @@ struct parsec_remote_deps_s {
     uint32_t                         incoming_mask;  /**< track all incoming actions (receives) */
     uint32_t                         outgoing_mask;  /**< track all outgoing actions (send) */
     remote_dep_wire_activate_t       msg;     /**< A copy of the message control */
+    void                            *eager_msg; /**< A pointer to the eager buffer if this is an eager msg, otherwise NULL */
     int32_t                          max_priority;
     int32_t                          priority;
     uint32_t                        *remote_dep_fw_mask;  /**< list of peers already notified about
@@ -183,8 +192,125 @@ int parsec_remote_dep_propagate(parsec_execution_stream_t* es,
 #define remote_dep_mpi_initialize_execution_stream(ctx) 0
 #endif /* DISTRIBUTED */
 
-END_C_DECLS
-
 /** @} */
 
-#endif /* __PARSEC_USE_REMOTE_DEP_H__ */
+typedef struct dep_cmd_item_s dep_cmd_item_t;
+typedef union dep_cmd_u dep_cmd_t;
+
+#define DEP_NB_CONCURENT 3
+
+extern int parsec_comm_gets_max;
+extern int parsec_comm_gets;
+extern int parsec_comm_puts_max;
+extern int parsec_comm_puts;
+
+/**
+ * The order is important as it will be used to compute the index in the
+ * pending array of messages.
+ */
+typedef enum dep_cmd_action_t {
+    DEP_ACTIVATE      = -1,
+    DEP_NEW_TASKPOOL  =  0,
+    DEP_MEMCPY,
+    DEP_RELEASE,
+    DEP_DTD_DELAYED_RELEASE,
+    DEP_GET_DATA,
+    DEP_CTL,
+    DEP_LAST  /* always the last element. it shoud not be used */
+} dep_cmd_action_t;
+
+union dep_cmd_u {
+    struct {
+        remote_dep_wire_get_t      task;
+        int                        peer;
+        parsec_ce_mem_reg_handle_t remote_memory_handle;
+    } activate;
+    struct {
+        parsec_remote_deps_t  *deps;
+    } release;
+    struct {
+        int enable;
+    } ctl;
+    struct {
+        parsec_taskpool_t    *tp;
+    } new_taskpool;
+    struct {
+        parsec_taskpool_t    *taskpool;
+        parsec_data_copy_t   *source;
+        parsec_data_copy_t   *destination;
+        parsec_datatype_t     datatype;
+        int64_t               displ_s;
+        int64_t               displ_r;
+        int                   count;
+    } memcpy;
+};
+
+struct dep_cmd_item_s {
+    parsec_list_item_t super;
+    parsec_list_item_t pos_list;
+    dep_cmd_action_t  action;
+    int               priority;
+    dep_cmd_t         cmd;
+};
+
+
+void* remote_dep_dequeue_main(parsec_context_t* context);
+int remote_dep_dequeue_send(parsec_execution_stream_t* es, int rank, parsec_remote_deps_t* deps);
+int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp);
+
+int remote_dep_dequeue_init(parsec_context_t* context);
+int remote_dep_dequeue_fini(parsec_context_t* context);
+#ifdef PARSEC_REMOTE_DEP_USE_THREADS
+int remote_dep_dequeue_on(parsec_context_t* context);
+int remote_dep_dequeue_off(parsec_context_t* context);
+/*static int remote_dep_dequeue_progress(parsec_execution_stream_t* es);*/
+#   define remote_dep_init(ctx) remote_dep_dequeue_init(ctx)
+#   define remote_dep_fini(ctx) remote_dep_dequeue_fini(ctx)
+#   define remote_dep_on(ctx)   remote_dep_dequeue_on(ctx)
+#   define remote_dep_off(ctx)  remote_dep_dequeue_off(ctx)
+#   define remote_dep_new_taskpool(tp) remote_dep_dequeue_new_taskpool(tp)
+#   define remote_dep_send(es, rank, deps) remote_dep_dequeue_send(es, rank, deps)
+#   define remote_dep_progress(es, cycles) remote_dep_dequeue_nothread_progress(es, cycles)
+
+#else
+int remote_dep_mpi_on(parsec_context_t* context);
+#   define remote_dep_init(ctx) remote_dep_dequeue_init(ctx)
+#   define remote_dep_fini(ctx) remote_dep_dequeue_fini(ctx)
+#   define remote_dep_on(ctx)   remote_dep_mpi_on(ctx)
+#   define remote_dep_off(ctx)  0
+#   define remote_dep_new_taskpool(tp) remote_dep_dequeue_new_taskpool(tp)
+#   define remote_dep_send(es, rank, deps) remote_dep_dequeue_send(es, rank, deps)
+#   define remote_dep_progress(es, cycles) remote_dep_dequeue_nothread_progress(es, cycles)
+#endif
+int remote_dep_dequeue_nothread_progress(parsec_execution_stream_t* es, int cycles);
+
+
+
+
+int remote_dep_bind_thread(parsec_context_t* context);
+int remote_dep_complete_and_cleanup(parsec_remote_deps_t** deps,
+                                int ncompleted);
+
+/* comm_yield mode: see valid values in the corresponding mca_register */
+extern int comm_yield;
+/* comm_yield_duration (ns) */
+extern int comm_yield_ns;
+
+/* make sure we don't leave before serving all data deps */
+static inline void
+remote_dep_inc_flying_messages(parsec_taskpool_t* handle)
+{
+    assert( handle->nb_pending_actions > 0 );
+    (void)parsec_atomic_fetch_inc_int32( &(handle->nb_pending_actions) );
+}
+
+/* allow for termination when all deps have been served */
+static inline void
+remote_dep_dec_flying_messages(parsec_taskpool_t *handle)
+{
+    (void)parsec_taskpool_update_runtime_nbtask(handle, -1);
+}
+
+int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx );
+
+#endif /* __USE_REMOTE_DEP_H__ */

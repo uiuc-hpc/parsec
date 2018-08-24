@@ -13,6 +13,7 @@
 #include "parsec/data_distribution.h"
 #include "parsec/datatype.h"
 #include "parsec/scheduling.h"
+#include "parsec/parsec_remote_dep.h"
 #include "parsec/utils/debug.h"
 
 #include "parsec/interfaces/interface.h"
