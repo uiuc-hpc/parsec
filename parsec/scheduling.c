@@ -13,7 +13,8 @@
 #include "parsec/vpmap.h"
 #include "parsec/mca/pins/pins.h"
 #include "parsec/os-spec-timing.h"
-#include "parsec/remote_dep.h"
+//#include "parsec/remote_dep.h"
+#include "parsec/parsec_remote_dep.h"
 #include "parsec/scheduling.h"
 #include "parsec/papi_sde.h"
 

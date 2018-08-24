@@ -22,9 +22,7 @@
 
 #define PARSEC_REMOTE_DEP_USE_THREADS
 
-#define PARSEC_DTD_SKIP_SAVING -1
 
-static char **dep_activate_buff;
 
 typedef struct dep_cmd_item_s dep_cmd_item_t;
 typedef union dep_cmd_u dep_cmd_t;
@@ -49,6 +47,7 @@ static int remote_dep_nothread_memcpy(parsec_execution_stream_t* es,
 
 static int remote_dep_dequeue_send(parsec_execution_stream_t* es, int rank, parsec_remote_deps_t* deps);
 static int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp);
+
 #ifdef PARSEC_REMOTE_DEP_USE_THREADS
 static int remote_dep_dequeue_init(parsec_context_t* context);
 static int remote_dep_dequeue_fini(parsec_context_t* context);
@@ -259,7 +258,7 @@ static parsec_execution_stream_t parsec_comm_es = {
  * copy to make sure the communicator does not dissapear before the communication
  * engine starts up.
  */
-static int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx )
+int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx )
 {
     MPI_Comm comm;
     int rc;
