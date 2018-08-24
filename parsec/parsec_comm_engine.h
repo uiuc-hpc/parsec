@@ -1,0 +1,122 @@
+/*
+ * Copyright (c) 2009-2018 The University of Tennessee and The University
+ *                         of Tennessee Research Foundation.  All rights
+ *                         reserved.
+ */
+#ifndef __USE_PARSEC_COMM_ENGINE_H__
+#define __USE_PARSEC_COMM_ENGINE_H__
+
+#include <stddef.h>
+#include <stdint.h>
+#include "parsec/runtime.h"
+
+typedef int parsec_converter_t;
+typedef char * parsec_ce_mem_reg_handle_t;
+
+typedef struct parsec_comm_engine_s parsec_comm_engine_t;
+
+typedef int (*parsec_ce_callback_t)(void *cb_data);
+
+typedef uint8_t parsec_ce_tag_t;
+
+typedef int (*parsec_ce_am_callback_t)(parsec_comm_engine_t *ce,
+                                       parsec_ce_tag_t tag,
+                                       void *msg,
+                                       size_t msg_size,
+                                       int src,
+                                       void *cb_data);
+
+typedef int (*parsec_ce_tag_register_fn_t)(parsec_ce_tag_t tag,
+                                           parsec_ce_am_callback_t cb,
+                                           void *cb_data,
+                                           size_t msg_length/*bytes*/);
+
+typedef int (*parsec_ce_tag_unregister_fn_t)(parsec_ce_tag_t tag);
+
+typedef int (*parsec_ce_mem_register_fn_t)(void *mem, size_t mem_size,
+                                           parsec_converter_t *conv,
+                                           parsec_ce_mem_reg_handle_t *lreg,
+                                           size_t *lreg_size);
+
+typedef int (*parsec_ce_mem_unregister_fn_t)(parsec_ce_mem_reg_handle_t *lreg);
+
+typedef int (*parsec_ce_mem_retrieve_fn_t)(parsec_ce_mem_reg_handle_t lreg, void **mem, size_t *size);
+
+typedef int (*parsec_ce_onesided_callback_t)(parsec_comm_engine_t *comm_engine,
+                             parsec_ce_mem_reg_handle_t lreg,
+                             ptrdiff_t ldispl,
+                             parsec_ce_mem_reg_handle_t rreg,
+                             ptrdiff_t rdispl,
+                             size_t size,
+                             int remote,
+                             void *cb_data);
+
+typedef int (*parsec_ce_put_fn_t)(parsec_comm_engine_t *comm_engine,
+                                  parsec_ce_mem_reg_handle_t lreg,
+                                  ptrdiff_t ldispl,
+                                  parsec_ce_mem_reg_handle_t rreg,
+                                  ptrdiff_t rdispl,
+                                  size_t size,
+                                  int remote,
+                                  parsec_ce_onesided_callback_t cb,
+                                  void *cb_data);
+
+typedef int (*parsec_ce_get_fn_t)(parsec_comm_engine_t *comm_engine,
+                                  parsec_ce_mem_reg_handle_t lreg,
+                                  ptrdiff_t ldispl,
+                                  parsec_ce_mem_reg_handle_t rreg,
+                                  ptrdiff_t rdispl,
+                                  size_t size,
+                                  int remote,
+                                  parsec_ce_onesided_callback_t cb,
+                                  void *cb_data);
+
+typedef int (*parsec_ce_send_active_message_fn_t)(parsec_comm_engine_t *comm_engine,
+                                             parsec_ce_tag_t tag,
+                                             int remote,
+                                             void *addr, size_t size);
+
+typedef int (*parsec_ce_progress_fn_t)(parsec_comm_engine_t *comm_engine);
+
+typedef int (*parsec_ce_enable_fn_t)(parsec_comm_engine_t *comm_engine);
+typedef int (*parsec_ce_disable_fn_t)(parsec_comm_engine_t *comm_engine);
+
+typedef int (*parsec_ce_pack_fn_t)(parsec_comm_engine_t *ce,
+                                   void *inbuf, int incount,
+                                   void *outbuf, int outsize,
+                                   int *positionA);
+
+typedef int (*parsec_ce_unpack_fn_t)(parsec_comm_engine_t *ce,
+                                     void *inbuf, int insize, int *position,
+                                     void *outbuf, int outcount);
+
+typedef int (*parsec_ce_sync_fn_t)(parsec_comm_engine_t *comm_engine);
+typedef int (*parsec_ce_can_serve_fn_t)(parsec_comm_engine_t *comm_engine);
+
+struct parsec_comm_engine_s {
+    parsec_context_t             *parsec_context;
+    parsec_ce_tag_register_fn_t   tag_register;
+    parsec_ce_tag_unregister_fn_t tag_unregister;
+    parsec_ce_mem_register_fn_t   mem_register;
+    parsec_ce_mem_unregister_fn_t mem_unregister;
+    parsec_ce_mem_retrieve_fn_t   mem_retrieve;
+    parsec_ce_put_fn_t            put;
+    parsec_ce_get_fn_t            get;
+    parsec_ce_progress_fn_t       progress;
+    parsec_ce_enable_fn_t         enable;
+    parsec_ce_disable_fn_t        disable;
+    parsec_ce_pack_fn_t           pack;
+    parsec_ce_unpack_fn_t         unpack;
+    parsec_ce_sync_fn_t           sync;
+    parsec_ce_can_serve_fn_t      can_serve;
+    parsec_ce_send_active_message_fn_t send_active_message;
+};
+
+
+/* global comm_engine */
+parsec_comm_engine_t parsec_ce;
+
+parsec_comm_engine_t * parsec_comm_engine_init(parsec_context_t *parsec_context);
+int parsec_comm_engine_fini(parsec_comm_engine_t *comm_engine);
+
+#endif /* __USE_PARSEC_COMM_ENGINE_H__ */

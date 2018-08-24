@@ -9,7 +9,8 @@
 #include "parsec/debug_marks.h"
 #include "parsec/utils/debug.h"
 #include "parsec/parsec_internal.h"
-#include "parsec/remote_dep.h"
+//#include "parsec/remote_dep.h"
+#include "parsec/parsec_remote_dep.h"
 
 void debug_mark_exe(int th, int vp, const struct parsec_task_s *ctx)
 {

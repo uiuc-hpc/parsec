@@ -88,6 +88,9 @@ set(SOURCES
   private_mempool.c
   ${PROFILING_SOURCE}
   remote_dep.c
+  parsec_comm_engine.c
+  parsec_mpi_funnelled.c
+  parsec_remote_dep.c
   scheduling.c
   vpmap.c
   maxheap.c

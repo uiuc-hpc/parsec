@@ -6,7 +6,8 @@
 
 #include "parsec/runtime.h"
 #include "parsec/utils/debug.h"
-#include "parsec/remote_dep.h"
+//#include "parsec/remote_dep.h"
+#include "parsec/parsec_remote_dep.h"
 #include "parsec/data_dist/matrix/matrix.h"
 #include "parsec/parsec_prof_grapher.h"
 #include "parsec/scheduling.h"
