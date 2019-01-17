@@ -248,7 +248,6 @@ struct dep_cmd_item_s {
     dep_cmd_t         cmd;
 };
 
-
 int remote_dep_dequeue_send(int rank, parsec_remote_deps_t* deps);
 int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp);
 int remote_dep_dequeue_init(parsec_context_t* context);

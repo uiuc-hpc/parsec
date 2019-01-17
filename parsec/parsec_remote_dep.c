@@ -1058,9 +1058,10 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
         parsec_ce_mem_reg_handle_t lreg;
         parsec_ce_mem_reg_handle_t rreg = task->lreg; /* lreg of msg is the rreg for this rank */
         size_t lreg_size;
-        int dtt_size;
+        /*int dtt_size;
         MPI_Type_size(dtt, &dtt_size);
-        parsec_ce.mem_register(dataptr, dtt_size, NULL, &lreg, &lreg_size);
+        parsec_ce.mem_register(dataptr, dtt_size, NULL, &lreg, &lreg_size);*/
+        parsec_ce.mem_register(dataptr, nbdtt, dtt, &lreg, &lreg_size);
 
 #if defined(PARSEC_DEBUG_NOISIER)
         PARSEC_DEBUG_VERBOSE(6, parsec_debug_output, "MPI:\tTO\t%d\tPut START\tunknown \tk=%d\twith deps 0x%lx at %p type bla\t(tag=bla displ = %ld)",
@@ -1228,9 +1229,10 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
          */
         parsec_ce_mem_reg_handle_t lreg;
         size_t lreg_size;
-        int dtt_size;
+        /*int dtt_size;
         MPI_Type_size(dtt, &dtt_size);
-        parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), dtt_size, NULL, &lreg, &lreg_size);
+        parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), dtt_size, NULL, &lreg, &lreg_size); */
+        parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), nbdtt, dtt, &lreg, &lreg_size);
 
         msg.lreg = lreg;
 

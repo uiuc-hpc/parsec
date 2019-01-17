@@ -9,9 +9,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "parsec/runtime.h"
+#include "parsec/datatype.h"
 
-typedef int parsec_converter_t;
 typedef char * parsec_ce_mem_reg_handle_t;
+
 
 typedef struct parsec_comm_engine_s parsec_comm_engine_t;
 
@@ -33,14 +34,14 @@ typedef int (*parsec_ce_tag_register_fn_t)(parsec_ce_tag_t tag,
 
 typedef int (*parsec_ce_tag_unregister_fn_t)(parsec_ce_tag_t tag);
 
-typedef int (*parsec_ce_mem_register_fn_t)(void *mem, size_t mem_size,
-                                           parsec_converter_t *conv,
+typedef int (*parsec_ce_mem_register_fn_t)(void *mem, size_t count,
+                                           parsec_datatype_t datatype,
                                            parsec_ce_mem_reg_handle_t *lreg,
                                            size_t *lreg_size);
 
 typedef int (*parsec_ce_mem_unregister_fn_t)(parsec_ce_mem_reg_handle_t *lreg);
 
-typedef int (*parsec_ce_mem_retrieve_fn_t)(parsec_ce_mem_reg_handle_t lreg, void **mem, size_t *size);
+typedef int (*parsec_ce_mem_retrieve_fn_t)(parsec_ce_mem_reg_handle_t lreg, void **mem, parsec_datatype_t *datatype, int *count);
 
 typedef int (*parsec_ce_onesided_callback_t)(parsec_comm_engine_t *comm_engine,
                              parsec_ce_mem_reg_handle_t lreg,

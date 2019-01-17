@@ -36,7 +36,8 @@ typedef struct mpi_funnelled_mem_reg_handle_s {
     parsec_list_item_t        super;
     parsec_thread_mempool_t *mempool_owner;
     void  *mem;
-    size_t size;
+    parsec_datatype_t datatype;
+    int count;
 } mpi_funnelled_mem_reg_handle_t;
 
 PARSEC_DECLSPEC OBJ_CLASS_DECLARATION(mpi_funnelled_mem_reg_handle_t);
@@ -214,7 +215,9 @@ mpi_funnelled_internal_get_am_callback(parsec_comm_engine_t *ce,
     assert(mpi_funnelled_last_active_req >= mpi_funnelled_static_req_idx);
 
     /* Now we can post the Isend on the lreg */
-    MPI_Isend(lreg->mem, lreg->size, MPI_BYTE, src, am_data->tag, comm,
+    /*MPI_Isend(lreg->mem, lreg->size, MPI_BYTE, src, am_data->tag, comm,
+              &array_of_requests[mpi_funnelled_last_active_req]);*/
+    MPI_Isend(lreg->mem, lreg->count, lreg->datatype, src, am_data->tag, comm,
               &array_of_requests[mpi_funnelled_last_active_req]);
     /* At this point we do not care when this Isend is finished */
     cb = &array_of_callbacks[mpi_funnelled_last_active_req];
@@ -258,7 +261,8 @@ mpi_funnelled_internal_put_am_callback(parsec_comm_engine_t *ce,
     assert(mpi_funnelled_last_active_req >= mpi_funnelled_static_req_idx);
     /* Time to post Irecv with tag given to me */
     /* Now we can post the Irecv on the lreg */
-    MPI_Irecv(ldata->mem, ldata->size, MPI_BYTE, src, am_data->tag, comm,
+    //MPI_Irecv(ldata->mem, ldata->size, MPI_BYTE, src, am_data->tag, comm,
+    MPI_Irecv(ldata->mem, ldata->count, ldata->datatype, src, am_data->tag, comm,
               &array_of_requests[mpi_funnelled_last_active_req]);
     /* At this point we do not care when this Isend is finished */
     cb = &array_of_callbacks[mpi_funnelled_last_active_req];
@@ -284,7 +288,7 @@ mpi_funnelled_init(parsec_context_t *context)
     int i, mpi_tag_ub_exists, *ub;
 
     /* Initialize the communicator we will be using for communication */
-    if( NULL != context->comm_ctx ) {
+    if( NULL != context && NULL != context->comm_ctx ) {
         MPI_Comm_dup(*(MPI_Comm*)context->comm_ctx, &comm);
     }
     else {
@@ -310,8 +314,10 @@ mpi_funnelled_init(parsec_context_t *context)
         }
     }
 
-    MPI_Comm_size(comm, &(context->nb_nodes));
-    MPI_Comm_rank(comm, &(context->my_rank));
+    if(NULL != context) {
+        MPI_Comm_size(comm, &(context->nb_nodes));
+        MPI_Comm_rank(comm, &(context->my_rank));
+    }
 
     /* Make all the fn pointers point to this compnent's function */
     parsec_ce.tag_register   = mpi_no_thread_tag_register;
@@ -547,19 +553,19 @@ mpi_no_thread_tag_unregister(parsec_ce_tag_t tag)
 }
 
 int
-mpi_no_thread_mem_register(void *mem, size_t mem_size,
-                           parsec_converter_t *conv,
+mpi_no_thread_mem_register(void *mem, size_t count,
+                           parsec_datatype_t datatype,
                            parsec_ce_mem_reg_handle_t *lreg,
                            size_t *lreg_size)
 {
-    (void) conv;
     *lreg = (char *)parsec_thread_mempool_allocate(mpi_funnelled_mem_reg_handle_mempool->thread_mempools);
 
     mpi_funnelled_mem_reg_handle_t *handle = (mpi_funnelled_mem_reg_handle_t *) *lreg;
     *lreg_size = sizeof(mpi_funnelled_mem_reg_handle_t);
 
     handle->mem  = mem;
-    handle->size = mem_size;
+    handle->datatype = datatype;
+    handle->count = count;
 
     // Push in a table
 
@@ -579,11 +585,12 @@ mpi_no_thread_mem_unregister(parsec_ce_mem_reg_handle_t *lreg)
  */
 int
 mpi_no_thread_mem_retrieve(parsec_ce_mem_reg_handle_t lreg,
-                           void **mem, size_t *mem_size)
+                           void **mem, parsec_datatype_t *datatype, int *count)
 {
     mpi_funnelled_mem_reg_handle_t *handle = (mpi_funnelled_mem_reg_handle_t *) lreg;
     *mem = handle->mem;
-    *mem_size = handle->size;
+    *datatype = handle->datatype;
+    *count = handle->count;
 
     return 1;
 }
@@ -621,7 +628,9 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
 
     assert(mpi_funnelled_last_active_req >= mpi_funnelled_static_req_idx);
     /* Now we can post the Isend on the lreg */
-    MPI_Isend(ldata->mem, ldata->size, MPI_BYTE, remote, tag, comm,
+    /*MPI_Isend((char *)ldata->mem + ldispl, ldata->size, MPI_BYTE, remote, tag, comm,
+              &array_of_requests[mpi_funnelled_last_active_req]);*/
+    MPI_Isend((char *)ldata->mem + ldispl, ldata->count, ldata->datatype, remote, tag, comm,
               &array_of_requests[mpi_funnelled_last_active_req]);
     cb = &array_of_callbacks[mpi_funnelled_last_active_req];
     cb->cb_type.onesided.fct = callback;
@@ -672,7 +681,8 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
 
     assert(mpi_funnelled_last_active_req >= mpi_funnelled_static_req_idx);
     /* Now we can post the Irecv on the lreg */
-    MPI_Irecv(ldata->mem, ldata->size, MPI_BYTE, remote, tag, comm,
+    //MPI_Irecv((char*)ldata->mem + ldispl, ldata->count, MPI_BYTE, remote, tag, comm,
+    MPI_Irecv((char*)ldata->mem + ldispl, ldata->count, ldata->datatype, remote, tag, comm,
               &array_of_requests[mpi_funnelled_last_active_req]);
     cb = &array_of_callbacks[mpi_funnelled_last_active_req];
     cb->cb_type.onesided.fct = callback;

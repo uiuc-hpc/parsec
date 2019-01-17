@@ -79,8 +79,12 @@ get_end(parsec_comm_engine_t *ce,
 {
     (void) ldispl; (void) rdispl; (void) size; (void) remote; (void) cb_data;
     void *mem;
-    size_t mem_size;
-    ce->mem_retrieve(lreg, &mem, &mem_size);
+    int mem_size;
+    int count;
+    parsec_datatype_t datatype;
+    ce->mem_retrieve(lreg, &mem, &datatype, &count);
+
+    parsec_type_size(datatype, &mem_size);
 
     printf("[%d] GET is over, message:\n", my_rank);
     int *test_buffer = (int *)mem;
@@ -128,7 +132,11 @@ notify_about_get(parsec_comm_engine_t *ce,
     parsec_ce_mem_reg_handle_t lreg;
     size_t lreg_size;
     int *test_buffer = malloc(sizeof(int) * 9);
-    ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
+
+    parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+    parsec_type_create_contiguous(9, parsec_datatype_int_t, datatype);
+    ce->mem_register(test_buffer, 1, *datatype, &lreg, &lreg_size);
+    //ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
 
     /* Let's start the GET */
     ce->get(ce, lreg, 0, noti_am->lreg, noti_am->ldispl, 0, src, get_end, (void *) ce);
@@ -149,8 +157,11 @@ get_end_ack(parsec_comm_engine_t *ce,
     (void) tag; (void) msg_size; (void) src; (void) cb_data;
     get_noti_am_t *noti_am = (get_noti_am_t *)msg;
     void *mem;
-    size_t mem_size;
-    ce->mem_retrieve(noti_am->lreg, &mem, &mem_size);
+
+    int count;
+    parsec_datatype_t datatype;
+    ce->mem_retrieve(noti_am->lreg, &mem, &datatype, &count);
+    //ce->mem_retrieve(noti_am->lreg, &mem, &mem_size);
 
     printf("[%d] Notification of GET over received\n", my_rank);
     int *test_buffer = (int *)mem;
@@ -182,7 +193,11 @@ notify_about_put(parsec_comm_engine_t *ce,
     parsec_ce_mem_reg_handle_t lreg;
     size_t lreg_size;
     int *test_buffer = malloc(sizeof(int) * 9);
-    ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
+
+    parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+    parsec_type_create_contiguous(9, parsec_datatype_int_t, datatype);
+    ce->mem_register(test_buffer, 1, *datatype, &lreg, &lreg_size);
+    //ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
 
     /* Let's do a put ack to pass the mem_reg of this side */
     get_noti_am_t noti_am_1;
@@ -216,10 +231,12 @@ put_end(parsec_comm_engine_t *ce,
     (void) ldispl; (void) rdispl; (void) size; (void) remote; (void) cb_data;
     printf("[%d] PUT is finished\n", my_rank);
 
-
     void *mem;
-    size_t mem_size;
-    ce->mem_retrieve(lreg, &mem, &mem_size);
+
+    int count;
+    parsec_datatype_t datatype;
+    ce->mem_retrieve(lreg, &mem, &datatype, &count);
+    //ce->mem_retrieve(lreg, &mem, &mem_size);
 
     free(mem);
 
@@ -276,8 +293,14 @@ put_end_ack(parsec_comm_engine_t *ce,
     get_noti_am_t *noti_am = (get_noti_am_t *)msg;
 
     void *mem;
-    size_t mem_size;
-    ce->mem_retrieve(noti_am->lreg, &mem, &mem_size);
+    int mem_size;
+
+    int count;
+    parsec_datatype_t datatype;
+    ce->mem_retrieve(noti_am->lreg, &mem, &datatype, &count);
+    //ce->mem_retrieve(noti_am->lreg, &mem, &mem_size);
+
+    parsec_type_size(datatype, &mem_size);
 
     printf("[%d] PUT is over, message:\n", my_rank);
     int *test_buffer = (int *)mem;
@@ -299,9 +322,7 @@ put_end_ack(parsec_comm_engine_t *ce,
 
 int main(int argc, char **argv)
 {
-    parsec_context_t *parsec = NULL;
-
-    int rank, world, cores = 1;
+    int rank, world;
     int i;
 
 #if defined(PARSEC_HAVE_MPI)
@@ -317,9 +338,8 @@ int main(int argc, char **argv)
 #endif
 
     my_rank = rank;
-    parsec = parsec_init( cores, &argc, &argv );
 
-    parsec_comm_engine_t *ce = parsec_comm_engine_init(parsec);
+    parsec_comm_engine_t *ce = parsec_comm_engine_init(NULL);
 
     if( world != 2 ) {
         printf("World is too small, too bad! Buh-bye");
@@ -393,7 +413,10 @@ int main(int argc, char **argv)
             test_buffer[i] = i;
         }
         /* Registering a memory with a mem_reg_handle */
-        ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
+        parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+        parsec_type_create_contiguous(9, parsec_datatype_int_t, datatype);
+        ce->mem_register(test_buffer, 1, *datatype, &lreg, &lreg_size);
+        //ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
 
         printf("[%d] Starting a GET (1 will get from 0), message:\n", my_rank);
         for(i = 0; i < 9; i++) {
@@ -433,7 +456,10 @@ int main(int argc, char **argv)
         for(i = 0; i < 9; i++) {
             test_buffer[i] = i * 2;
         }
-        ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
+        parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+        parsec_type_create_contiguous(9, parsec_datatype_int_t, datatype);
+        ce->mem_register(test_buffer, 1, *datatype, &lreg, &lreg_size);
+        //ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
         printf("[%d] Starting a PUT (0 will put in 1), message:\n", my_rank);
         for(i = 0; i < 9; i++) {
             printf("%d\t", test_buffer[i]);
@@ -471,8 +497,6 @@ int main(int argc, char **argv)
     ce->tag_unregister(8);
 
     parsec_comm_engine_fini(ce);
-
-    parsec_fini(&parsec);
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();

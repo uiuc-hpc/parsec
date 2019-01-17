@@ -19,14 +19,14 @@ int mpi_no_thread_tag_register(parsec_ce_tag_t tag,
 
 int mpi_no_thread_tag_unregister(parsec_ce_tag_t tag);
 
-int mpi_no_thread_mem_register(void *mem, size_t mem_size,
-                               parsec_converter_t *conv,
+int mpi_no_thread_mem_register(void *mem, size_t count,
+                               parsec_datatype_t datatype,
                                parsec_ce_mem_reg_handle_t *lreg,
                                size_t *lreg_size);
 
 int mpi_no_thread_mem_unregister(parsec_ce_mem_reg_handle_t *lreg);
 
-int mpi_no_thread_mem_retrieve(parsec_ce_mem_reg_handle_t lreg, void **mem, size_t *mem_size);
+int mpi_no_thread_mem_retrieve(parsec_ce_mem_reg_handle_t lreg, void **mem, parsec_datatype_t *datatype, int *count);
 
 int mpi_no_thread_put(parsec_comm_engine_t *comm_engine,
                       parsec_ce_mem_reg_handle_t lreg,
