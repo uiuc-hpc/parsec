@@ -139,7 +139,9 @@ notify_about_get(parsec_comm_engine_t *ce,
     //ce->mem_register(test_buffer, sizeof(int) * 9, NULL, &lreg, &lreg_size);
 
     /* Let's start the GET */
-    ce->get(ce, lreg, 0, noti_am->lreg, noti_am->ldispl, 0, src, get_end, (void *) ce);
+    ce->get(ce, lreg, 0, noti_am->lreg, noti_am->ldispl, 0, src,
+            0, get_end, (void *) ce,
+            0, NULL, NULL);
 
     counter++;
 
@@ -273,7 +275,9 @@ put_ack_am(parsec_comm_engine_t *ce,
 
     /* We have received the mem_reg_handle of the other side, now we can
      * start the PUT */
-    ce->put(ce, noti_am->rreg, noti_am->rdispl, noti_am->lreg, noti_am->ldispl, 0, src, put_end, NULL);
+    ce->put(ce, noti_am->rreg, noti_am->rdispl, noti_am->lreg, noti_am->ldispl, 0, src,
+            0, put_end, NULL,
+            0, NULL, NULL);
 
     counter++;
 

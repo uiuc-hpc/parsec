@@ -18,6 +18,8 @@ elif [ "x${USER}" = "xmfaverge" ]; then
 elif [ "x$USER" = "xrhoque" ]; then
   module load gcc
   CC=gcc
+  MPI_DIR="/sw/openmpi/3.0.0"
+  #MPI_DIR="/home/bosilca/opt/ompi/master/debug"
 elif [ "x$USER" = "xdgenet" ]; then
   CC=gcc
   CXX=g++

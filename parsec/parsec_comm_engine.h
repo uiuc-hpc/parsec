@@ -59,8 +59,8 @@ typedef int (*parsec_ce_put_fn_t)(parsec_comm_engine_t *comm_engine,
                                   ptrdiff_t rdispl,
                                   size_t size,
                                   int remote,
-                                  parsec_ce_onesided_callback_t cb,
-                                  void *cb_data);
+                                  parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                                  parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data);
 
 typedef int (*parsec_ce_get_fn_t)(parsec_comm_engine_t *comm_engine,
                                   parsec_ce_mem_reg_handle_t lreg,
@@ -69,8 +69,8 @@ typedef int (*parsec_ce_get_fn_t)(parsec_comm_engine_t *comm_engine,
                                   ptrdiff_t rdispl,
                                   size_t size,
                                   int remote,
-                                  parsec_ce_onesided_callback_t cb,
-                                  void *cb_data);
+                                  parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                                  parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data);
 
 typedef int (*parsec_ce_send_active_message_fn_t)(parsec_comm_engine_t *comm_engine,
                                              parsec_ce_tag_t tag,
