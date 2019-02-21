@@ -40,7 +40,7 @@ enum {
 parsec_mempool_t *parsec_remote_dep_cb_data_mempool;
 
 typedef struct remote_dep_cb_data_s {
-    parsec_object_t        super;
+    parsec_list_item_t        super;
     parsec_thread_mempool_t *mempool_owner;
     parsec_remote_deps_t *deps; /* local */
     parsec_ce_mem_reg_handle_t lreg;
@@ -49,7 +49,7 @@ typedef struct remote_dep_cb_data_s {
 
 PARSEC_DECLSPEC OBJ_CLASS_DECLARATION(remote_dep_cb_data_t);
 
-OBJ_CLASS_INSTANCE(remote_dep_cb_data_t, parsec_object_t,
+OBJ_CLASS_INSTANCE(remote_dep_cb_data_t, parsec_list_item_t,
                    NULL, NULL);
 
 extern char*
@@ -486,7 +486,6 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
     return 0;
 }
 
-
 /**
  * An activation message has been received, and the remote_dep_wire_activate_t
  * part has already been extracted into the deps->msg. This function handles the
@@ -500,6 +499,7 @@ static void remote_dep_mpi_recv_activate(parsec_execution_stream_t* es,
                                          int length,
                                          int* position)
 {
+    (void) length; (void) position;
     (void) packed_buffer;
     remote_dep_datakey_t complete_mask = 0;
     int k;
@@ -651,7 +651,7 @@ remote_dep_mpi_save_activate_cb(parsec_comm_engine_t *ce, parsec_ce_tag_t tag,
     }
     assert(position == length);
     PINS(es, ACTIVATE_CB_END, NULL);
-    return 0;
+    return 1;
 }
 
 static int
@@ -697,7 +697,7 @@ remote_dep_mpi_save_put_cb(parsec_comm_engine_t *ce,
                 remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN), item->cmd.activate.peer,
                 task->tag, task->output_mask, (void*)deps);
     }
-    return 0;
+    return 1;
 }
 
 int
@@ -1061,11 +1061,11 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
         assert(k < MAX_PARAM_COUNT);
         if(!((1U<<k) & task->output_mask)) continue;
 
-        if(parsec_comm_puts == parsec_comm_puts_max) {
+        /*if(parsec_comm_puts == parsec_comm_puts_max) {
             PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "MPI:\treach PUT limit for deps 0x%lx. Reschedule.", deps);
             parsec_list_nolock_push_front(&dep_put_fifo, (parsec_list_item_t*)item);
             return;
-        }
+        }*/
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "MPI:\t[idx %d mask(0x%x / 0x%x)] %p, %p", k, (1U<<k), task->output_mask,
                 deps->output[k].data.data, PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data));
         dataptr = PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data);
@@ -1213,12 +1213,12 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
 
     for(k = count = 0; deps->incoming_mask >> k; k++)
         if( ((1U<<k) & deps->incoming_mask) ) count++;
-    if( (parsec_comm_gets + count) > parsec_comm_gets_max ) {
+    /*if( (parsec_comm_gets + count) > parsec_comm_gets_max ) {
         assert(deps->msg.output_mask != 0);
         assert(deps->incoming_mask != 0);
         parsec_list_nolock_push_front(&dep_activates_fifo, (parsec_list_item_t*)deps);
         return;
-    }
+    }*/
     (void)es;
     DEBUG_MARK_CTL_MSG_ACTIVATE_RECV(from, (void*)task, task);
 
@@ -1619,15 +1619,13 @@ remote_dep_mpi_progress(parsec_execution_stream_t* es)
 
     ret = parsec_ce.progress(&parsec_ce);
 
-    if(ret == 0) {
-        if(parsec_ce.can_serve(&parsec_ce) && !parsec_list_nolock_is_empty(&dep_activates_fifo)) {
-                parsec_remote_deps_t* deps = (parsec_remote_deps_t*)parsec_list_nolock_fifo_pop(&dep_activates_fifo);
-                remote_dep_mpi_get_start(es, deps);
-        }
-        if(parsec_ce.can_serve(&parsec_ce) && !parsec_list_nolock_is_empty(&dep_put_fifo)) {
-                dep_cmd_item_t* item = (dep_cmd_item_t*)parsec_list_nolock_fifo_pop(&dep_put_fifo);
-                remote_dep_mpi_put_start(es, item);
-        }
+    if(parsec_ce.can_serve(&parsec_ce) && !parsec_list_nolock_is_empty(&dep_activates_fifo)) {
+            parsec_remote_deps_t* deps = (parsec_remote_deps_t*)parsec_list_nolock_fifo_pop(&dep_activates_fifo);
+            remote_dep_mpi_get_start(es, deps);
+    }
+    if(parsec_ce.can_serve(&parsec_ce) && !parsec_list_nolock_is_empty(&dep_put_fifo)) {
+            dep_cmd_item_t* item = (dep_cmd_item_t*)parsec_list_nolock_fifo_pop(&dep_put_fifo);
+            remote_dep_mpi_put_start(es, item);
     }
 
     return ret;
