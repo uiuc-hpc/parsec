@@ -167,40 +167,10 @@ typedef struct mpi_funnelled_dynamic_req_s {
 
 PARSEC_DECLSPEC OBJ_CLASS_DECLARATION(mpi_funnelled_dynamic_req_t);
 
-/* To create object of class mpi_funnelled_req_item_t that inherits
+/* To create object of class mpi_funnelled_dynamic_req_t that inherits
  * parsec_list_item_t class
  */
 OBJ_CLASS_INSTANCE(mpi_funnelled_dynamic_req_t, parsec_list_item_t,
-                   NULL, NULL);
-
-
-
-
-
-/* List to order all requests */
-parsec_list_t mpi_funnelled_req_fifo; /* ordered non threaded fifo */
-
-parsec_mempool_t *mpi_funnelled_req_item_mempool = NULL;
-
-/* This structure is used to save all the information necessary to
- * invoke a callback after a MPI_Request is satisfied
- */
-typedef struct mpi_funnelled_req_item_s {
-    parsec_list_item_t super;
-    parsec_thread_mempool_t *mempool_owner;
-    mpi_funnelled_callback_t cb;
-    int   mpi_tag;
-    int   length;
-    int   mpi_source;
-    char *buf;
-} mpi_funnelled_req_item_t;
-
-PARSEC_DECLSPEC OBJ_CLASS_DECLARATION(mpi_funnelled_req_item_t);
-
-/* To create object of class mpi_funnelled_req_item_t that inherits
- * parsec_list_item_t class
- */
-OBJ_CLASS_INSTANCE(mpi_funnelled_req_item_t, parsec_list_item_t,
                    NULL, NULL);
 
 
@@ -488,19 +458,11 @@ mpi_funnelled_init(parsec_context_t *context)
                              offsetof(mpi_funnelled_mem_reg_handle_t, mempool_owner),
                              1);
 
-    mpi_funnelled_req_item_mempool = (parsec_mempool_t*) malloc (sizeof(parsec_mempool_t));
-    parsec_mempool_construct(mpi_funnelled_req_item_mempool,
-                             OBJ_CLASS(mpi_funnelled_req_item_t), sizeof(mpi_funnelled_req_item_t),
-                             offsetof(mpi_funnelled_req_item_t, mempool_owner),
-                             1);
-
-
     mpi_funnelled_dynamic_req_mempool = (parsec_mempool_t*) malloc (sizeof(parsec_mempool_t));
     parsec_mempool_construct(mpi_funnelled_dynamic_req_mempool,
                              OBJ_CLASS(mpi_funnelled_dynamic_req_t), sizeof(mpi_funnelled_dynamic_req_t),
                              offsetof(mpi_funnelled_dynamic_req_t, mempool_owner),
                              1);
-
 
 
     return &parsec_ce;
@@ -525,9 +487,6 @@ mpi_funnelled_fini(parsec_comm_engine_t *ce)
 
     parsec_mempool_destruct(mpi_funnelled_mem_reg_handle_mempool);
     free(mpi_funnelled_mem_reg_handle_mempool);
-
-    parsec_mempool_destruct(mpi_funnelled_req_item_mempool);
-    free(mpi_funnelled_req_item_mempool);
 
     parsec_mempool_destruct(mpi_funnelled_dynamic_req_mempool);
     free(mpi_funnelled_dynamic_req_mempool);
@@ -927,7 +886,6 @@ mpi_no_thread_serve_cb(parsec_comm_engine_t *ce, mpi_funnelled_callback_t *cb,
         }
     }
 
-    assert(ret == 1);
     return ret;
 }
 
@@ -966,90 +924,6 @@ mpi_no_thread_push_posted_req(parsec_comm_engine_t *ce)
 
     return 1;
 }
-
-#if 0
-/* This function progresses the saved completed requests, that could not
- * be completed as there were no space in the array_of_requests.
- */
-int
-mpi_no_thread_progress_saved_req(parsec_comm_engine_t *ce)
-{
-    mpi_funnelled_req_item_t *item;
-    int ret;
-    item = (mpi_funnelled_req_item_t *) parsec_list_nolock_fifo_pop(&mpi_funnelled_dynamic_req_fifo);
-    ret = mpi_no_thread_serve_cb(ce, &item->cb, item->mpi_tag,
-                           item->mpi_source, item->length,
-                           item->buf, 0);
-    if(!ret) {
-        parsec_list_nolock_fifo_push(&mpi_funnelled_dynamic_req_fifo,
-                                     (parsec_list_item_t *)item);
-    } else {
-        if(item->buf != NULL) {
-            free(item->buf);
-        }
-        parsec_thread_mempool_free(mpi_funnelled_req_item_mempool->thread_mempools, item);
-    }
-    return 1;
-}
-
-int
-mpi_no_thread_save_cb(parsec_comm_engine_t *ce, MPI_Status *status,
-                      mpi_funnelled_callback_t *cb, int length)
-{
-    int save = 1;
-    if(cb->type == MPI_FUNNELLED_TYPE_AM) {
-        if(NULL == cb->cb_type.am.fct) {
-            save = 0;
-            assert(mpi_funnelled_static_req_idx > cb->storage1);
-            MPI_Start(&array_of_requests[cb->storage1]);
-        }
-    } else {
-        assert(cb->type == MPI_FUNNELLED_TYPE_ONESIDED);
-        if(NULL == cb->cb_type.onesided.fct) {
-            save = 0;
-        }
-    }
-    if(save) {
-        mpi_funnelled_req_item_t *item;
-        item = (mpi_funnelled_req_item_t *)parsec_thread_mempool_allocate(mpi_funnelled_req_item_mempool->thread_mempools);
-        OBJ_CONSTRUCT(&item->super, parsec_list_item_t);
-        /* set cb members */
-        item->cb.storage1 = cb->storage1;
-        item->cb.storage2 = cb->storage2;
-        item->cb.cb_data = cb->cb_data;
-        item->cb.type = cb->type;
-        item->cb.tag  = cb->tag;
-        if(cb->type == MPI_FUNNELLED_TYPE_AM) {
-            item->cb.cb_type.am.fct = cb->cb_type.am.fct;
-            item->mpi_tag = status->MPI_TAG;
-            item->length  = length;
-            item->mpi_source = status->MPI_SOURCE;
-            item->buf = malloc(cb->tag->msg_length  * sizeof(char));
-            memcpy(item->buf, cb->tag->buf[cb->storage2], cb->tag->msg_length);
-            /* Let's re-enable the pending request in the same position */
-            assert(mpi_funnelled_static_req_idx > cb->storage1);
-            MPI_Start(&array_of_requests[cb->storage1]);
-        } else {
-            assert(cb->type == MPI_FUNNELLED_TYPE_ONESIDED);
-            item->cb.cb_type.onesided.fct    = cb->cb_type.onesided.fct;
-            item->cb.cb_type.onesided.lreg   = cb->cb_type.onesided.lreg;
-            item->cb.cb_type.onesided.ldispl = cb->cb_type.onesided.ldispl;
-            item->cb.cb_type.onesided.rreg   = cb->cb_type.onesided.rreg;
-            item->cb.cb_type.onesided.rdispl = cb->cb_type.onesided.rdispl;
-            item->cb.cb_type.onesided.size   = cb->cb_type.onesided.size;
-            item->cb.cb_type.onesided.remote = cb->cb_type.onesided.remote;
-            item->mpi_tag = status->MPI_TAG;
-            item->length  = -1;
-            item->mpi_source = status->MPI_SOURCE;
-            item->buf = NULL;
-        }
-        parsec_list_nolock_fifo_push(&mpi_funnelled_dynamic_req_fifo,
-                                     (parsec_list_item_t *)item);
-    }
-
-    return 1;
-}
-#endif
 
 int
 mpi_no_thread_progress(parsec_comm_engine_t *ce)
