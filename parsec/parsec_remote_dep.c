@@ -1099,8 +1099,8 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
                             item->cmd.activate.peer, deps->msg);
         parsec_ce.put(&parsec_ce, lreg, 0, rreg, 0,
                       0, item->cmd.activate.peer,
-                      0, remote_dep_mpi_put_end_cb, cb_data,
-                      0, (parsec_ce_onesided_callback_t) task->callback_fn, (void *)task->rdeps);
+                      remote_dep_mpi_put_end_cb, cb_data,
+                      (parsec_ce_tag_t)task->callback_fn, (void *)task->rdeps);
         parsec_comm_puts++;
     }
 #endif  /* !defined(PARSEC_PROF_DRY_DEP) */

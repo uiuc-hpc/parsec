@@ -161,6 +161,7 @@ parsec_mempool_t *mpi_funnelled_dynamic_req_mempool = NULL;
 typedef struct mpi_funnelled_dynamic_req_s {
     parsec_list_item_t super;
     parsec_thread_mempool_t *mempool_owner;
+    int post_isend;
     MPI_Request request;
     mpi_funnelled_callback_t cb;
 } mpi_funnelled_dynamic_req_t;
@@ -232,25 +233,26 @@ mpi_funnelled_internal_get_am_callback(parsec_comm_engine_t *ce,
     if(post_in_static_array) {
         request = &array_of_requests[mpi_funnelled_last_active_req];
         cb = &array_of_callbacks[mpi_funnelled_last_active_req];
+        MPI_Isend(lreg->mem, lreg->count, lreg->datatype, src, am_data->tag, comm,
+                  request);
     } else {
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
+        item->post_isend = 1;
         request = &item->request;
         cb = &item->cb;
     }
 
-    MPI_Isend(lreg->mem, lreg->count, lreg->datatype, src, am_data->tag, comm,
-              request);
     /* At this point we do not care when this Isend is finished */
     //cb = &array_of_callbacks[mpi_funnelled_last_active_req];
     cb->cb_type.onesided.fct = NULL; /* we do not care when this Isend is completed */
     cb->storage1 = mpi_funnelled_last_active_req;
     cb->storage2 = src;
     cb->cb_data  = cb_data;
-    cb->cb_type.onesided.lreg = NULL;
+    cb->cb_type.onesided.lreg = (parsec_ce_mem_reg_handle_t) lreg;
     cb->cb_type.onesided.ldispl = 0;
     cb->cb_type.onesided.rreg = NULL;
     cb->cb_type.onesided.rdispl = 0;
-    cb->cb_type.onesided.size = 0;
+    cb->cb_type.onesided.size = am_data->tag;
     cb->cb_type.onesided.remote = src;
     cb->tag   = NULL;
     cb->type  = MPI_FUNNELLED_TYPE_ONESIDED;
@@ -317,6 +319,7 @@ mpi_funnelled_internal_put_am_callback(parsec_comm_engine_t *ce,
          * This ensures we are not generating MPI unexpected and all the sends and receives are in order.
          */
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
+        item->post_isend = 0;
         request = &item->request;
         cb = &item->cb;
     }
@@ -408,6 +411,7 @@ mpi_funnelled_init(parsec_context_t *context)
     parsec_ce.can_serve      = mpi_no_thread_can_push_more;
     parsec_ce.send_active_message = mpi_no_thread_send_active_message;
     parsec_ce.parsec_context = context;
+    parsec_ce.capabilites.sided = 2;
 
     /* init hash table for registered tags */
     int nb;
@@ -517,7 +521,7 @@ mpi_no_thread_tag_register(parsec_ce_tag_t tag,
 
     parsec_key_t key = 0 | tag ;
     if(NULL != parsec_hash_table_nolock_find(tag_hash_table, key)) {
-        printf("Tag: %d is already registered\n", tag);
+        printf("Tag: %ld is already registered\n", tag);
         return 0;
     }
 
@@ -598,7 +602,7 @@ mpi_no_thread_tag_unregister(parsec_ce_tag_t tag)
     parsec_key_t key = 0 | tag ;
     mpi_funnelled_tag_t *tag_struct = parsec_hash_table_nolock_find(tag_hash_table, key);
     if(NULL == tag_struct) {
-        printf("Tag %d is not registered\n", tag);
+        printf("Tag %ld is not registered\n", tag);
         return 0;
     }
 
@@ -676,12 +680,12 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
                   ptrdiff_t rdispl,
                   size_t size,
                   int remote,
-                  parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                  parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data)
+                  parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                  parsec_ce_tag_t r_tag, void *r_cb_data)
 {
     assert(mpi_funnelled_last_active_req < size_of_total_reqs);
 
-    (void)r_tag; (void)r_cb; (void)r_cb_data; (void)l_tag;
+    (void)r_cb_data; (void) size;
 
     mpi_funnelled_callback_t *cb;
     MPI_Request *request;
@@ -695,7 +699,7 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
     am_data.lreg = lreg; /* lreg is this rank's mem_reg */
     am_data.rreg = rreg; /* rreg is the remote mem_reg */
 
-    am_data.cb_fn = (uintptr_t) r_cb;
+    am_data.cb_fn = (uintptr_t) r_tag;
     am_data.deps  = (uintptr_t) r_cb_data;
 
     //printf(" put callback_fn %ld, r_cb : %p\n", am_data.cb_fn, r_cb);
@@ -724,14 +728,15 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
     if(post_in_static_array) {
         request = &array_of_requests[mpi_funnelled_last_active_req];
         cb = &array_of_callbacks[mpi_funnelled_last_active_req];
+        MPI_Isend((char *)ldata->mem + ldispl, ldata->count, ldata->datatype, remote, tag, comm,
+                  request);
     } else {
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
+        item->post_isend = 1;
         request = &item->request;
         cb = &item->cb;
     }
 
-    MPI_Isend((char *)ldata->mem + ldispl, ldata->count, ldata->datatype, remote, tag, comm,
-              request);
 
     //cb = &array_of_callbacks[mpi_funnelled_last_active_req];
     cb->cb_type.onesided.fct = l_cb;
@@ -742,7 +747,7 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
     cb->cb_type.onesided.ldispl = ldispl;
     cb->cb_type.onesided.rreg = rreg;
     cb->cb_type.onesided.rdispl = rdispl;
-    cb->cb_type.onesided.size = size;
+    cb->cb_type.onesided.size = tag; /* This should be taken care of */
     cb->cb_type.onesided.remote = remote;
     cb->tag  = NULL;
     cb->type = MPI_FUNNELLED_TYPE_ONESIDED;
@@ -769,10 +774,10 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
                   ptrdiff_t rdispl,
                   size_t size,
                   int remote,
-                  parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                  parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data)
+                  parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                  parsec_ce_tag_t r_tag, void *r_cb_data)
 {
-    (void)r_tag; (void)r_cb; (void)r_cb_data; (void)l_tag;
+    (void)r_tag; (void)r_cb_data;
 
     mpi_funnelled_callback_t *cb;
     MPI_Request *request;
@@ -810,6 +815,7 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
         cb = &array_of_callbacks[mpi_funnelled_last_active_req];
     } else {
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
+        item->post_isend = 0;
         request = &item->request;
         cb = &item->cb;
     }
@@ -917,6 +923,13 @@ mpi_no_thread_push_posted_req(parsec_comm_engine_t *ce)
     array_of_callbacks[mpi_funnelled_last_active_req].cb_type.onesided.rdispl = item->cb.cb_type.onesided.rdispl;
     array_of_callbacks[mpi_funnelled_last_active_req].cb_type.onesided.size = item->cb.cb_type.onesided.size;
     array_of_callbacks[mpi_funnelled_last_active_req].cb_type.onesided.remote = item->cb.cb_type.onesided.remote;
+
+    if(item->post_isend) {
+        mpi_funnelled_mem_reg_handle_t *ldata = (mpi_funnelled_mem_reg_handle_t *) item->cb.cb_type.onesided.lreg;
+        MPI_Isend((char *)ldata->mem + item->cb.cb_type.onesided.ldispl, ldata->count,
+                  ldata->datatype, item->cb.cb_type.onesided.remote, item->cb.cb_type.onesided.size, comm,
+                  &array_of_requests[mpi_funnelled_last_active_req]);
+    }
 
     mpi_funnelled_last_active_req++;
 

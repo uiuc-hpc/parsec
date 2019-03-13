@@ -35,8 +35,8 @@ int mpi_no_thread_put(parsec_comm_engine_t *comm_engine,
                       ptrdiff_t rdispl,
                       size_t size,
                       int remote,
-                      parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                      parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data);
+                      parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                      parsec_ce_tag_t r_tag, void *r_cb_data);
 
 int mpi_no_thread_get(parsec_comm_engine_t *comm_engine,
                       parsec_ce_mem_reg_handle_t lreg,
@@ -45,8 +45,8 @@ int mpi_no_thread_get(parsec_comm_engine_t *comm_engine,
                       ptrdiff_t rdispl,
                       size_t size,
                       int remote,
-                      parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                      parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data);
+                      parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                      parsec_ce_tag_t r_tag, void *r_cb_data);
 
 int mpi_no_thread_send_active_message(parsec_comm_engine_t *comm_engine,
                                       parsec_ce_tag_t tag,

@@ -13,12 +13,13 @@
 
 typedef char * parsec_ce_mem_reg_handle_t;
 
+typedef struct parsec_comm_engine_capabilites_s parsec_comm_engine_capabilites_t;
 
 typedef struct parsec_comm_engine_s parsec_comm_engine_t;
 
 typedef int (*parsec_ce_callback_t)(void *cb_data);
 
-typedef uint8_t parsec_ce_tag_t;
+typedef uint64_t parsec_ce_tag_t;
 
 typedef int (*parsec_ce_am_callback_t)(parsec_comm_engine_t *ce,
                                        parsec_ce_tag_t tag,
@@ -59,8 +60,8 @@ typedef int (*parsec_ce_put_fn_t)(parsec_comm_engine_t *comm_engine,
                                   ptrdiff_t rdispl,
                                   size_t size,
                                   int remote,
-                                  parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                                  parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data);
+                                  parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                                  parsec_ce_tag_t r_tag, void *r_cb_data);
 
 typedef int (*parsec_ce_get_fn_t)(parsec_comm_engine_t *comm_engine,
                                   parsec_ce_mem_reg_handle_t lreg,
@@ -69,8 +70,8 @@ typedef int (*parsec_ce_get_fn_t)(parsec_comm_engine_t *comm_engine,
                                   ptrdiff_t rdispl,
                                   size_t size,
                                   int remote,
-                                  parsec_ce_tag_t l_tag, parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                                  parsec_ce_tag_t r_tag, parsec_ce_onesided_callback_t r_cb, void *r_cb_data);
+                                  parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
+                                  parsec_ce_tag_t r_tag, void *r_cb_data);
 
 typedef int (*parsec_ce_send_active_message_fn_t)(parsec_comm_engine_t *comm_engine,
                                              parsec_ce_tag_t tag,
@@ -94,7 +95,12 @@ typedef int (*parsec_ce_unpack_fn_t)(parsec_comm_engine_t *ce,
 typedef int (*parsec_ce_sync_fn_t)(parsec_comm_engine_t *comm_engine);
 typedef int (*parsec_ce_can_serve_fn_t)(parsec_comm_engine_t *comm_engine);
 
+struct parsec_comm_engine_capabilites_s {
+    int sided; /* Valid are 1 and 2 */
+};
+
 struct parsec_comm_engine_s {
+    parsec_comm_engine_capabilites_t capabilites;
     parsec_context_t             *parsec_context;
     parsec_ce_tag_register_fn_t   tag_register;
     parsec_ce_tag_unregister_fn_t tag_unregister;
@@ -112,7 +118,6 @@ struct parsec_comm_engine_s {
     parsec_ce_can_serve_fn_t      can_serve;
     parsec_ce_send_active_message_fn_t send_active_message;
 };
-
 
 /* global comm_engine */
 parsec_comm_engine_t parsec_ce;

@@ -20,7 +20,7 @@ callback_tag_0(parsec_comm_engine_t *ce,
                void *cb_data)
 {
     (void) ce; (void) cb_data;
-    printf("[%d] In callback for tag %d, message sent from %d msg: %p size: %ld message: ", my_rank, tag, src, msg, msg_size);
+    printf("[%d] In callback for tag %ld, message sent from %d msg: %p size: %ld message: ", my_rank, tag, src, msg, msg_size);
 
     int i, total = msg_size/sizeof(int);
 
@@ -44,7 +44,7 @@ callback_tag_1(parsec_comm_engine_t *ce,
                void *cb_data)
 {
     (void) ce; (void) cb_data;
-    printf("[%d] In callback for tag %d, message sent from %d msg: %p size: %ld message: ", my_rank, tag, src, msg, msg_size);
+    printf("[%d] In callback for tag %ld, message sent from %d msg: %p size: %ld message: ", my_rank, tag, src, msg, msg_size);
 
     int i, total = msg_size/sizeof(float);
 
@@ -140,8 +140,8 @@ notify_about_get(parsec_comm_engine_t *ce,
 
     /* Let's start the GET */
     ce->get(ce, lreg, 0, noti_am->lreg, noti_am->ldispl, 0, src,
-            0, get_end, (void *) ce,
-            0, NULL, NULL);
+            get_end, (void *) ce,
+            0, NULL);
 
     counter++;
 
@@ -276,8 +276,8 @@ put_ack_am(parsec_comm_engine_t *ce,
     /* We have received the mem_reg_handle of the other side, now we can
      * start the PUT */
     ce->put(ce, noti_am->rreg, noti_am->rdispl, noti_am->lreg, noti_am->ldispl, 0, src,
-            0, put_end, NULL,
-            0, NULL, NULL);
+            put_end, NULL,
+            0, NULL);
 
     counter++;
 
