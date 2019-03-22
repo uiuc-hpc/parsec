@@ -33,7 +33,6 @@ typedef struct remote_dep_wire_activate_s
 {
     remote_dep_datakey_t deps;         /**< a pointer to the dep structure on the source */
     remote_dep_datakey_t output_mask;  /**< the mask of the output dependencies satisfied by this activation message */
-    remote_dep_datakey_t tag;
     uint32_t             taskpool_id;
     uint32_t             task_class_id;
     uint32_t             length;
@@ -42,12 +41,11 @@ typedef struct remote_dep_wire_activate_s
 
 typedef struct remote_dep_wire_get_s
 {
-    remote_dep_datakey_t deps;
-    remote_dep_datakey_t rdeps; /* receiver's deps */
+    remote_dep_datakey_t source_deps;
+    remote_dep_datakey_t remote_callback_data;
     remote_dep_datakey_t output_mask;
-    remote_dep_datakey_t tag;
     uintptr_t callback_fn;
-    parsec_ce_mem_reg_handle_t lreg; /* lreg of message sender */
+    parsec_ce_mem_reg_handle_t remote_memory_handle;
 } remote_dep_wire_get_t;
 
 /**
@@ -217,9 +215,9 @@ typedef enum dep_cmd_action_t {
 
 union dep_cmd_u {
     struct {
-        remote_dep_wire_get_t task;
-        int                   peer;
-        parsec_ce_mem_reg_handle_t lreg;
+        remote_dep_wire_get_t      task;
+        int                        peer;
+        parsec_ce_mem_reg_handle_t remote_memory_handle;
     } activate;
     struct {
         parsec_remote_deps_t  *deps;

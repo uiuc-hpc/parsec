@@ -11,7 +11,7 @@
 #include "parsec/runtime.h"
 #include "parsec/datatype.h"
 
-typedef char * parsec_ce_mem_reg_handle_t;
+typedef void* parsec_ce_mem_reg_handle_t;
 
 typedef struct parsec_comm_engine_capabilites_s parsec_comm_engine_capabilites_t;
 
@@ -42,6 +42,8 @@ typedef int (*parsec_ce_mem_register_fn_t)(void *mem, size_t count,
 
 typedef int (*parsec_ce_mem_unregister_fn_t)(parsec_ce_mem_reg_handle_t *lreg);
 
+typedef int (*parsec_ce_get_mem_reg_handle_size_fn_t)(void);
+
 typedef int (*parsec_ce_mem_retrieve_fn_t)(parsec_ce_mem_reg_handle_t lreg, void **mem, parsec_datatype_t *datatype, int *count);
 
 typedef int (*parsec_ce_onesided_callback_t)(parsec_comm_engine_t *comm_engine,
@@ -61,7 +63,7 @@ typedef int (*parsec_ce_put_fn_t)(parsec_comm_engine_t *comm_engine,
                                   size_t size,
                                   int remote,
                                   parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                                  parsec_ce_tag_t r_tag, void *r_cb_data);
+                                  parsec_ce_tag_t r_tag, void *r_cb_data, size_t r_cb_data_size);
 
 typedef int (*parsec_ce_get_fn_t)(parsec_comm_engine_t *comm_engine,
                                   parsec_ce_mem_reg_handle_t lreg,
@@ -71,7 +73,7 @@ typedef int (*parsec_ce_get_fn_t)(parsec_comm_engine_t *comm_engine,
                                   size_t size,
                                   int remote,
                                   parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
-                                  parsec_ce_tag_t r_tag, void *r_cb_data);
+                                  parsec_ce_tag_t r_tag, void *r_cb_data, size_t r_cb_data_size);
 
 typedef int (*parsec_ce_send_active_message_fn_t)(parsec_comm_engine_t *comm_engine,
                                              parsec_ce_tag_t tag,
@@ -106,6 +108,7 @@ struct parsec_comm_engine_s {
     parsec_ce_tag_unregister_fn_t tag_unregister;
     parsec_ce_mem_register_fn_t   mem_register;
     parsec_ce_mem_unregister_fn_t mem_unregister;
+    parsec_ce_get_mem_reg_handle_size_fn_t get_mem_handle_size;
     parsec_ce_mem_retrieve_fn_t   mem_retrieve;
     parsec_ce_put_fn_t            put;
     parsec_ce_get_fn_t            get;
