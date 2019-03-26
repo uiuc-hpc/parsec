@@ -39,10 +39,8 @@ typedef struct remote_dep_wire_activate_s
 typedef struct remote_dep_wire_get_s
 {
     remote_dep_datakey_t deps;
-    remote_dep_datakey_t rdeps; /* receiver's deps */
     remote_dep_datakey_t output_mask;
     remote_dep_datakey_t tag;
-    parsec_ce_mem_reg_handle_t lreg; /* lreg of message sender */
 } remote_dep_wire_get_t;
 
 /**

@@ -1218,7 +1218,6 @@ parsec_dtd_taskpool_new(void)
     __tp->super.nb_pending_actions = 0;  /* For the future tasks that will be inserted */
     __tp->super.nb_task_classes    = 0;
     __tp->super.update_nb_runtime_task = parsec_dtd_update_runtime_task;
-    __tp->super.nb_task_classes    = 0;
 
     __tp->super.devices_index_mask = 0;
     for (i = 0; i < (int)parsec_nb_devices; i++) {

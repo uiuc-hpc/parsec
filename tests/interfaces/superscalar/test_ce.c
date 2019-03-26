@@ -444,6 +444,12 @@ int main(int argc, char **argv)
     ce->tag_register(NOTIFY_ABOUT_PUT_FROM_0_TAG, notify_about_put, ce, 4096);
     ce->tag_register(NOTIFY_ABOUT_MEM_HANDLE_FROM_1_TAG, put_ack_am, ce, 4096);
 
+    if(ce->capabilites.sided == 1) {
+        /* This is true onesided and we need to register more tags for notifications */
+        ce->tag_register((parsec_ce_tag_t)(uintptr_t)get_end_ack, get_end_ack, ce, 4096);
+        ce->tag_register((parsec_ce_tag_t)(uintptr_t)put_end_ack, put_end_ack, ce, 4096);
+    }
+
     /* To make sure all the ranks have the tags registered */
     MPI_Barrier(MPI_COMM_WORLD);
 
