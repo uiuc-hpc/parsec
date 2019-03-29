@@ -11,6 +11,11 @@
 #include "parsec/runtime.h"
 #include "parsec/datatype.h"
 
+typedef enum {
+    PARSEC_MEM_TYPE_CONTIGUOUS = 0,
+    PARSEC_MEM_TYPE_NONCONTIGUOUS = 1
+} parsec_mem_type_t;
+
 typedef void* parsec_ce_mem_reg_handle_t;
 
 typedef struct parsec_comm_engine_capabilites_s parsec_comm_engine_capabilites_t;
@@ -35,8 +40,16 @@ typedef int (*parsec_ce_tag_register_fn_t)(parsec_ce_tag_t tag,
 
 typedef int (*parsec_ce_tag_unregister_fn_t)(parsec_ce_tag_t tag);
 
-typedef int (*parsec_ce_mem_register_fn_t)(void *mem, size_t count,
-                                           parsec_datatype_t datatype,
+/* PaRSEC will try to use non-contiguous type for lower layer capable of
+ * supporting it.
+ * For non-contiguous type the lower layer will expect layout and count and for
+ * contiguous only size will be provided.
+ * Please indicate the mem type using PARSEC_MEM_TYPE_CONTIGUOUS and
+ * PARSEC_MEM_TYPE_NONCONTIGUOUS.
+ */
+typedef int (*parsec_ce_mem_register_fn_t)(void *mem, parsec_mem_type_t mem_type,
+                                           size_t count, parsec_datatype_t datatype,
+                                           size_t mem_size,
                                            parsec_ce_mem_reg_handle_t *lreg,
                                            size_t *lreg_size);
 
@@ -99,6 +112,7 @@ typedef int (*parsec_ce_can_serve_fn_t)(parsec_comm_engine_t *comm_engine);
 
 struct parsec_comm_engine_capabilites_s {
     int sided; /* Valid are 1 and 2 */
+    int supports_noncontiguous_datatype;
 };
 
 struct parsec_comm_engine_s {

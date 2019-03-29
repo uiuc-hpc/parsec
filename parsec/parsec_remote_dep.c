@@ -1054,7 +1054,22 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
 
         parsec_ce_mem_reg_handle_t source_memory_handle;
         size_t source_memory_handle_size;
-        parsec_ce.mem_register(dataptr, nbdtt, dtt, &source_memory_handle, &source_memory_handle_size);
+
+        if(parsec_ce.capabilites.supports_noncontiguous_datatype) {
+            parsec_ce.mem_register(dataptr, PARSEC_MEM_TYPE_NONCONTIGUOUS,
+                                   nbdtt, dtt,
+                                   -1,
+                                   &source_memory_handle, &source_memory_handle_size);
+        } else {
+            /* TODO: Implement converter to pack and unpack */
+            int dtt_size;
+            parsec_type_size(dtt, &dtt_size);
+            parsec_ce.mem_register(dataptr, PARSEC_MEM_TYPE_CONTIGUOUS,
+                                   -1, -1,
+                                   dtt_size,
+                                   &source_memory_handle, &source_memory_handle_size);
+
+        }
 
         parsec_ce_mem_reg_handle_t remote_memory_handle = item->cmd.activate.remote_memory_handle;
 
@@ -1243,11 +1258,22 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
          */
         parsec_ce_mem_reg_handle_t receiver_memory_handle;
         size_t receiver_memory_handle_size;
-        /*int dtt_size;
-        MPI_Type_size(dtt, &dtt_size);
-        parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), dtt_size, NULL, &lreg, &lreg_size); */
-        parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), nbdtt, dtt, &receiver_memory_handle,
-                               &receiver_memory_handle_size);
+
+        if(parsec_ce.capabilites.supports_noncontiguous_datatype) {
+            parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), PARSEC_MEM_TYPE_NONCONTIGUOUS,
+                                   nbdtt, dtt,
+                                   -1,
+                                   &receiver_memory_handle, &receiver_memory_handle_size);
+        } else {
+            /* TODO: Implement converter to pack and unpack */
+            int dtt_size;
+            parsec_type_size(dtt, &dtt_size);
+            parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), PARSEC_MEM_TYPE_CONTIGUOUS,
+                                   -1, -1,
+                                   dtt_size,
+                                   &receiver_memory_handle, &receiver_memory_handle_size);
+
+        }
 
         callback_data->memory_handle = receiver_memory_handle;
 
@@ -1301,7 +1327,7 @@ remote_dep_mpi_get_end_cb(parsec_comm_engine_t *ce,
                           int src,
                           void *cb_data)
 {
-    (void) ce; (void) tag; (void) msg_size; (void) cb_data;
+    (void) ce; (void) tag; (void) msg_size; (void) cb_data; (void) src;
     parsec_execution_stream_t* es = &parsec_comm_es;
 
     /* We send 8 bytes to the source to give it back to us when the PUT is completed,

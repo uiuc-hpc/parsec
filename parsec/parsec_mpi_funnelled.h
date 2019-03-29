@@ -19,10 +19,12 @@ int mpi_no_thread_tag_register(parsec_ce_tag_t tag,
 
 int mpi_no_thread_tag_unregister(parsec_ce_tag_t tag);
 
-int mpi_no_thread_mem_register(void *mem, size_t count,
-                               parsec_datatype_t datatype,
-                               parsec_ce_mem_reg_handle_t *lreg,
-                               size_t *lreg_size);
+int
+mpi_no_thread_mem_register(void *mem, parsec_mem_type_t mem_type,
+                           size_t count, parsec_datatype_t datatype,
+                           size_t mem_size,
+                           parsec_ce_mem_reg_handle_t *lreg,
+                           size_t *lreg_size);
 
 int mpi_no_thread_mem_unregister(parsec_ce_mem_reg_handle_t *lreg);
 

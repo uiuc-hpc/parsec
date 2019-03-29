@@ -78,7 +78,7 @@ static inline int next_tag() {
  * For dynamic tags, there will be a total of MAX_DYNAMIC_REQ_RANGE
  * spots in the same array.
  */
-#define MAX_DYNAMIC_REQ_RANGE 20 /* according to current implementation */
+#define MAX_DYNAMIC_REQ_RANGE 30 /* according to current implementation */
 #define EACH_STATIC_REQ_RANGE 5 /* for each registered tag */
 
 /* Hash table for tag_structure. Each registered tags will be book-kept
@@ -418,6 +418,7 @@ mpi_funnelled_init(parsec_context_t *context)
     parsec_ce.send_active_message = mpi_no_thread_send_active_message;
     parsec_ce.parsec_context = context;
     parsec_ce.capabilites.sided = 2;
+    parsec_ce.capabilites.supports_noncontiguous_datatype = 1;
 
     /* init hash table for registered tags */
     int nb;
@@ -636,11 +637,17 @@ mpi_no_thread_tag_unregister(parsec_ce_tag_t tag)
 }
 
 int
-mpi_no_thread_mem_register(void *mem, size_t count,
-                           parsec_datatype_t datatype,
+mpi_no_thread_mem_register(void *mem, parsec_mem_type_t mem_type,
+                           size_t count, parsec_datatype_t datatype,
+                           size_t mem_size,
                            parsec_ce_mem_reg_handle_t *lreg,
                            size_t *lreg_size)
 {
+    /* For now we only expect non-contiguous data or a layout and count */
+    assert(mem_type == PARSEC_MEM_TYPE_NONCONTIGUOUS);
+    (void) mem_type; (void) mem_size;
+
+    /* This is mpi two_sided, the type can be of noncontiguous */
     *lreg = (void *)parsec_thread_mempool_allocate(mpi_funnelled_mem_reg_handle_mempool->thread_mempools);
 
     mpi_funnelled_mem_reg_handle_t *handle = (mpi_funnelled_mem_reg_handle_t *) *lreg;

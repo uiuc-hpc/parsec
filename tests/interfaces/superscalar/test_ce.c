@@ -136,9 +136,19 @@ notify_about_get(parsec_comm_engine_t *ce,
     /* GET operation will store the actual data in the following buffer */
     int *receive_buf = malloc(sizeof(int) * GET_activation_message->buf_size);
 
-    parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
-    parsec_type_create_contiguous(GET_activation_message->buf_size, parsec_datatype_int_t, datatype);
-    ce->mem_register(receive_buf, 1, *datatype, &rank_1_memory_handle, &rank_1_memory_handle_size);
+    if(ce->capabilites.supports_noncontiguous_datatype) {
+        parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+        parsec_type_create_contiguous(GET_activation_message->buf_size, parsec_datatype_int_t, datatype);
+        ce->mem_register(receive_buf, PARSEC_MEM_TYPE_NONCONTIGUOUS,
+                         1, *datatype,
+                         -1,
+                         &rank_1_memory_handle, &rank_1_memory_handle_size);
+    } else {
+         ce->mem_register(receive_buf, PARSEC_MEM_TYPE_CONTIGUOUS,
+                          -1, -1,
+                          sizeof(int) * GET_activation_message->buf_size,
+                          &rank_1_memory_handle, &rank_1_memory_handle_size);
+    }
 
     parsec_ce_mem_reg_handle_t rank_0_memory_handle = (parsec_ce_mem_reg_handle_t)(((char *)GET_activation_message) + sizeof(handshake_info_t));
 
@@ -258,9 +268,20 @@ notify_about_put(parsec_comm_engine_t *ce,
      * Let's allocate the local mem_reg_handle
      * and send both to other side to start a PUT.
      */
-    parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
-    parsec_type_create_contiguous(PUT_activation_message->buf_size, parsec_datatype_int_t, datatype);
-    ce->mem_register(receive_buf, 1, *datatype, &rank_1_memory_handle, &rank_1_memory_handle_size);
+
+    if(ce->capabilites.supports_noncontiguous_datatype) {
+        parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+        parsec_type_create_contiguous(PUT_activation_message->buf_size, parsec_datatype_int_t, datatype);
+        ce->mem_register(receive_buf, PARSEC_MEM_TYPE_NONCONTIGUOUS,
+                         1, *datatype,
+                         -1,
+                         &rank_1_memory_handle, &rank_1_memory_handle_size);
+    } else {
+         ce->mem_register(receive_buf, PARSEC_MEM_TYPE_CONTIGUOUS,
+                          -1, -1,
+                          sizeof(int) * PUT_activation_message->buf_size,
+                          &rank_1_memory_handle, &rank_1_memory_handle_size);
+    }
 
     handshake_info_t handshake_info;
     handshake_info.buf_size = 0;
@@ -516,9 +537,19 @@ int main(int argc, char **argv)
             }
 
             /* Registering a memory with a mem_reg_handle */
-            parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
-            parsec_type_create_contiguous(buf_size, parsec_datatype_int_t, datatype);
-            ce->mem_register(send_buf, 1, *datatype, &rank_0_memory_handle, &rank_0_memory_handle_size);
+            if(ce->capabilites.supports_noncontiguous_datatype) {
+                parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+                parsec_type_create_contiguous(buf_size, parsec_datatype_int_t, datatype);
+                ce->mem_register(send_buf, PARSEC_MEM_TYPE_NONCONTIGUOUS,
+                                 1, *datatype,
+                                 -1,
+                                 &rank_0_memory_handle, &rank_0_memory_handle_size);
+            } else {
+                 ce->mem_register(send_buf, PARSEC_MEM_TYPE_CONTIGUOUS,
+                                  -1, -1,
+                                  buf_size,
+                                  &rank_0_memory_handle, &rank_0_memory_handle_size);
+            }
 
             printf("[%d] Starting a GET (1 will GET from 0), message:\n[", my_rank);
             for(i = 0; i < buf_size; i++) {
@@ -580,9 +611,19 @@ int main(int argc, char **argv)
                 send_buf[i] = i * 2;
             }
 
-            parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
-            parsec_type_create_contiguous(buf_size, parsec_datatype_int_t, datatype);
-            ce->mem_register(send_buf, 1, *datatype, &rank_0_memory_handle, &rank_0_memory_handle_size);
+            if(ce->capabilites.supports_noncontiguous_datatype) {
+                parsec_datatype_t *datatype = malloc(sizeof(parsec_datatype_t));
+                parsec_type_create_contiguous(buf_size, parsec_datatype_int_t, datatype);
+                ce->mem_register(send_buf, PARSEC_MEM_TYPE_NONCONTIGUOUS,
+                                 1, *datatype,
+                                 -1,
+                                 &rank_0_memory_handle, &rank_0_memory_handle_size);
+            } else {
+                 ce->mem_register(send_buf, PARSEC_MEM_TYPE_CONTIGUOUS,
+                                  -1, -1,
+                                  buf_size,
+                                  &rank_0_memory_handle, &rank_0_memory_handle_size);
+            }
 
             printf("[%d] Starting a PUT (0 will PUT in 1), message:\n[", my_rank);
             for(i = 0; i < buf_size; i++) {
