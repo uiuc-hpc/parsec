@@ -188,6 +188,12 @@ int parsec_version_ex( size_t len, char* version_string);
 int parsec_remote_dep_set_ctx( parsec_context_t* context, intptr_t opaque_comm_ctx );
 
 
+#ifdef PARSEC_HAVE_LCI
+#include <lc.h>
+extern lc_ep *lci_global_ep;
+#endif
+
+
 /**
  * @brief Abort PaRSEC context
  *
