@@ -38,7 +38,9 @@ BODY
 
 #if defined(PARSEC_HAVE_MPI)
     MPI_Comm_rank( MPI_COMM_WORLD, &rank );
-#endif  /* defined(PARSEC_HAVE_MPI) */
+#else
+    rank = 0;
+#endif
     printf("I am element %d in the chain computed on node %d\n", *Aint, rank );
 }
 END

@@ -141,14 +141,14 @@ int main( int argc, char** argv )
         memmove(&argv[i], &argv[i+1], (argc - 1) * sizeof(char*));
         argc -= 1;
     }
-#ifdef DISTRIBUTED
+#ifdef PARSEC_HAVE_MPI
     {
         int provided;
         MPI_Init_thread(NULL, NULL, MPI_THREAD_SERIALIZED, &provided);
     }
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-#endif  /* DISTRIBUTED */
+#endif  /* PARSEC_HAVE_MPI */
     parsec = parsec_init(cores, &argc, &argv);
     if( NULL == parsec ) {
         exit(-1);

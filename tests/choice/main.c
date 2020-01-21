@@ -14,6 +14,8 @@
 #endif  /* defined(PARSEC_HAVE_STRING_H) */
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif  /* defined(PARSEC_HAVE_MPI) */
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,6 +37,12 @@ int main(int argc, char *argv[])
     }
     MPI_Comm_size(MPI_COMM_WORLD, &world);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_proc_num(&rank);
+    lc_get_num_proc(&world);
 #else
     world = 1;
     rank = 0;
@@ -111,6 +119,8 @@ int main(int argc, char *argv[])
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
 #endif
 
     return 0;
