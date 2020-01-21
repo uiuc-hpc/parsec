@@ -17,6 +17,8 @@ extern "C" %{
 
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif
 
 %}
@@ -169,6 +171,12 @@ int main(int argc, char *argv[])
     }
     MPI_Comm_size(MPI_COMM_WORLD, &nodes);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_proc_num(&rank);
+    lc_get_num_proc(&nodes);
 #else
     nodes = 1;
     rank = 0;
@@ -265,6 +273,8 @@ int main(int argc, char *argv[])
         /* Time start */
 #if defined(PARSEC_HAVE_MPI)
         MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lc_barrier(ep);
 #endif  /* defined(PARSEC_HAVE_MPI) */
         gettimeofday(&tstart, NULL);
 
@@ -275,6 +285,8 @@ int main(int argc, char *argv[])
         /* Time end */
 #if defined(PARSEC_HAVE_MPI)
         MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lc_barrier(ep);
 #endif  /* defined(PARSEC_HAVE_MPI) */
         gettimeofday(&tend, NULL);
 
@@ -292,11 +304,11 @@ int main(int argc, char *argv[])
 
     /* Clean up parsec*/
     parsec_fini(&parsec);
-
-#ifdef PARSEC_HAVE_MPI
+#if   defined(PARSEC_HAVE_MPI)
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
 #endif
-
     return 0;
 }
 

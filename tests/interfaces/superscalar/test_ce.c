@@ -1,4 +1,8 @@
+#if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
+#endif  /* defined(PARSEC_HAVE_MPI) */
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -441,6 +445,12 @@ int main(int argc, char **argv)
     }
     MPI_Comm_size(MPI_COMM_WORLD, &world);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_proc_num(&rank);
+    lc_get_num_proc(&world);
 #else
     world = 1;
     rank = 0;
@@ -472,7 +482,9 @@ int main(int argc, char **argv)
     }
 
     /* To make sure all the ranks have the tags registered */
+#ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif
 
     /* Testing active message */
     if(rank == 0) {
@@ -496,7 +508,9 @@ int main(int argc, char **argv)
         }
     }
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif
     counter = 0;
     printf("-------------------------------------\n");
 
@@ -520,7 +534,9 @@ int main(int argc, char **argv)
         }
     }
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif
     counter = 0;
     printf("-------------------------------------\n");
 
@@ -595,7 +611,9 @@ int main(int argc, char **argv)
 
     }
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif
     counter = 0;
 
     if(test_PUT) {
@@ -665,7 +683,9 @@ int main(int argc, char **argv)
         }
     }
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif
 
     ce->tag_unregister(ACTIVE_MESSAGE_FROM_0_TAG);
     ce->tag_unregister(ACTIVE_MESSAGE_FROM_1_TAG);
@@ -677,6 +697,8 @@ int main(int argc, char **argv)
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
 #endif
 
     return 0;

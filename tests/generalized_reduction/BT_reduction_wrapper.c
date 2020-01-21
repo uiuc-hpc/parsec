@@ -6,17 +6,17 @@
 
 #include "parsec/runtime.h"
 #include "parsec/data_distribution.h"
+#include "parsec/datatype.h"
 #include "parsec/arena.h"
 
-#if defined(PARSEC_HAVE_MPI)
-#include <mpi.h>
-#endif
 static parsec_datatype_t block;
 
 #include <stdio.h>
 
 #include "BT_reduction.h"
 #include "BT_reduction_wrapper.h"
+
+static parsec_datatype_t block;
 
 /**
  * @param [IN] A    the data, already distributed and allocated
@@ -47,9 +47,7 @@ parsec_taskpool_t *BT_reduction_new(parsec_tiled_matrix_dc_t *A, int nb, int nt)
  */
 void BT_reduction_destroy(parsec_taskpool_t *o)
 {
-#if defined(PARSEC_HAVE_MPI)
-    MPI_Type_free( &block );
-#endif
+    parsec_type_free(&block);
 
     parsec_taskpool_free(o);
 }
