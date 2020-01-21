@@ -1,5 +1,6 @@
 extern "C" %{
 #include "parsec/data_distribution.h"
+#include "parsec/datatype.h"
 #include "parsec/utils/mca_param.h"
 
 #include <assert.h>
@@ -206,7 +207,7 @@ bandwidth_new(parsec_data_collection_t *A, int loops, int frags, int size, int w
 
     ptrdiff_t lb, extent;
     parsec_datatype_t block;
-    parsec_type_create_contiguous(size, MPI_BYTE, &block);
+    parsec_type_create_contiguous(size, parsec_datatype_uint8_t, &block);
     parsec_type_extent(block, &lb, &extent);
 
     parsec_arena_construct(((parsec_bandwidth_taskpool_t*)tp)->arenas[PARSEC_bandwidth_DEFAULT_ARENA],
@@ -290,7 +291,7 @@ extern "C" %{
 int main(int argc, char *argv[])
 {
     parsec_context_t* parsec;
-    int rank, world, cores = -1, ngpus = 0;
+    int rank = 0, world = 1, cores = -1, ngpus = 0;
     int i, rc, size, loops, frags;
     parsec_data_collection_t *dcA;
     parsec_taskpool_t *bw_test;
@@ -301,9 +302,17 @@ int main(int argc, char *argv[])
     frags = 1;
     size = 1024;
     
+#if   defined(PARSEC_HAVE_MPI)
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &world);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_proc_num(&rank);
+    lc_get_num_proc(&world);
+#endif
 
     for( i = 1; i < argc; i++ ) {
         if(0 == strcmp(argv[i], "-c")) {
@@ -369,7 +378,11 @@ int main(int argc, char *argv[])
     free_data(dcA);
 
     parsec_fini(&parsec);
+#if   defined(PARSEC_HAVE_MPI)
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
+#endif
     return 0;
 }
 %}
