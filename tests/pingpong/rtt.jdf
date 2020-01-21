@@ -1,5 +1,9 @@
 extern "C" %{
-   /* This simple example does not need to include anything */
+#if   defined(PARSEC_HAVE_MPI)
+#include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
+#endif
 %}
 
 NT
@@ -17,8 +21,11 @@ RW T <- (k ==0) ? A(k % WS) : T PING(k-1)
 ; 0
 
 BODY
-	/* 
-	int r; MPI_Comm_rank(MPI_COMM_WORLD, &r);
+    int r;
+#if   defined(PARSEC_HAVE_MPI) 
+	MPI_Comm_rank(MPI_COMM_WORLD, &r);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_get_proc_num(&r);
+#endif
 	printf("%d: PING(%d)\n", r, k);
- 	*/
 END

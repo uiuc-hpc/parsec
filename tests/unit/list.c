@@ -17,6 +17,8 @@
 #include <inttypes.h>
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif
 #include "parsec/class/list.h"
 #include "parsec/os-spec-timing.h"
@@ -269,6 +271,10 @@ int main(int argc, char *argv[])
         int provided;
         MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided);
     }
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
 #endif
 
     while( (ch = getopt(argc, argv, "c:n:N:h?")) != -1 ) {

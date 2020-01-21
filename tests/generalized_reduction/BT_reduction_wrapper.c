@@ -10,6 +10,8 @@
 
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif
 static parsec_datatype_t block;
 
@@ -17,6 +19,8 @@ static parsec_datatype_t block;
 
 #include "BT_reduction.h"
 #include "BT_reduction_wrapper.h"
+
+static parsec_datatype_t block;
 
 /**
  * @param [IN] A    the data, already distributed and allocated

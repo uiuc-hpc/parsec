@@ -16,6 +16,8 @@
 #include <math.h>
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif  /* defined(PARSEC_HAVE_MPI) */
 
 #define MAXNT   16384
@@ -45,6 +47,12 @@ int main(int argc, char *argv[])
     }
     MPI_Comm_size(MPI_COMM_WORLD, &world);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep lci_ep;
+    lc_init(1, &lci_ep);
+    lci_global_ep = &lci_ep;
+    lc_get_proc_num(&rank);
+    lc_get_num_proc(&world);
 #else
     world = 1;
     rank = 0;
@@ -104,6 +112,8 @@ int main(int argc, char *argv[])
     parsec_fini(&parsec);
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
 #endif
 
     return 0;
