@@ -6,6 +6,13 @@
 #include "parsec/runtime.h"
 #include "parsec/datatype.h"
 
+#include <stdlib.h>
+
+typedef struct parsec_internal_datatype_s {
+    parsec_datatype_t element;
+    int count;
+} parsec_internal_datatype_t;
+
 /**
  * Map the datatype creation to the well designed and well known MPI datatype
  * mainipulation. However, right now we only provide the most basic types and
@@ -17,7 +24,7 @@
 int parsec_type_size( parsec_datatype_t type,
                      int *size )
 {
-    *size = 0;
+    parsec_internal_datatype_t *rtype = (parsec_internal_datatype_t *)type;
     switch( type ) {
     case parsec_datatype_int_t:
         *size = sizeof( int ); break;
@@ -48,19 +55,39 @@ int parsec_type_size( parsec_datatype_t type,
     case parsec_datatype_double_complex_t:
         *size = 2 * sizeof( double ); break;
     default:
-        return PARSEC_NOT_SUPPORTED;
+        parsec_type_size(rtype->element, size); *size *= rtype->count; break;
     }
     return PARSEC_SUCCESS;
 }
 
 int parsec_type_extent(parsec_datatype_t type, ptrdiff_t* lb, ptrdiff_t* extent) {
-    int size, rc;
-    rc = parsec_type_size(type, &size);
+    int ret, size;
+    ret = parsec_type_size(type, &size);
     *extent = size;
-    return rc;
+    *lb = 0;
+    return ret;
 }
 
 int parsec_type_free(parsec_datatype_t* type) {
+    switch( *type ) {
+    case parsec_datatype_int_t:
+    case parsec_datatype_int8_t:
+    case parsec_datatype_int16_t:
+    case parsec_datatype_int32_t:
+    case parsec_datatype_int64_t:
+    case parsec_datatype_uint8_t:
+    case parsec_datatype_uint16_t:
+    case parsec_datatype_uint32_t:
+    case parsec_datatype_uint64_t:
+    case parsec_datatype_float_t:
+    case parsec_datatype_double_t:
+    case parsec_datatype_long_double_t:
+    case parsec_datatype_complex_t:
+    case parsec_datatype_double_complex_t:
+        return PARSEC_ERR_BAD_PARAM;
+    default:
+        free((parsec_internal_datatype_t *)*type);
+    }
     *type = PARSEC_DATATYPE_NULL;
     return PARSEC_SUCCESS;
 }
@@ -69,8 +96,10 @@ int parsec_type_create_contiguous( int count,
                                   parsec_datatype_t oldtype,
                                   parsec_datatype_t* newtype )
 {
-    *newtype = PARSEC_DATATYPE_NULL;
-    (void)count; (void)oldtype;
+    parsec_internal_datatype_t *rtype = malloc(sizeof(*rtype));
+    rtype->element = oldtype;
+    rtype->count = count;
+    *newtype = (intptr_t)rtype;
     return PARSEC_SUCCESS;
 }
 

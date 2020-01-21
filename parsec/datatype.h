@@ -41,7 +41,7 @@ typedef MPI_Datatype parsec_datatype_t;
 
 #else  /* !defined(PARSEC_HAVE_MPI) */
 
-#define PARSEC_DATATYPE_NULL  ((intptr_t)NULL)
+#define PARSEC_DATATYPE_NULL  ((intptr_t)-1)
 typedef intptr_t  parsec_datatype_t;
 
 #define parsec_datatype_int_t              1
