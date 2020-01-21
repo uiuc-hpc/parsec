@@ -64,6 +64,11 @@
 #include <cuda_runtime_api.h>
 #endif
 
+#ifdef PARSEC_HAVE_LCI
+#include <lc.h>
+#include "parsec/parsec_lci.h"
+#endif
+
 /*
  * Global variables.
  */
@@ -107,10 +112,16 @@ static int parsec_runtime_bind_main_thread = 1;
 
 PARSEC_TLS_DECLARE(parsec_tls_execution_stream);
 
-#if defined(DISTRIBUTED) && defined(PARSEC_HAVE_MPI)
+#if defined(DISTRIBUTED)
+#  if   defined(PARSEC_HAVE_MPI)
 static void parsec_mpi_exit(int status) {
     MPI_Abort(MPI_COMM_WORLD, status);
 }
+#  elif defined(PARSEC_HAVE_LCI)
+static void parsec_lci_exit(int status) {
+    lci_abort(status);
+}
+#  endif
 #endif
 
 /*
@@ -402,13 +413,20 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
         }
         free(environ);
     }
-#if defined(DISTRIBUTED) && defined(PARSEC_HAVE_MPI)
+#if defined(DISTRIBUTED)
+#  if   defined(PARSEC_HAVE_MPI)
     int mpi_is_up;
     MPI_Initialized(&mpi_is_up);
     if( mpi_is_up ) {
         MPI_Comm_rank(MPI_COMM_WORLD, &parsec_debug_rank);
         parsec_weaksym_exit = parsec_mpi_exit;
     }
+#  elif defined(PARSEC_HAVE_LCI)
+    if (NULL != lci_global_ep) {
+        lc_get_proc_num(&parsec_debug_rank);
+        parsec_weaksym_exit = parsec_lci_exit;
+    }
+#  endif
 #endif    
     parsec_debug_init();
     mca_components_repository_init();
@@ -998,23 +1016,30 @@ int parsec_fini( parsec_context_t** pcontext )
     {
         char filename[64];
         char prefix[32];
-#if defined(DISTRIBUTED) && defined(PARSEC_HAVE_MPI)
+# if defined(DISTRIBUTED)
         int rank = 0, size = 1;
+#  if   defined(PARSEC_HAVE_MPI)
         int mpi_is_on;
         MPI_Initialized(&mpi_is_on);
         if(mpi_is_on) {
             MPI_Comm_rank(MPI_COMM_WORLD, &rank);
             MPI_Comm_size(MPI_COMM_WORLD, &size);
         }
+#  elif defined(PARSEC_HAVE_LCI)
+        if (NULL != lci_global_ep) {
+            lc_get_proc_num(&rank);
+            lc_get_num_proc(&size);
+        }
+#  endif /* PARSEC_HAVE_MPI || PARSEC_HAVE_LCI */
         snprintf(filename, 64, "parsec-%d.stats", rank);
         snprintf(prefix, 32, "%d/%d", rank, size);
 # else
         snprintf(filename, 64, "parsec.stats");
         prefix[0] = '\0';
-# endif
+# endif /* DISTRIBUTED */
         parsec_stats_dump(filename, prefix);
     }
-#endif
+#endif /* PARSEC_STATS */
 
     parsec_taskpool_release_resources();
 
@@ -1772,6 +1797,16 @@ int parsec_taskpool_register( parsec_taskpool_t* tp )
     return idx;
 }
 
+#if defined(DISTRIBUTED) && defined(PARSEC_HAVE_LCI)
+static void lci_max_op(void *dst, void *src, size_t count)
+{
+    uint32_t *d = dst;
+    uint32_t *s = src;
+    if (*s > *d)
+        *d = *s;
+}
+#endif
+
 /* globally synchronize taskpool id's so that next register generates the same
  * id at all ranks. */
 void parsec_taskpool_sync_ids( void )
@@ -1784,6 +1819,11 @@ void parsec_taskpool_sync_ids( void )
     MPI_Initialized(&mpi_is_on);
     if( mpi_is_on ) {
         MPI_Allreduce( MPI_IN_PLACE, &idx, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD );
+    }
+#elif defined(DISTRIBUTED) && defined(PARSEC_HAVE_LCI)
+    if (NULL != lci_global_ep) {
+        lc_alreduce(LC_COL_IN_PLACE, &idx, sizeof(uint32_t),
+                    lci_max_op, *lci_global_ep);
     }
 #endif
     if( idx >= taskpool_array_size ) {
@@ -1998,6 +2038,9 @@ int parsec_parse_binding_parameter(const char * option, parsec_context_t* contex
         if(mpi_is_on) {
             MPI_Comm_rank((MPI_Comm)context->comm_ctx, &rank);
         }
+#elif defined(DISTRIBUTED) && defined(PARSEC_HAVE_LCI)
+        if (NULL != lci_global_ep)
+            lc_get_proc_num(&rank);
 #endif /* DISTRIBUTED && PARSEC_HAVE_MPI */
         while (getline(&line, &line_len, f) != -1) {
             if(line_num == rank) {

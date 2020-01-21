@@ -35,12 +35,17 @@ void parsec_prof_grapher_init(const char *base_filename, int nbthreads)
     char *filename;
     int t, size = 1, rank = 0;
 
-#if defined(DISTRIBUTED) && defined(PARSEC_HAVE_MPI)
+#if defined(DISTRIBUTED)
     char *format;
     int l10 = 0, cs;
 
+#  if   defined(PARSEC_HAVE_MPI)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+#  elif defined(PARSEC_HAVE_LCI)
+    lc_get_proc_num(&rank);
+    lc_get_num_proc(&size);
+#  endif
     cs = size;
     while(cs > 0) {
       l10++;

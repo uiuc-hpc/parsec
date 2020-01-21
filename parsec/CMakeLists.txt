@@ -89,6 +89,7 @@ set(SOURCES
   ${PROFILING_SOURCE}
   remote_dep.c
   parsec_comm_engine.c
+  parsec_lci.c
   parsec_mpi_funnelled.c
   parsec_remote_dep.c
   scheduling.c

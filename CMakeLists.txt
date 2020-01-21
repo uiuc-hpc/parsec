@@ -93,9 +93,11 @@ option(PARSEC_SCHED_DEPS_MASK
 ### Distributed engine parameters
 mark_as_advanced(PARSEC_DIST_THREAD PARSEC_DIST_PRIORITIES)
 option(PARSEC_DIST_WITH_MPI
-  "Build PaRSEC for distributed memory with MPI backend (conflicts all other backends)" ON)
-if(PARSEC_DIST_WITH_MPI AND 0)
-  message(FATAL_ERROR "PARSEC_DIST_WITH_MPI and PARSEC_DIST_WITH_OTHER are mutually exclusive, please select only one")
+  "Build PaRSEC for distributed memory with MPI backend (conflicts all other backends)" OFF)
+option(PARSEC_DIST_WITH_LCI
+  "Build PaRSEC for distributed memory with LCI backend (conflicts all other backends)" ON)
+if(PARSEC_DIST_WITH_MPI AND PARSEC_DIST_WITH_LCI)
+  message(FATAL_ERROR "PARSEC_DIST_WITH_MPI and PARSEC_DIST_WITH_LCI are mutually exclusive, please select only one")
 endif()
 option(PARSEC_DIST_THREAD
   "Use an extra thread to progress the data movements" ON)
@@ -628,6 +630,15 @@ IF( BUILD_PARSEC )
     check_function_exists(MPI_Type_create_resized PARSEC_HAVE_MPI_20)
     CMAKE_POP_CHECK_STATE()
   endif (MPI_C_FOUND)
+
+  if(PARSEC_DIST_WITH_LCI)
+    pkg_check_modules (LCI REQUIRED liblci=0.2.0)
+    link_directories(${LCI_LIBRARY_DIRS})
+    list(APPEND EXTRA_LIBS ${LCI_LIBRARIES})
+    include_directories(${LCI_INCLUDE_DIRS})
+    list(APPEND EXTRA_INCLUDES ${LCI_INCLUDE_DIRS})
+    set(PARSEC_HAVE_LCI ${LCI_FOUND})
+  endif(PARSEC_DIST_WITH_LCI)
 
   if( PARSEC_GPU_WITH_CUDA )
     STRING(REGEX MATCH "PGI$" _match_pgi ${CMAKE_C_COMPILER_ID})

@@ -49,6 +49,7 @@
 
 /* Communication engine */
 #cmakedefine PARSEC_DIST_WITH_MPI
+#cmakedefine PARSEC_DIST_WITH_LCI
 #cmakedefine PARSEC_DIST_THREAD
 #cmakedefine PARSEC_DIST_PRIORITIES
 #cmakedefine PARSEC_DIST_COLLECTIVES
@@ -103,6 +104,7 @@
 #cmakedefine PARSEC_HAVE_OPENCL
 #cmakedefine PARSEC_HAVE_MPI
 #cmakedefine PARSEC_HAVE_MPI_20
+#cmakedefine PARSEC_HAVE_LCI
 #cmakedefine PARSEC_HAVE_AYUDAME
 
 #define PARSEC_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"

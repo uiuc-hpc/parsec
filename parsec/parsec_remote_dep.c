@@ -1,6 +1,12 @@
 #include "parsec/parsec_config.h"
 
+#if   defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
+#endif
+
+#include "datatype.h"
 #include "profiling.h"
 #include "parsec/class/list.h"
 #include "parsec/utils/output.h"
@@ -587,7 +593,7 @@ remote_dep_mpi_save_activate_cb(parsec_comm_engine_t *ce, parsec_ce_tag_t tag,
                     0, deps->msg.deps, deps->msg.output_mask);
             /* Copy the eager data to some temp storage */
             packed_buffer = malloc(deps->msg.length);
-            memcpy(packed_buffer, msg + position, deps->msg.length);
+            memcpy(packed_buffer, (uint8_t *)msg + position, deps->msg.length);
             position += deps->msg.length;  /* move to the next order */
             deps->taskpool = (parsec_taskpool_t*)packed_buffer;  /* temporary storage */
             parsec_list_nolock_fifo_push(&dep_activates_noobj_fifo, (parsec_list_item_t*)deps);
@@ -611,7 +617,7 @@ remote_dep_mpi_save_activate_cb(parsec_comm_engine_t *ce, parsec_ce_tag_t tag,
                             deps->msg.deps, deps->msg.output_mask);
                     /* Copy the eager data to some temp storage */
                     packed_buffer = malloc(deps->msg.length);
-                    memcpy(packed_buffer, msg + position, deps->msg.length);
+                    memcpy(packed_buffer, (uint8_t *)msg + position, deps->msg.length);
                     position += deps->msg.length;  /* move to the next order */
                     deps->taskpool = (parsec_taskpool_t*)packed_buffer;  /* temporary storage */
                     parsec_dtd_track_remote_dep( dtd_tp, key, deps );
@@ -705,6 +711,7 @@ remote_dep_dequeue_init(parsec_context_t* context)
 
     assert(mpi_initialized == 0);
 
+#if defined(PARSEC_HAVE_MPI)
     MPI_Initialized(&is_mpi_up);
     if( 0 == is_mpi_up ) {
         /**
@@ -720,8 +727,23 @@ remote_dep_dequeue_init(parsec_context_t* context)
                      "\t* Alternatively, compile a version of PaRSEC without MPI (-DPARSEC_DIST_WITH_MPI=OFF in ccmake)\n");
         return 1;
     }
+#elif defined(PARSEC_HAVE_LCI)
+    if (NULL == lci_global_ep) {
+        /**
+         * LCI is not up, so we will consider this as a single node run. Fall
+         * back to the no-LCI case.
+         */
+        context->nb_nodes = 1;
+        parsec_communication_engine_up = -1;  /* No communications supported */
+        return 1;
+    }
+    if (NULL == context->comm_ctx)
+        context->comm_ctx = lci_global_ep;
+#endif
+
     parsec_communication_engine_up = 0;  /* we have communication capabilities */
 
+#if defined(PARSEC_HAVE_MPI)
     MPI_Query_thread( &thread_level_support );
     if( thread_level_support == MPI_THREAD_SINGLE ||
         thread_level_support == MPI_THREAD_FUNNELED ) {
@@ -736,6 +758,10 @@ remote_dep_dequeue_init(parsec_context_t* context)
     if( thread_level_support >= MPI_THREAD_MULTIPLE ) {
         context->flags |= PARSEC_CONTEXT_FLAG_COMM_MT;
     }
+#elif defined(PARSEC_HAVE_LCI)
+    lc_get_num_proc(&context->nb_nodes);
+    context->flags |= PARSEC_CONTEXT_FLAG_COMM_MT;
+#endif
 
     /**
      * Finalize the initialization of the upper level structures
@@ -959,15 +985,27 @@ static int remote_dep_nothread_memcpy(parsec_execution_stream_t* es,
                                       dep_cmd_item_t *item)
 {
     dep_cmd_t* cmd = &item->cmd;
+    int ret = 0;
+#if   defined(PARSEC_HAVE_MPI)
     int rc = MPI_Sendrecv((char*)PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.source     ) + cmd->memcpy.displ_s,
                           cmd->memcpy.count, cmd->memcpy.datatype, 0, 0,
                           (char*)PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.destination) + cmd->memcpy.displ_r,
                           cmd->memcpy.count, cmd->memcpy.datatype, 0, 0,
                           MPI_COMM_SELF, MPI_STATUS_IGNORE);
+    if (MPI_SUCCESS != rc)
+        ret = -1;
+#elif defined(PARSEC_HAVE_LCI)
+    int size;
+    parsec_type_size(cmd->memcpy.datatype, &size);
+    size_t bytes = size * cmd->memcpy.count;
+    memcpy((uint8_t *)PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.destination) + cmd->memcpy.displ_r,
+           (uint8_t *)PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.source     ) + cmd->memcpy.displ_s,
+           bytes);
+#endif
     PARSEC_DATA_COPY_RELEASE(cmd->memcpy.source);
     remote_dep_dec_flying_messages(item->cmd.memcpy.taskpool);
     (void)es;
-    return (MPI_SUCCESS == rc ? 0 : -1);
+    return ret;
 }
 
 static int remote_dep_mpi_on(parsec_context_t* context)
@@ -1025,9 +1063,9 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
     parsec_remote_deps_t* deps = (parsec_remote_deps_t*) (uintptr_t) task->source_deps;
     int k, nbdtt;
     void* dataptr;
-    MPI_Datatype dtt;
+    parsec_datatype_t dtt;
 #endif  /* !defined(PARSEC_PROF_DRY_DEP) */
-#if defined(PARSEC_DEBUG_NOISIER)
+#if defined(PARSEC_DEBUG_NOISIER) && defined(PARSEC_HAVE_MPI)
     char type_name[MPI_MAX_OBJECT_NAME];
     int len;
 #endif
@@ -1074,9 +1112,14 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
         parsec_ce_mem_reg_handle_t remote_memory_handle = item->cmd.activate.remote_memory_handle;
 
 #if defined(PARSEC_DEBUG_NOISIER)
+#  if   defined(PARSEC_HAVE_MPI)
         MPI_Type_get_name(dtt, type_name, &len);
         PARSEC_DEBUG_VERBOSE(10, parsec_debug_output, "MPI:\tTO\t%d\tPut START\tunknown \tk=%d\twith deps 0x%lx at %p type %s\t(tag=bla displ = %ld)",
                item->cmd.activate.peer, k, task->source_deps, dataptr, type_name, deps->output[k].data.displ);
+#  elif defined(PARSEC_HAVE_LCI)
+        PARSEC_DEBUG_VERBOSE(10, parsec_debug_output, "LCI:\tTO\t%d\tPut START\tunknown \tk=%d\twith deps 0x%lx at %p\t(tag=bla displ = %ld)",
+               item->cmd.activate.peer, k, task->source_deps, dataptr, deps->output[k].data.displ);
+#  endif
 #endif
 
         remote_dep_cb_data_t *cb_data = (remote_dep_cb_data_t *) parsec_thread_mempool_allocate
@@ -1202,10 +1245,13 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
     remote_dep_wire_activate_t* task = &(deps->msg);
     int from = deps->from, k, count, nbdtt;
     remote_dep_wire_get_t msg;
-    MPI_Datatype dtt;
+    parsec_datatype_t dtt;
 #if defined(PARSEC_DEBUG_NOISIER)
-    char tmp[MAX_TASK_STRLEN], type_name[MPI_MAX_OBJECT_NAME];
+#if defined(PARSEC_HAVE_MPI)
+    char type_name[MPI_MAX_OBJECT_NAME];
     int len;
+#endif
+    char tmp[MAX_TASK_STRLEN];
     remote_dep_cmd_to_string(task, tmp, MAX_TASK_STRLEN);
 #endif
 
@@ -1244,12 +1290,18 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
         nbdtt = deps->output[k].data.count;
 
 #  if defined(PARSEC_DEBUG_NOISIER)
+#    if   defined(PARSEC_HAVE_MPI)
         MPI_Type_get_name(dtt, type_name, &len);
         int _size;
         MPI_Type_size(dtt, &_size);
         PARSEC_DEBUG_VERBOSE(10, parsec_debug_output, "MPI:\tTO\t%d\tGet START\t% -8s\tk=%d\twith datakey %lx at %p type %s count %d displ %ld extent %d\t(tag=%d)",
                 from, tmp, k, task->deps, PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), type_name, nbdtt,
                 deps->output[k].data.displ, deps->output[k].data.arena->elem_size * nbdtt, k);
+#    elif defined(PARSEC_HAVE_LCI)
+        PARSEC_DEBUG_VERBOSE(10, parsec_debug_output, "LCI:\tTO\t%d\tGet START\t% -8s\tk=%d\twith datakey %lx at %p count %d displ %ld extent %d\t(tag=%d)",
+                from, tmp, k, task->deps, PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), nbdtt,
+                deps->output[k].data.displ, deps->output[k].data.arena->elem_size * nbdtt, k);
+#    endif
 #  endif
 
         /* We have the remote mem_handle.

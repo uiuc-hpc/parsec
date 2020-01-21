@@ -64,7 +64,7 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
-#if defined(PARSEC_HAVE_MPI)
+#if defined(PARSEC_HAVE_MPI) || defined(PARSEC_HAVE_LCI)
 # define DISTRIBUTED
 #else
 # undef DISTRIBUTED

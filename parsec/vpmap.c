@@ -10,10 +10,13 @@
 #include <assert.h>
 #include <errno.h>
 
-#if defined(PARSEC_HAVE_MPI)
+#if   defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif
 
+#include "parsec/runtime.h"
 #include "parsec/parsec_hwloc.h"
 #include "parsec/vpmap.h"
 #include "parsec/utils/debug.h"
@@ -250,6 +253,9 @@ int vpmap_init_from_file(const char *filename)
     if(mpi_is_on) {
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     }
+#elif defined(PARSEC_HAVE_LCI)
+    if (NULL != lci_global_ep)
+        lc_get_proc_num(&rank);
 #endif
     /* Count the number of line describing a VP for the process rank */
     while( getline(&line, &nline, f) != -1 ) {
