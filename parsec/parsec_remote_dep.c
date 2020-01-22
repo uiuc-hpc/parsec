@@ -1118,7 +1118,7 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
             int dtt_size;
             parsec_type_size(dtt, &dtt_size);
             parsec_ce.mem_register(dataptr, PARSEC_MEM_TYPE_CONTIGUOUS,
-                                   -1, NULL,
+                                   -1, PARSEC_DATATYPE_NULL,
                                    dtt_size,
                                    &source_memory_handle, &source_memory_handle_size);
 
@@ -1318,7 +1318,7 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
             int dtt_size;
             parsec_type_size(dtt, &dtt_size);
             parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), PARSEC_MEM_TYPE_CONTIGUOUS,
-                                   -1, NULL,
+                                   -1, PARSEC_DATATYPE_NULL,
                                    dtt_size,
                                    &receiver_memory_handle, &receiver_memory_handle_size);
 
