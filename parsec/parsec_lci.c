@@ -56,8 +56,7 @@ typedef struct lci_mem_reg_handle_s {
     size_t                  count;
     parsec_datatype_t       datatype;
 } lci_mem_reg_handle_t;
-PARSEC_DECLSPEC OBJ_CLASS_DECLARATION(lci_mem_reg_handle_t);
-OBJ_CLASS_INSTANCE(lci_mem_reg_handle_t, parsec_list_item_t, NULL, NULL);
+static PARSEC_OBJ_CLASS_INSTANCE(lci_mem_reg_handle_t, parsec_list_item_t, NULL, NULL);
 
 /* memory pool for memory handles */
 static parsec_mempool_t *lci_mem_reg_handle_mempool = NULL;
@@ -91,8 +90,7 @@ typedef struct lci_cb_handle_s {
         int                  remote;       /* remote peer   */
     } args;
 } lci_cb_handle_t;
-PARSEC_DECLSPEC OBJ_CLASS_DECLARATION(lci_cb_handle_t);
-OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
+static PARSEC_OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
 
 /* memory pool for callbacks */
 static parsec_mempool_t *lci_cb_handle_mempool = NULL;
@@ -249,7 +247,7 @@ lci_init(parsec_context_t *context)
     /* create a mempool for memory registration */
     lci_mem_reg_handle_mempool = malloc(sizeof(parsec_mempool_t));
     parsec_mempool_construct(lci_mem_reg_handle_mempool,
-                             OBJ_CLASS(lci_mem_reg_handle_t),
+                             PARSEC_OBJ_CLASS(lci_mem_reg_handle_t),
                              sizeof(lci_mem_reg_handle_t),
                              offsetof(lci_mem_reg_handle_t, mempool_owner),
                              1);
@@ -257,7 +255,7 @@ lci_init(parsec_context_t *context)
     /* create a mempool for callbacks */
     lci_cb_handle_mempool = malloc(sizeof(parsec_mempool_t));
     parsec_mempool_construct(lci_cb_handle_mempool,
-                             OBJ_CLASS(lci_cb_handle_t),
+                             PARSEC_OBJ_CLASS(lci_cb_handle_t),
                              sizeof(lci_cb_handle_t),
                              offsetof(lci_cb_handle_t, mempool_owner),
                              1);
@@ -280,7 +278,7 @@ lci_init(parsec_context_t *context)
     }
 
     /* allocated hash tables for callbacks */
-    am_cb_hash_table = OBJ_NEW(parsec_hash_table_t);
+    am_cb_hash_table = PARSEC_OBJ_NEW(parsec_hash_table_t);
     parsec_hash_table_init(am_cb_hash_table,
                            offsetof(lci_cb_handle_t, ht_item),
                            4, key_fns, am_cb_hash_table);
@@ -343,7 +341,7 @@ lci_fini(parsec_comm_engine_t *comm_engine)
     pthread_join(progress_thread_id, &progress_retval);
 
     parsec_hash_table_fini(am_cb_hash_table);
-    OBJ_RELEASE(am_cb_hash_table);
+    PARSEC_OBJ_RELEASE(am_cb_hash_table);
 
     lc_pool_destroy(lci_req_pool);
     free(lci_req_array);
