@@ -28,6 +28,10 @@ if(NOT TARGET parsec-data-matrix)
   add_library(parsec-data-matrix OBJECT ${sources})
 endif(NOT TARGET parsec-data-matrix)
 
+if( PARSEC_HAVE_LCI )
+  target_include_directories(parsec-data-matrix PUBLIC ${LCI_INCLUDE_DIRS})
+endif( PARSEC_HAVE_LCI )
+
 set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/reduce_col.jdf"
                     "${CMAKE_CURRENT_SOURCE_DIR}/reduce_row.jdf"
                     "${CMAKE_CURRENT_SOURCE_DIR}/reduce.jdf"
