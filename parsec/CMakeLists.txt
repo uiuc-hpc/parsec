@@ -187,7 +187,8 @@ if( BUILD_PARSEC )
     PUBLIC
     $<$<BOOL:${HWLOC_FOUND}>:HWLOC::HWLOC>
     $<$<BOOL:${PARSEC_HAVE_OTF2}>:otf2>
-    $<$<BOOL:${MPI_C_FOUND}>:MPI::MPI_C>
+    $<$<BOOL:${PARSEC_HAVE_MPI}>:MPI::MPI_C>
+    $<$<BOOL:${PARSEC_HAVE_LCI}>:PkgConfig::LCI>
     INTERFACE
     ${EXTRA_LIBS}
     )

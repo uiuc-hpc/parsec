@@ -634,11 +634,7 @@ IF( BUILD_PARSEC )
   endif (MPI_C_FOUND)
 
   if(PARSEC_DIST_WITH_LCI)
-    pkg_check_modules (LCI REQUIRED liblci=0.2.0)
-    link_directories(${LCI_LIBRARY_DIRS})
-    list(APPEND EXTRA_LIBS ${LCI_LIBRARIES})
-    include_directories(${LCI_INCLUDE_DIRS})
-    list(APPEND EXTRA_INCLUDES ${LCI_INCLUDE_DIRS})
+    pkg_check_modules (LCI REQUIRED IMPORTED_TARGET liblci=0.2.0)
     set(PARSEC_HAVE_LCI ${LCI_FOUND})
   endif(PARSEC_DIST_WITH_LCI)
 
