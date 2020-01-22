@@ -96,8 +96,6 @@ set(SOURCES
   private_mempool.c
   remote_dep.c
   parsec_comm_engine.c
-  parsec_lci.c
-  parsec_mpi_funnelled.c
   parsec_remote_dep.c
   scheduling.c
   compound.c
@@ -109,11 +107,13 @@ set(SOURCES
   ${MCA_EXTRA_SOURCES}
 )
 
-if( NOT MPI_C_FOUND )
+if( PARSEC_HAVE_MPI )
+  list(APPEND SOURCES datatype/datatype_mpi.c parsec_mpi_funnelled.c)
+elseif( PARSEC_HAVE_LCI )
+  list(APPEND SOURCES datatype/datatype.c parsec_lci.c)
+else( PARSEC_HAVE_MPI )
   list(APPEND SOURCES datatype/datatype.c)
-else( NOT MPI_C_FOUND )
-  list(APPEND SOURCES datatype/datatype_mpi.c)
-endif( NOT MPI_C_FOUND )
+endif( PARSEC_HAVE_MPI )
 list(APPEND SOURCES parsec_hwloc.c)
 
 if( PARSEC_PROF_GRAPHER )
