@@ -17,6 +17,8 @@
 #include "parsec/parsec_remote_dep.h"
 #include "parsec/class/dequeue.h"
 
+extern int parsec_comm_output_stream;
+
 #define PARSEC_DTD_SKIP_SAVING -1
 #define PARSEC_DTD_SAVE 1
 

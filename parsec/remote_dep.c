@@ -25,7 +25,7 @@
  * -  3: communication thread is up but sleeping
  */
 int parsec_communication_engine_up = -1;
-static int parsec_comm_output_stream = 0;
+int parsec_comm_output_stream = 0;
 static int parsec_comm_verbose = 0;
 
 #ifdef DISTRIBUTED
