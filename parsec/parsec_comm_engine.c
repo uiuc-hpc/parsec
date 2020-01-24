@@ -5,8 +5,12 @@
  */
 
 #include <assert.h>
+#include "parsec/parsec_comm_engine.h"
+#if defined(PARSEC_HAVE_MPI)
+#include "parsec/parsec_mpi_funnelled.h"
+#elif defined(PARSEC_HAVE_LCI)
 #include "parsec/parsec_lci.h"
-//#include "parsec/parsec_mpi_funnelled.h"
+#endif
 
 parsec_comm_engine_t parsec_ce;
 
@@ -14,9 +18,13 @@ parsec_comm_engine_t parsec_ce;
 parsec_comm_engine_t *
 parsec_comm_engine_init(parsec_context_t *parsec_context)
 {
+    parsec_comm_engine_t *ce = NULL;
     /* call the selected module init */
-    parsec_comm_engine_t *ce = lci_init(parsec_context);
-//    parsec_comm_engine_t *ce = mpi_funnelled_init(parsec_context);
+#if defined(PARSEC_HAVE_MPI)
+    ce = mpi_funnelled_init(parsec_context);
+#elif defined(PARSEC_HAVE_LCI)
+    ce = lci_init(parsec_context);
+#endif
 
     assert(ce->capabilites.sided > 0 && ce->capabilites.sided < 3);
     return ce;
@@ -25,7 +33,12 @@ parsec_comm_engine_init(parsec_context_t *parsec_context)
 int
 parsec_comm_engine_fini(parsec_comm_engine_t *comm_engine)
 {
+    int ret = 1;
     /* call the selected module fini */
-    return lci_fini(comm_engine);
-//    return mpi_funnelled_fini(comm_engine);
+#if defined(PARSEC_HAVE_MPI)
+    ret = mpi_funnelled_fini(comm_engine);
+#elif defined(PARSEC_HAVE_LCI)
+    ret = lci_fini(comm_engine);
+#endif
+    return ret;
 }
