@@ -118,6 +118,14 @@ set   (PARSEC_DIST_SHORT_LIMIT 1 CACHE STRING
 set   (PARSEC_DIST_EAGER_LIMIT 12 CACHE STRING
   "Use the eager protocol (no flow control) for messages smaller than the limit in KB")
 
+### Datatype parameters
+CMAKE_DEPENDENT_OPTION(PARSEC_OPAL_DATATYPES
+  "Use Open PAL datatypes (requires Open MPI development headers)" OFF
+  "NOT PARSEC_DIST_WITH_MPI" OFF)
+if(PARSEC_DIST_WITH_MPI AND PARSEC_OPAL_DATATYPES)
+  message(WARNING "PARSEC_DIST_WITH_MPI implies MPI datatypes, PARSEC_OPAL_DATATYPES ignored")
+endif()
+
 ### GPU engine parameters
 option(PARSEC_GPU_WITH_CUDA
   "Enable GPU support using CUDA kernels" ON)
@@ -630,6 +638,11 @@ IF( BUILD_PARSEC )
                              FAIL_REGEX "malfunctionning mpi_assert_enable_overtaking")
     CMAKE_POP_CHECK_STATE()
   endif (MPI_C_FOUND)
+
+  if (PARSEC_OPAL_DATATYPES)
+    pkg_check_modules(OPAL REQUIRED IMPORTED_TARGET opal)
+    set(PARSEC_HAVE_OPAL ${OPAL_FOUND})
+  endif (PARSEC_OPAL_DATATYPES)
 
   if( PARSEC_GPU_WITH_CUDA )
     STRING(REGEX MATCH "PGI$" _match_pgi ${CMAKE_C_COMPILER_ID})

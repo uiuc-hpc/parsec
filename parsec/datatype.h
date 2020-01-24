@@ -39,6 +39,25 @@ typedef MPI_Datatype parsec_datatype_t;
 #define parsec_datatype_complex_t          MPI_COMPLEX
 #define parsec_datatype_double_complex_t   MPI_DOUBLE_COMPLEX
 
+#elif defined(PARSEC_OPAL_DATATYPES)
+#include <opal/datatype/opal_datatype.h>
+typedef opal_datatype_t * parsec_datatype_t;
+extern const parsec_datatype_t PARSEC_DATATYPE_NULL;
+extern const parsec_datatype_t parsec_datatype_int_t;
+extern const parsec_datatype_t parsec_datatype_int8_t;
+extern const parsec_datatype_t parsec_datatype_int16_t;
+extern const parsec_datatype_t parsec_datatype_int32_t;
+extern const parsec_datatype_t parsec_datatype_int64_t;
+extern const parsec_datatype_t parsec_datatype_uint8_t;
+extern const parsec_datatype_t parsec_datatype_uint16_t;
+extern const parsec_datatype_t parsec_datatype_uint32_t;
+extern const parsec_datatype_t parsec_datatype_uint64_t;
+extern const parsec_datatype_t parsec_datatype_float_t;
+extern const parsec_datatype_t parsec_datatype_double_t;
+extern const parsec_datatype_t parsec_datatype_long_double_t;
+extern const parsec_datatype_t parsec_datatype_complex_t;
+extern const parsec_datatype_t parsec_datatype_double_complex_t;
+
 #else  /* !defined(PARSEC_HAVE_MPI) */
 
 #define PARSEC_DATATYPE_NULL  ((intptr_t)NULL)

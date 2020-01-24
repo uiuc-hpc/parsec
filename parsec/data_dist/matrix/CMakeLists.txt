@@ -38,6 +38,10 @@ target_ptg_sources(parsec-data-matrix PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/reduce
 set_target_properties(parsec-data-matrix PROPERTIES POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 target_include_directories(parsec-data-matrix PUBLIC ${MPI_C_INCLUDE_PATH}) # ${CMAKE_CURRENT_BINARY_DIR}) added by target_ptg_sources
 
+if(PARSEC_OPAL_DATATYPES AND OPAL_FOUND)
+  target_include_directories(parsec-data-matrix PUBLIC ${OPAL_INCLUDE_DIRS})
+endif(PARSEC_OPAL_DATATYPES AND OPAL_FOUND)
+
 add_dependencies(parsec parsec-data-matrix)
 target_sources(parsec PRIVATE $<TARGET_OBJECTS:parsec-data-matrix>)
 

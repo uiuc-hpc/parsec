@@ -63,6 +63,11 @@
 #include <cuda_runtime_api.h>
 #endif
 
+#ifdef PARSEC_HAVE_OPAL
+extern int opal_init_util(int* pargc, char*** pargv);
+extern int opal_finalize_util(void);
+#endif
+
 /*
  * Global variables.
  */
@@ -408,6 +413,7 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
         }
         free(environ);
     }
+
 #if defined(DISTRIBUTED) && defined(PARSEC_HAVE_MPI)
     int mpi_is_up;
     MPI_Initialized(&mpi_is_up);
@@ -425,6 +431,10 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     parsec_warning("OS X < 10.13 does not support thread/process binding. Performance might be affected");
 #endif  /* defined(PARSEC_OSX) */
 #endif  /* defined(HWLOC) */
+
+#if defined(PARSEC_HAVE_OPAL)
+    opal_init_util(pargc, pargv);
+#endif
 
     if( parsec_cmd_line_is_taken(cmd_line, "ht") ) {
 #if defined(PARSEC_HAVE_HWLOC)
@@ -982,6 +992,10 @@ int parsec_fini( parsec_context_t** pcontext )
     }
     /* Destroy all resources allocated for the barrier */
     parsec_barrier_destroy( &(context->barrier) );
+
+#if defined(PARSEC_HAVE_OPAL)
+    opal_finalize_util();
+#endif
 
 #if defined(PARSEC_HAVE_HWLOC_BITMAP)
     /* Release thread binding masks */

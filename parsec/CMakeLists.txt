@@ -103,11 +103,14 @@ set(SOURCES
   ${MCA_EXTRA_SOURCES}
 )
 
-if( NOT MPI_C_FOUND )
-  list(APPEND SOURCES datatype/datatype.c)
-else( NOT MPI_C_FOUND )
+if( PARSEC_HAVE_MPI )
   list(APPEND SOURCES datatype/datatype_mpi.c)
-endif( NOT MPI_C_FOUND )
+elseif( PARSEC_OPAL_DATATYPES )
+  list(APPEND SOURCES datatype/datatype_opal.c)
+else()
+  list(APPEND SOURCES datatype/datatype.c)
+endif()
+
 list(APPEND SOURCES parsec_hwloc.c)
 
 if( PARSEC_PROF_GRAPHER )
@@ -184,6 +187,7 @@ if( BUILD_PARSEC )
     $<$<BOOL:${HWLOC_FOUND}>:HWLOC::HWLOC>
     $<$<BOOL:${PARSEC_HAVE_OTF2}>:otf2>
     $<$<BOOL:${MPI_C_FOUND}>:MPI::MPI_C>
+    $<$<BOOL:${OPAL_FOUND}>:PkgConfig::OPAL>
     INTERFACE
     ${EXTRA_LIBS}
     )
