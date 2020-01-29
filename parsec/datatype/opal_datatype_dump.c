@@ -22,34 +22,34 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "opal/constants.h"
-#include "opal/util/output.h"
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_datatype_internal.h"
+#include "parsec/constants.h"
+#include "parsec/util/output.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
 
 /********************************************************
  * Data dumping functions
  ********************************************************/
 
-int opal_datatype_contain_basic_datatypes( const opal_datatype_t* pData, char* ptr, size_t length )
+int parsec_datatype_contain_basic_datatypes( const parsec_datatype_t* pData, char* ptr, size_t length )
 {
     int i;
     int32_t index = 0;
     uint64_t mask = 1;
 
-    if( pData->flags & OPAL_DATATYPE_FLAG_USER_LB ) index += snprintf( ptr, length - index, "lb " );
-    if( pData->flags & OPAL_DATATYPE_FLAG_USER_UB ) index += snprintf( ptr + index, length - index, "ub " );
-    for( i = 0; i < OPAL_DATATYPE_MAX_PREDEFINED; i++ ) {
+    if( pData->flags & PARSEC_DATATYPE_FLAG_USER_LB ) index += snprintf( ptr, length - index, "lb " );
+    if( pData->flags & PARSEC_DATATYPE_FLAG_USER_UB ) index += snprintf( ptr + index, length - index, "ub " );
+    for( i = 0; i < PARSEC_DATATYPE_MAX_PREDEFINED; i++ ) {
         if( pData->bdt_used & mask ) {
             if( NULL == pData->ptypes ) {
-                index += snprintf( ptr + index, length - index, "%s:* ", opal_datatype_basicDatatypes[i]->name );
+                index += snprintf( ptr + index, length - index, "%s:* ", parsec_datatype_basicDatatypes[i]->name );
             } else {
-                index += snprintf( ptr + index, length - index, "%s:%" PRIsize_t " ", opal_datatype_basicDatatypes[i]->name,
+                index += snprintf( ptr + index, length - index, "%s:%" PRIsize_t " ", parsec_datatype_basicDatatypes[i]->name,
                                    pData->ptypes[i]);
             }
         }
@@ -59,48 +59,48 @@ int opal_datatype_contain_basic_datatypes( const opal_datatype_t* pData, char* p
     return index;
 }
 
-int opal_datatype_dump_data_flags( unsigned short usflags, char* ptr, size_t length )
+int parsec_datatype_dump_data_flags( unsigned short usflags, char* ptr, size_t length )
 {
     int index = 0;
     if( length < 22 ) return 0;
     index = snprintf( ptr, 22, "-----------[---][---]" );  /* set everything to - */
-    if( usflags & OPAL_DATATYPE_FLAG_COMMITTED )  ptr[1]  = 'c';
-    if( usflags & OPAL_DATATYPE_FLAG_CONTIGUOUS ) ptr[2]  = 'C';
-    if( usflags & OPAL_DATATYPE_FLAG_OVERLAP )    ptr[3]  = 'o';
-    if( usflags & OPAL_DATATYPE_FLAG_USER_LB )    ptr[4]  = 'l';
-    if( usflags & OPAL_DATATYPE_FLAG_USER_UB )    ptr[5]  = 'u';
-    if( usflags & OPAL_DATATYPE_FLAG_PREDEFINED ) ptr[6]  = 'P';
-    if( !(usflags & OPAL_DATATYPE_FLAG_NO_GAPS) ) ptr[7]  = 'G';
-    if( usflags & OPAL_DATATYPE_FLAG_DATA )       ptr[8]  = 'D';
-    if( (usflags & OPAL_DATATYPE_FLAG_BASIC) == OPAL_DATATYPE_FLAG_BASIC ) ptr[9]  = 'B';
+    if( usflags & PARSEC_DATATYPE_FLAG_COMMITTED )  ptr[1]  = 'c';
+    if( usflags & PARSEC_DATATYPE_FLAG_CONTIGUOUS ) ptr[2]  = 'C';
+    if( usflags & PARSEC_DATATYPE_FLAG_OVERLAP )    ptr[3]  = 'o';
+    if( usflags & PARSEC_DATATYPE_FLAG_USER_LB )    ptr[4]  = 'l';
+    if( usflags & PARSEC_DATATYPE_FLAG_USER_UB )    ptr[5]  = 'u';
+    if( usflags & PARSEC_DATATYPE_FLAG_PREDEFINED ) ptr[6]  = 'P';
+    if( !(usflags & PARSEC_DATATYPE_FLAG_NO_GAPS) ) ptr[7]  = 'G';
+    if( usflags & PARSEC_DATATYPE_FLAG_DATA )       ptr[8]  = 'D';
+    if( (usflags & PARSEC_DATATYPE_FLAG_BASIC) == PARSEC_DATATYPE_FLAG_BASIC ) ptr[9]  = 'B';
     /* We know nothing about the upper level language or flags! */
     /* ... */
     return index;
 }
 
 
-int opal_datatype_dump_data_desc( dt_elem_desc_t* pDesc, int nbElems, char* ptr, size_t length )
+int parsec_datatype_dump_data_desc( dt_elem_desc_t* pDesc, int nbElems, char* ptr, size_t length )
 {
     int i;
     int32_t index = 0;
 
     for( i = 0; i < nbElems; i++ ) {
-        index += opal_datatype_dump_data_flags( pDesc->elem.common.flags, ptr + index, length );
+        index += parsec_datatype_dump_data_flags( pDesc->elem.common.flags, ptr + index, length );
         if( length <= (size_t)index ) break;
-        index += snprintf( ptr + index, length - index, "%15s ", opal_datatype_basicDatatypes[pDesc->elem.common.type]->name );
+        index += snprintf( ptr + index, length - index, "%15s ", parsec_datatype_basicDatatypes[pDesc->elem.common.type]->name );
         if( length <= (size_t)index ) break;
-        if( OPAL_DATATYPE_LOOP == pDesc->elem.common.type )
+        if( PARSEC_DATATYPE_LOOP == pDesc->elem.common.type )
             index += snprintf( ptr + index, length - index, "%u times the next %u elements extent %td\n",
                                pDesc->loop.loops, pDesc->loop.items,
                                pDesc->loop.extent );
-        else if( OPAL_DATATYPE_END_LOOP == pDesc->elem.common.type )
+        else if( PARSEC_DATATYPE_END_LOOP == pDesc->elem.common.type )
             index += snprintf( ptr + index, length - index, "prev %u elements first elem displacement %td size of data %" PRIsize_t "\n",
                                pDesc->end_loop.items, pDesc->end_loop.first_elem_disp,
                                pDesc->end_loop.size );
         else
             index += snprintf( ptr + index, length - index, "count %u disp 0x%tx (%td) blen %" PRIsize_t " extent %td (size %zd)\n",
                                pDesc->elem.count, pDesc->elem.disp, pDesc->elem.disp, pDesc->elem.blocklen,
-                               pDesc->elem.extent, (pDesc->elem.count * pDesc->elem.blocklen * opal_datatype_basicDatatypes[pDesc->elem.common.type]->size) );
+                               pDesc->elem.extent, (pDesc->elem.count * pDesc->elem.blocklen * parsec_datatype_basicDatatypes[pDesc->elem.common.type]->size) );
         pDesc++;
 
         if( length <= (size_t)index ) break;
@@ -109,7 +109,7 @@ int opal_datatype_dump_data_desc( dt_elem_desc_t* pDesc, int nbElems, char* ptr,
 }
 
 
-void opal_datatype_dump( const opal_datatype_t* pData )
+void parsec_datatype_dump( const parsec_datatype_t* pData )
 {
     size_t length;
     int index = 0;
@@ -126,32 +126,32 @@ void opal_datatype_dump( const opal_datatype_t* pData )
                        pData->lb, pData->ub, pData->ub - pData->lb,
                        pData->nbElems, pData->loops, (int)pData->flags );
     /* dump the flags */
-    if( pData->flags == OPAL_DATATYPE_FLAG_PREDEFINED )
+    if( pData->flags == PARSEC_DATATYPE_FLAG_PREDEFINED )
         index += snprintf( buffer + index, length - index, "predefined " );
     else {
-        if( pData->flags & OPAL_DATATYPE_FLAG_COMMITTED ) index += snprintf( buffer + index, length - index, "committed " );
-        if( pData->flags & OPAL_DATATYPE_FLAG_CONTIGUOUS) index += snprintf( buffer + index, length - index, "contiguous " );
+        if( pData->flags & PARSEC_DATATYPE_FLAG_COMMITTED ) index += snprintf( buffer + index, length - index, "committed " );
+        if( pData->flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS) index += snprintf( buffer + index, length - index, "contiguous " );
     }
     index += snprintf( buffer + index, length - index, ")" );
-    index += opal_datatype_dump_data_flags( pData->flags, buffer + index, length - index );
+    index += parsec_datatype_dump_data_flags( pData->flags, buffer + index, length - index );
     {
         index += snprintf( buffer + index, length - index, "\n   contain " );
-        index += opal_datatype_contain_basic_datatypes( pData, buffer + index, length - index );
+        index += parsec_datatype_contain_basic_datatypes( pData, buffer + index, length - index );
         index += snprintf( buffer + index, length - index, "\n" );
     }
     if( (pData->opt_desc.desc != pData->desc.desc) && (NULL != pData->opt_desc.desc) ) {
         /* If the data is already committed print everything including the last
-         * fake OPAL_DATATYPE_END_LOOP entry.
+         * fake PARSEC_DATATYPE_END_LOOP entry.
          */
-        index += opal_datatype_dump_data_desc( pData->desc.desc, pData->desc.used + 1, buffer + index, length - index );
+        index += parsec_datatype_dump_data_desc( pData->desc.desc, pData->desc.used + 1, buffer + index, length - index );
         index += snprintf( buffer + index, length - index, "Optimized description \n" );
-        index += opal_datatype_dump_data_desc( pData->opt_desc.desc, pData->opt_desc.used + 1, buffer + index, length - index );
+        index += parsec_datatype_dump_data_desc( pData->opt_desc.desc, pData->opt_desc.used + 1, buffer + index, length - index );
     } else {
-        index += opal_datatype_dump_data_desc( pData->desc.desc, pData->desc.used, buffer + index, length - index );
+        index += parsec_datatype_dump_data_desc( pData->desc.desc, pData->desc.used, buffer + index, length - index );
         index += snprintf( buffer + index, length - index, "No optimized description\n" );
     }
     buffer[index] = '\0';  /* make sure we end the string with 0 */
-    opal_output( 0, "%s\n", buffer );
+    parsec_output( 0, "%s\n", buffer );
 
     free(buffer);
 }

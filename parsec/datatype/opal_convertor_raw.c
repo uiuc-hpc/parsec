@@ -14,21 +14,21 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <stddef.h>
 
-#include "opal/datatype/opal_convertor_internal.h"
-#include "opal/datatype/opal_datatype_internal.h"
-#include "opal_stdint.h"
+#include "parsec/datatype/parsec_convertor_internal.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
+#include "parsec_stdint.h"
 
-#if OPAL_ENABLE_DEBUG
-#include "opal/util/output.h"
+#if PARSEC_ENABLE_DEBUG
+#include "parsec/util/output.h"
 
-#define DO_DEBUG(INST)  if( opal_ddt_raw_debug ) { INST }
+#define DO_DEBUG(INST)  if( parsec_ddt_raw_debug ) { INST }
 #else
 #define DO_DEBUG(INST)
-#endif /* OPAL_ENABLE_DEBUG */
+#endif /* PARSEC_ENABLE_DEBUG */
 
 /* Take a new iovec (base + len) and try to merge it with what we already
  * have. If we succeed return 0 and move forward, otherwise save it into a new
@@ -36,7 +36,7 @@
  * of the iovec array, return 1 to signal we did not saved the last iovec.
  */
 static inline int
-opal_convertor_merge_iov( struct iovec* iov, uint32_t* iov_count,
+parsec_convertor_merge_iov( struct iovec* iov, uint32_t* iov_count,
                           IOVBASE_TYPE* base, size_t len,
                           uint32_t* idx )
 {
@@ -59,11 +59,11 @@ opal_convertor_merge_iov( struct iovec* iov, uint32_t* iov_count,
  * length we're working on are local.
  */
 int32_t
-opal_convertor_raw( opal_convertor_t* pConvertor,
+parsec_convertor_raw( parsec_convertor_t* pConvertor,
                     struct iovec* iov, uint32_t* iov_count,
                     size_t* length )
 {
-    const opal_datatype_t *pData = pConvertor->pDesc;
+    const parsec_datatype_t *pData = pConvertor->pDesc;
     dt_stack_t* pStack;       /* pointer to the position on the stack */
     uint32_t pos_desc;        /* actual position in the description of the derived datatype */
     size_t count_desc;        /* the number of items already done in the actual pos_desc */
@@ -74,19 +74,19 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
     uint32_t index = 0;          /* the iov index and a simple counter */
 
     assert( (*iov_count) > 0 );
-    if( OPAL_LIKELY(pConvertor->flags & CONVERTOR_COMPLETED) ) {
+    if( PARSEC_LIKELY(pConvertor->flags & CONVERTOR_COMPLETED) ) {
         iov[0].iov_base = NULL;
         iov[0].iov_len  = 0;
         *iov_count      = 0;
         *length         = iov[0].iov_len;
         return 1;  /* We're still done */
     }
-    if( OPAL_LIKELY(pConvertor->flags & CONVERTOR_NO_OP) ) {
+    if( PARSEC_LIKELY(pConvertor->flags & CONVERTOR_NO_OP) ) {
         /* The convertor contain minimal informations, we only use the bConverted
          * to manage the conversion. This function work even after the convertor
          * was moved to a specific position.
          */
-        opal_convertor_get_current_pointer( pConvertor, (void**)&iov[0].iov_base );
+        parsec_convertor_get_current_pointer( pConvertor, (void**)&iov[0].iov_base );
         iov[0].iov_len = pConvertor->local_size - pConvertor->bConverted;
         *length = iov[0].iov_len;
         pConvertor->bConverted = pConvertor->local_size;
@@ -95,7 +95,7 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
         return 1;  /* we're done */
     }
 
-    DO_DEBUG( opal_output( 0, "opal_convertor_raw( %p, {%p, %" PRIu32 "}, %"PRIsize_t " )\n", (void*)pConvertor,
+    DO_DEBUG( parsec_output( 0, "parsec_convertor_raw( %p, {%p, %" PRIu32 "}, %"PRIsize_t " )\n", (void*)pConvertor,
                            (void*)iov, *iov_count, *length ); );
 
     description = pConvertor->use_desc->desc;
@@ -112,7 +112,7 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
     pConvertor->stack_pos--;
     pElem = &(description[pos_desc]);
 
-    DO_DEBUG( opal_output( 0, "raw start pos_desc %d count_desc %" PRIsize_t " disp %ld\n"
+    DO_DEBUG( parsec_output( 0, "raw start pos_desc %d count_desc %" PRIsize_t " disp %ld\n"
                            "stack_pos %d pos_desc %d count_desc %" PRIsize_t " disp %ld\n",
                            pos_desc, count_desc, (long)(source_base - pConvertor->pBaseBuf),
                            pConvertor->stack_pos, pStack->index, pStack->count, (long)pStack->disp ); );
@@ -122,32 +122,32 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
      * We can treat this outside the loop as it is an exception that can only happen once,
      * and will simplify the loop handling.
      */
-    if( pElem->elem.common.flags & OPAL_DATATYPE_FLAG_DATA ) {
+    if( pElem->elem.common.flags & PARSEC_DATATYPE_FLAG_DATA ) {
         const ddt_elem_desc_t* current = &(pElem->elem);
 
         if( count_desc != ((size_t)current->count * current->blocklen) ) {  /* Not the full element description */
             if( (do_now = count_desc % current->blocklen) ) {
                 do_now = current->blocklen - do_now;  /* how much left in the block */
                 source_base += current->disp;
-                blength = do_now * opal_datatype_basicDatatypes[current->common.type]->size;
-                OPAL_DATATYPE_SAFEGUARD_POINTER( source_base, blength, pConvertor->pBaseBuf,
+                blength = do_now * parsec_datatype_basicDatatypes[current->common.type]->size;
+                PARSEC_DATATYPE_SAFEGUARD_POINTER( source_base, blength, pConvertor->pBaseBuf,
                                                  pConvertor->pDesc, pConvertor->count );
-                DO_DEBUG( opal_output( 0, "raw 1. iov[%d] = {base %p, length %" PRIsize_t "}\n",
+                DO_DEBUG( parsec_output( 0, "raw 1. iov[%d] = {base %p, length %" PRIsize_t "}\n",
                                        index, (void*)source_base, blength ); );
-                opal_convertor_merge_iov( iov, iov_count,
+                parsec_convertor_merge_iov( iov, iov_count,
                                           (IOVBASE_TYPE *) source_base, blength, &index );
                 /* ignore the return value, we know there was at least one element in the iovec */
                 sum_iov_len += blength;
                 count_desc -= do_now;
 
-                source_base += (blength - current->blocklen * opal_datatype_basicDatatypes[current->common.type]->size +
+                source_base += (blength - current->blocklen * parsec_datatype_basicDatatypes[current->common.type]->size +
                                 current->extent - current->disp);
             }
         }
     }
 
     while( 1 ) {
-        while( pElem->elem.common.flags & OPAL_DATATYPE_FLAG_DATA ) {
+        while( pElem->elem.common.flags & PARSEC_DATATYPE_FLAG_DATA ) {
             const ddt_elem_desc_t* current = &(pElem->elem);
             source_base += current->disp;
 
@@ -157,13 +157,13 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
                 assert( 0 == (count_desc % current->blocklen) );
             }
 
-            blength = current->blocklen * opal_datatype_basicDatatypes[current->common.type]->size;
+            blength = current->blocklen * parsec_datatype_basicDatatypes[current->common.type]->size;
             for(size_t _i = 0; _i < do_now; _i++ ) {
-                OPAL_DATATYPE_SAFEGUARD_POINTER( source_base, blength, pConvertor->pBaseBuf,
+                PARSEC_DATATYPE_SAFEGUARD_POINTER( source_base, blength, pConvertor->pBaseBuf,
                                                  pConvertor->pDesc, pConvertor->count );
-                DO_DEBUG( opal_output( 0, "raw 2. iov[%d] = {base %p, length %" PRIsize_t "}\n",
+                DO_DEBUG( parsec_output( 0, "raw 2. iov[%d] = {base %p, length %" PRIsize_t "}\n",
                                        index, (void*)source_base, blength ); );
-                if( opal_convertor_merge_iov( iov, iov_count,
+                if( parsec_convertor_merge_iov( iov, iov_count,
                                               (IOVBASE_TYPE *) source_base, blength, &index ) )
                     break;  /* no more iovec available, bail out */
 
@@ -181,8 +181,8 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
             source_base -= current->disp;
             goto complete_loop;
         }
-        if( OPAL_DATATYPE_END_LOOP == pElem->elem.common.type ) { /* end of the current loop */
-            DO_DEBUG( opal_output( 0, "raw end_loop count %" PRIsize_t " stack_pos %d"
+        if( PARSEC_DATATYPE_END_LOOP == pElem->elem.common.type ) { /* end of the current loop */
+            DO_DEBUG( parsec_output( 0, "raw end_loop count %" PRIsize_t " stack_pos %d"
                                    " pos_desc %d disp %ld space %" PRIsize_t "\n",
                                    pStack->count, pConvertor->stack_pos,
                                    pos_desc, (long)pStack->disp, sum_iov_len ); );
@@ -200,28 +200,28 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
                 if( pStack->index == -1 ) {
                     pStack->disp += (pData->ub - pData->lb);
                 } else {
-                    assert( OPAL_DATATYPE_LOOP == description[pStack->index].loop.common.type );
+                    assert( PARSEC_DATATYPE_LOOP == description[pStack->index].loop.common.type );
                     pStack->disp += description[pStack->index].loop.extent;  /* jump by the loop extent */
                 }
             }
             source_base = pConvertor->pBaseBuf + pStack->disp;
             UPDATE_INTERNAL_COUNTERS( description, pos_desc, pElem, count_desc );
-            DO_DEBUG( opal_output( 0, "raw new_loop count %" PRIsize_t " stack_pos %d "
+            DO_DEBUG( parsec_output( 0, "raw new_loop count %" PRIsize_t " stack_pos %d "
                                    "pos_desc %d disp %ld space %" PRIsize_t "\n",
                                    pStack->count, pConvertor->stack_pos,
                                    pos_desc, (long)pStack->disp, sum_iov_len ); );
         }
-        if( OPAL_DATATYPE_LOOP == pElem->elem.common.type ) {
+        if( PARSEC_DATATYPE_LOOP == pElem->elem.common.type ) {
             ptrdiff_t local_disp = (ptrdiff_t)source_base;
             ddt_endloop_desc_t* end_loop = (ddt_endloop_desc_t*)(pElem + pElem->loop.items);
 
-            if( pElem->loop.common.flags & OPAL_DATATYPE_FLAG_CONTIGUOUS ) {
+            if( pElem->loop.common.flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS ) {
                 ptrdiff_t offset = end_loop->first_elem_disp;
                 source_base += offset;
                 for(; count_desc > 0; ) {
-                    OPAL_DATATYPE_SAFEGUARD_POINTER( source_base, end_loop->size, pConvertor->pBaseBuf,
+                    PARSEC_DATATYPE_SAFEGUARD_POINTER( source_base, end_loop->size, pConvertor->pBaseBuf,
                                                      pConvertor->pDesc, pConvertor->count );
-                    if( opal_convertor_merge_iov( iov, iov_count,
+                    if( parsec_convertor_merge_iov( iov, iov_count,
                                                   (IOVBASE_TYPE *) source_base, end_loop->size, &index ) ) {
                         source_base -= offset;
                         goto complete_loop;
@@ -230,7 +230,7 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
                     source_base += pElem->loop.extent;
                     sum_iov_len += end_loop->size;
                     count_desc--;
-                    DO_DEBUG( opal_output( 0, "raw contig loop generate iov[%d] = {base %p, length %" PRIsize_t "}"
+                    DO_DEBUG( parsec_output( 0, "raw contig loop generate iov[%d] = {base %p, length %" PRIsize_t "}"
                                            "space %" PRIsize_t " [pos_desc %d]\n",
                                            index, iov[index].iov_base, iov[index].iov_len,
                                            sum_iov_len, pos_desc ); );
@@ -239,7 +239,7 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
                 pos_desc += pElem->loop.items + 1;
             } else {
                 local_disp = (ptrdiff_t)source_base - local_disp;
-                PUSH_STACK( pStack, pConvertor->stack_pos, pos_desc, OPAL_DATATYPE_LOOP, count_desc,
+                PUSH_STACK( pStack, pConvertor->stack_pos, pos_desc, PARSEC_DATATYPE_LOOP, count_desc,
                             pStack->disp + local_disp);
                 pos_desc++;
             }
@@ -257,9 +257,9 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
         return 1;
     }
     /* I complete an element, next step I should go to the next one */
-    PUSH_STACK( pStack, pConvertor->stack_pos, pos_desc, OPAL_DATATYPE_UINT1, count_desc,
+    PUSH_STACK( pStack, pConvertor->stack_pos, pos_desc, PARSEC_DATATYPE_UINT1, count_desc,
                 source_base - pConvertor->pBaseBuf );
-    DO_DEBUG( opal_output( 0, "raw save stack stack_pos %d pos_desc %d count_desc %" PRIsize_t " disp %ld\n",
+    DO_DEBUG( parsec_output( 0, "raw save stack stack_pos %d pos_desc %d count_desc %" PRIsize_t " disp %ld\n",
                            pConvertor->stack_pos, pStack->index, pStack->count, (long)pStack->disp ); );
     return 0;
 }

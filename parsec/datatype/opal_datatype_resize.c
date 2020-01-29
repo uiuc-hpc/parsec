@@ -13,20 +13,20 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
-#include "opal/constants.h"
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_datatype_internal.h"
+#include "parsec_config.h"
+#include "parsec/constants.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
 
-int32_t opal_datatype_resize( opal_datatype_t* type, ptrdiff_t lb, ptrdiff_t extent )
+int32_t parsec_datatype_resize( parsec_datatype_t* type, ptrdiff_t lb, ptrdiff_t extent )
 {
     type->lb = lb;
     type->ub = lb + extent;
 
-    type->flags &= ~OPAL_DATATYPE_FLAG_NO_GAPS;
+    type->flags &= ~PARSEC_DATATYPE_FLAG_NO_GAPS;
     if( (extent == (ptrdiff_t)type->size) &&
-        (type->flags & OPAL_DATATYPE_FLAG_CONTIGUOUS) ) {
-        type->flags |= OPAL_DATATYPE_FLAG_NO_GAPS;
+        (type->flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS) ) {
+        type->flags |= PARSEC_DATATYPE_FLAG_NO_GAPS;
     }
-    return OPAL_SUCCESS;
+    return PARSEC_SUCCESS;
 }

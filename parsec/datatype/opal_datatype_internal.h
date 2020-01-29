@@ -24,33 +24,33 @@
  * $HEADER$
  */
 
-#ifndef OPAL_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
-#define OPAL_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
+#ifndef PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
+#define PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <stdarg.h>
 #include <string.h>
 
 #if defined(VERBOSE)
-#include "opal/util/output.h"
+#include "parsec/util/output.h"
 
-extern int opal_datatype_dfd;
+extern int parsec_datatype_dfd;
 
 #  define DDT_DUMP_STACK( PSTACK, STACK_POS, PDESC, NAME ) \
-     opal_datatype_dump_stack( (PSTACK), (STACK_POS), (PDESC), (NAME) )
+     parsec_datatype_dump_stack( (PSTACK), (STACK_POS), (PDESC), (NAME) )
 #  if defined(ACCEPT_C99)
-#    define DUMP( ARGS... )          opal_output(opal_datatype_dfd, __VA_ARGS__)
+#    define DUMP( ARGS... )          parsec_output(parsec_datatype_dfd, __VA_ARGS__)
 #  else
 #    if defined(__GNUC__) && !defined(__STDC__)
-#      define DUMP(ARGS...)          opal_output( opal_datatype_dfd, ARGS)
+#      define DUMP(ARGS...)          parsec_output( parsec_datatype_dfd, ARGS)
 #  else
 static inline void DUMP( char* fmt, ... )
 {
    va_list list;
 
    va_start( list, fmt );
-   opal_output_vverbose( 0, opal_datatype_dfd, fmt, list );
+   parsec_output_vverbose( 0, parsec_datatype_dfd, fmt, list );
    va_end( list );
 }
 #    endif  /* __GNUC__ && !__STDC__ */
@@ -65,11 +65,11 @@ static inline void DUMP( char* fmt, ... )
 #    else
        /* If we do not compile with PGI, mark the parameter as unused */
 #      if !defined(__PGI)
-#        define __opal_attribute_unused_tmp__  __opal_attribute_unused__
+#        define __parsec_attribute_unused_tmp__  __parsec_attribute_unused__
 #      else
-#        define __opal_attribute_unused_tmp__
+#        define __parsec_attribute_unused_tmp__
 #      endif
-static inline void DUMP( char* fmt __opal_attribute_unused_tmp__, ... )
+static inline void DUMP( char* fmt __parsec_attribute_unused_tmp__, ... )
 {
 #if defined(__PGI)
            /* Some compilers complain if we have "..." arguments and no
@@ -79,7 +79,7 @@ static inline void DUMP( char* fmt __opal_attribute_unused_tmp__, ... )
            va_end(arglist);
 #endif
 }
-#         undef __opal_attribute_unused_tmp__
+#         undef __parsec_attribute_unused_tmp__
 #    endif  /* __GNUC__ && !__STDC__ */
 #  endif  /* ACCEPT_C99 */
 #endif  /* VERBOSE */
@@ -94,49 +94,49 @@ static inline void DUMP( char* fmt __opal_attribute_unused_tmp__, ... )
  * - and finally the derived one where multiple basic types are used.
  *   Depending on the architecture they can be contiguous or not.
  *
- * At the OPAL-level we do not care from which language the datatype came from
+ * At the PARSEC-level we do not care from which language the datatype came from
  * (C, C++ or FORTRAN), we only focus on their internal representation in
  * the host memory.
  *
  * NOTE: This predefined datatype order should be matched by any upper-level
- * users of the OPAL datatype.
+ * users of the PARSEC datatype.
  */
-#define OPAL_DATATYPE_LOOP           0
-#define OPAL_DATATYPE_END_LOOP       1
-#define OPAL_DATATYPE_LB             2
-#define OPAL_DATATYPE_UB             3
-#define OPAL_DATATYPE_FIRST_TYPE     4 /* Number of first real type */
-#define OPAL_DATATYPE_INT1           4
-#define OPAL_DATATYPE_INT2           5
-#define OPAL_DATATYPE_INT4           6
-#define OPAL_DATATYPE_INT8           7
-#define OPAL_DATATYPE_INT16          8
-#define OPAL_DATATYPE_UINT1          9
-#define OPAL_DATATYPE_UINT2          10
-#define OPAL_DATATYPE_UINT4          11
-#define OPAL_DATATYPE_UINT8          12
-#define OPAL_DATATYPE_UINT16         13
-#define OPAL_DATATYPE_FLOAT2         14
-#define OPAL_DATATYPE_FLOAT4         15
-#define OPAL_DATATYPE_FLOAT8         16
-#define OPAL_DATATYPE_FLOAT12        17
-#define OPAL_DATATYPE_FLOAT16        18
-#define OPAL_DATATYPE_SHORT_FLOAT_COMPLEX 19
-#define OPAL_DATATYPE_FLOAT_COMPLEX  20
-#define OPAL_DATATYPE_DOUBLE_COMPLEX 21
-#define OPAL_DATATYPE_LONG_DOUBLE_COMPLEX 22
-#define OPAL_DATATYPE_BOOL           23
-#define OPAL_DATATYPE_WCHAR          24
-#define OPAL_DATATYPE_UNAVAILABLE    25
+#define PARSEC_DATATYPE_LOOP           0
+#define PARSEC_DATATYPE_END_LOOP       1
+#define PARSEC_DATATYPE_LB             2
+#define PARSEC_DATATYPE_UB             3
+#define PARSEC_DATATYPE_FIRST_TYPE     4 /* Number of first real type */
+#define PARSEC_DATATYPE_INT1           4
+#define PARSEC_DATATYPE_INT2           5
+#define PARSEC_DATATYPE_INT4           6
+#define PARSEC_DATATYPE_INT8           7
+#define PARSEC_DATATYPE_INT16          8
+#define PARSEC_DATATYPE_UINT1          9
+#define PARSEC_DATATYPE_UINT2          10
+#define PARSEC_DATATYPE_UINT4          11
+#define PARSEC_DATATYPE_UINT8          12
+#define PARSEC_DATATYPE_UINT16         13
+#define PARSEC_DATATYPE_FLOAT2         14
+#define PARSEC_DATATYPE_FLOAT4         15
+#define PARSEC_DATATYPE_FLOAT8         16
+#define PARSEC_DATATYPE_FLOAT12        17
+#define PARSEC_DATATYPE_FLOAT16        18
+#define PARSEC_DATATYPE_SHORT_FLOAT_COMPLEX 19
+#define PARSEC_DATATYPE_FLOAT_COMPLEX  20
+#define PARSEC_DATATYPE_DOUBLE_COMPLEX 21
+#define PARSEC_DATATYPE_LONG_DOUBLE_COMPLEX 22
+#define PARSEC_DATATYPE_BOOL           23
+#define PARSEC_DATATYPE_WCHAR          24
+#define PARSEC_DATATYPE_UNAVAILABLE    25
 
-#ifndef OPAL_DATATYPE_MAX_PREDEFINED
-#define OPAL_DATATYPE_MAX_PREDEFINED (OPAL_DATATYPE_UNAVAILABLE+1)
-#elif OPAL_DATATYPE_MAX_PREDEFINED <= OPAL_DATATYPE_UNAVAILABLE
+#ifndef PARSEC_DATATYPE_MAX_PREDEFINED
+#define PARSEC_DATATYPE_MAX_PREDEFINED (PARSEC_DATATYPE_UNAVAILABLE+1)
+#elif PARSEC_DATATYPE_MAX_PREDEFINED <= PARSEC_DATATYPE_UNAVAILABLE
 /*
  * If the number of basic datatype should change update
- * OPAL_DATATYPE_MAX_PREDEFINED in opal_datatype.h
+ * PARSEC_DATATYPE_MAX_PREDEFINED in parsec_datatype.h
  */
-#error OPAL_DATATYPE_MAX_PREDEFINED should be updated to the next value after the OPAL_DATATYPE_UNAVAILABLE define
+#error PARSEC_DATATYPE_MAX_PREDEFINED should be updated to the next value after the PARSEC_DATATYPE_UNAVAILABLE define
 #endif
 
 #define DT_INCREASE_STACK     8
@@ -197,8 +197,8 @@ union dt_elem_desc {
 
 #define CREATE_LOOP_START( _place, _count, _items, _extent, _flags )           \
     do {                                                                       \
-        (_place)->loop.common.type   = OPAL_DATATYPE_LOOP;                     \
-        (_place)->loop.common.flags  = (_flags) & ~OPAL_DATATYPE_FLAG_DATA;    \
+        (_place)->loop.common.type   = PARSEC_DATATYPE_LOOP;                     \
+        (_place)->loop.common.flags  = (_flags) & ~PARSEC_DATATYPE_FLAG_DATA;    \
         (_place)->loop.loops         = (_count);                               \
         (_place)->loop.items         = (_items);                               \
         (_place)->loop.extent        = (_extent);                              \
@@ -207,8 +207,8 @@ union dt_elem_desc {
 
 #define CREATE_LOOP_END( _place, _items, _first_item_disp, _size, _flags )     \
     do {                                                                       \
-        (_place)->end_loop.common.type = OPAL_DATATYPE_END_LOOP;               \
-        (_place)->end_loop.common.flags = (_flags) & ~OPAL_DATATYPE_FLAG_DATA; \
+        (_place)->end_loop.common.type = PARSEC_DATATYPE_END_LOOP;               \
+        (_place)->end_loop.common.flags = (_flags) & ~PARSEC_DATATYPE_FLAG_DATA; \
         (_place)->end_loop.items = (_items);                                   \
         (_place)->end_loop.first_elem_disp = (_first_item_disp);               \
         (_place)->end_loop.size = (_size);  /* the size inside the loop */     \
@@ -222,13 +222,13 @@ union dt_elem_desc {
  */
 #define CREATE_ELEM(_place, _type, _flags, _blocklen, _count, _disp, _extent)  \
     do {                                                                       \
-        (_place)->elem.common.flags = (_flags) | OPAL_DATATYPE_FLAG_DATA;      \
+        (_place)->elem.common.flags = (_flags) | PARSEC_DATATYPE_FLAG_DATA;      \
         (_place)->elem.common.type  = (_type);                                 \
         (_place)->elem.blocklen     = (_blocklen);                             \
         (_place)->elem.count        = (_count);                                \
         (_place)->elem.extent       = (_extent);                               \
         (_place)->elem.disp         = (_disp);                                 \
-        if( _extent == (ptrdiff_t)(_blocklen * opal_datatype_basicDatatypes[_type]->size) ) { \
+        if( _extent == (ptrdiff_t)(_blocklen * parsec_datatype_basicDatatypes[_type]->size) ) { \
             /* collapse it into a single large blocklen */              \
             (_place)->elem.blocklen *= _count;                          \
             (_place)->elem.extent   *= _count;                          \
@@ -238,218 +238,218 @@ union dt_elem_desc {
 /*
  * This array holds the descriptions desc.desc[2] of the predefined basic datatypes.
  */
-OPAL_DECLSPEC extern union dt_elem_desc opal_datatype_predefined_elem_desc[2 * OPAL_DATATYPE_MAX_PREDEFINED];
-struct opal_datatype_t;
+PARSEC_DECLSPEC extern union dt_elem_desc parsec_datatype_predefined_elem_desc[2 * PARSEC_DATATYPE_MAX_PREDEFINED];
+struct parsec_datatype_t;
 
-/* Other fields starting after bdt_used (index of OPAL_DATATYPE_LOOP should be ONE) */
+/* Other fields starting after bdt_used (index of PARSEC_DATATYPE_LOOP should be ONE) */
 /*
- * NOTE: The order of initialization *MUST* match the order of the OPAL_DATATYPE_-numbers.
+ * NOTE: The order of initialization *MUST* match the order of the PARSEC_DATATYPE_-numbers.
  * Unfortunateley, I don't get the preprocessor to replace
- *     OPAL_DATATYPE_INIT_BTYPES_ARRAY_ ## OPAL_DATATYPE ## NAME
+ *     PARSEC_DATATYPE_INIT_BTYPES_ARRAY_ ## PARSEC_DATATYPE ## NAME
  * into
- *     OPAL_DATATYPE_INIT_BTYPES_ARRAY_[0-21], then order and naming would _not_ matter....
+ *     PARSEC_DATATYPE_INIT_BTYPES_ARRAY_[0-21], then order and naming would _not_ matter....
  */
 
-#define OPAL_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE NULL
-#define OPAL_DATATYPE_INIT_PTYPES_ARRAY(NAME) (size_t[OPAL_DATATYPE_MAX_PREDEFINED]){ [OPAL_DATATYPE_ ## NAME] = 1, [OPAL_DATATYPE_MAX_PREDEFINED-1] = 0 }
+#define PARSEC_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE NULL
+#define PARSEC_DATATYPE_INIT_PTYPES_ARRAY(NAME) (size_t[PARSEC_DATATYPE_MAX_PREDEFINED]){ [PARSEC_DATATYPE_ ## NAME] = 1, [PARSEC_DATATYPE_MAX_PREDEFINED-1] = 0 }
 
-#define OPAL_DATATYPE_INIT_NAME(NAME) "OPAL_" #NAME
+#define PARSEC_DATATYPE_INIT_NAME(NAME) "PARSEC_" #NAME
 
 /*
  * Macro to initialize the main description for basic types, setting the pointer
- * into the array opal_datatype_predefined_type_desc, which is initialized at
- * runtime in opal_datatype_init(). Each basic type has two desc-elements....
+ * into the array parsec_datatype_predefined_type_desc, which is initialized at
+ * runtime in parsec_datatype_init(). Each basic type has two desc-elements....
  */
-#define OPAL_DATATYPE_INIT_DESC_PREDEFINED(NAME)                                     \
+#define PARSEC_DATATYPE_INIT_DESC_PREDEFINED(NAME)                                     \
     {                                                                                \
         .length = 1, .used = 1,                                                      \
-        .desc = &(opal_datatype_predefined_elem_desc[2 * OPAL_DATATYPE_ ## NAME])    \
+        .desc = &(parsec_datatype_predefined_elem_desc[2 * PARSEC_DATATYPE_ ## NAME])    \
     }
-#define OPAL_DATATYPE_INIT_DESC_NULL  {.length = 0, .used = 0, .desc = NULL}
+#define PARSEC_DATATYPE_INIT_DESC_NULL  {.length = 0, .used = 0, .desc = NULL}
 
-#define OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( NAME, FLAGS )                   \
+#define PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( NAME, FLAGS )                   \
     {                                                                                \
-        .super = OPAL_OBJ_STATIC_INIT(opal_datatype_t),                              \
-        .flags = OPAL_DATATYPE_FLAG_UNAVAILABLE | OPAL_DATATYPE_FLAG_PREDEFINED | (FLAGS), \
-        .id = OPAL_DATATYPE_ ## NAME,                                                \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                              \
+        .flags = PARSEC_DATATYPE_FLAG_UNAVAILABLE | PARSEC_DATATYPE_FLAG_PREDEFINED | (FLAGS), \
+        .id = PARSEC_DATATYPE_ ## NAME,                                                \
         .bdt_used = 0,                                                               \
         .size = 0,                                                                   \
         .true_lb = 0, .true_ub = 0, .lb = 0, .ub = 0,                                \
         .align = 0,                                                                  \
         .nbElems = 1,                                                                \
-        .name = OPAL_DATATYPE_INIT_NAME(NAME),                                       \
-        .desc = OPAL_DATATYPE_INIT_DESC_PREDEFINED(UNAVAILABLE),                     \
-        .opt_desc = OPAL_DATATYPE_INIT_DESC_PREDEFINED(UNAVAILABLE),                 \
-        .ptypes = OPAL_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE                        \
+        .name = PARSEC_DATATYPE_INIT_NAME(NAME),                                       \
+        .desc = PARSEC_DATATYPE_INIT_DESC_PREDEFINED(UNAVAILABLE),                     \
+        .opt_desc = PARSEC_DATATYPE_INIT_DESC_PREDEFINED(UNAVAILABLE),                 \
+        .ptypes = PARSEC_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE                        \
     }
 
-#define OPAL_DATATYPE_INITIALIZER_UNAVAILABLE( FLAGS )                               \
-    OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( UNAVAILABLE, (FLAGS) )
+#define PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE( FLAGS )                               \
+    PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( UNAVAILABLE, (FLAGS) )
 
-#define OPAL_DATATYPE_INITIALIZER_EMPTY( FLAGS )                        \
+#define PARSEC_DATATYPE_INITIALIZER_EMPTY( FLAGS )                        \
     {                                                                   \
-        .super = OPAL_OBJ_STATIC_INIT(opal_datatype_t),                 \
-        .flags = OPAL_DATATYPE_FLAG_PREDEFINED | (FLAGS),               \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                 \
+        .flags = PARSEC_DATATYPE_FLAG_PREDEFINED | (FLAGS),               \
         .id = 0,                                                        \
         .bdt_used = 0,                                                  \
         .size = 0,                                                      \
         .true_lb = 0, .true_ub = 0, .lb = 0, .ub = 0,                   \
         .align = 0,                                                     \
         .nbElems = 1,                                                   \
-        .name = OPAL_DATATYPE_INIT_NAME(EMPTY),                         \
-        .desc = OPAL_DATATYPE_INIT_DESC_NULL,                           \
-        .opt_desc = OPAL_DATATYPE_INIT_DESC_NULL,                       \
-        .ptypes = OPAL_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE           \
+        .name = PARSEC_DATATYPE_INIT_NAME(EMPTY),                         \
+        .desc = PARSEC_DATATYPE_INIT_DESC_NULL,                           \
+        .opt_desc = PARSEC_DATATYPE_INIT_DESC_NULL,                       \
+        .ptypes = PARSEC_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE           \
     }
 
-#define OPAL_DATATYPE_INIT_BASIC_TYPE( TYPE, NAME, FLAGS )              \
+#define PARSEC_DATATYPE_INIT_BASIC_TYPE( TYPE, NAME, FLAGS )              \
     {                                                                   \
-        .super = OPAL_OBJ_STATIC_INIT(opal_datatype_t),                 \
-        .flags = OPAL_DATATYPE_FLAG_PREDEFINED | (FLAGS),               \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                 \
+        .flags = PARSEC_DATATYPE_FLAG_PREDEFINED | (FLAGS),               \
         .id = TYPE,                                                     \
         .bdt_used = (((uint32_t)1)<<(TYPE)),                            \
         .size = 0,                                                      \
         .true_lb = 0, .true_ub = 0, .lb = 0, .ub = 0,                   \
         .align = 0,                                                     \
         .nbElems = 1,                                                   \
-        .name = OPAL_DATATYPE_INIT_NAME(NAME),                          \
-        .desc = OPAL_DATATYPE_INIT_DESC_NULL,                           \
-        .opt_desc = OPAL_DATATYPE_INIT_DESC_NULL,                       \
-        .ptypes = OPAL_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE           \
+        .name = PARSEC_DATATYPE_INIT_NAME(NAME),                          \
+        .desc = PARSEC_DATATYPE_INIT_DESC_NULL,                           \
+        .opt_desc = PARSEC_DATATYPE_INIT_DESC_NULL,                       \
+        .ptypes = PARSEC_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE           \
     }
 
-#define OPAL_DATATYPE_INIT_BASIC_DATATYPE( TYPE, ALIGN, NAME, FLAGS )                \
+#define PARSEC_DATATYPE_INIT_BASIC_DATATYPE( TYPE, ALIGN, NAME, FLAGS )                \
     {                                                                                \
-        .super = OPAL_OBJ_STATIC_INIT(opal_datatype_t),                              \
-        .flags = OPAL_DATATYPE_FLAG_BASIC | (FLAGS),                                 \
-        .id = OPAL_DATATYPE_ ## NAME,                                                \
-        .bdt_used = (((uint32_t)1)<<(OPAL_DATATYPE_ ## NAME)),                       \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                              \
+        .flags = PARSEC_DATATYPE_FLAG_BASIC | (FLAGS),                                 \
+        .id = PARSEC_DATATYPE_ ## NAME,                                                \
+        .bdt_used = (((uint32_t)1)<<(PARSEC_DATATYPE_ ## NAME)),                       \
         .size = sizeof(TYPE),                                                        \
         .true_lb = 0, .true_ub = sizeof(TYPE), .lb = 0, .ub = sizeof(TYPE),          \
         .align = (ALIGN),                                                            \
         .nbElems = 1,                                                                \
-        .name = OPAL_DATATYPE_INIT_NAME(NAME),                                       \
-        .desc = OPAL_DATATYPE_INIT_DESC_PREDEFINED(NAME),                            \
-        .opt_desc = OPAL_DATATYPE_INIT_DESC_PREDEFINED(NAME),                        \
-        .ptypes = OPAL_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE                        \
+        .name = PARSEC_DATATYPE_INIT_NAME(NAME),                                       \
+        .desc = PARSEC_DATATYPE_INIT_DESC_PREDEFINED(NAME),                            \
+        .opt_desc = PARSEC_DATATYPE_INIT_DESC_PREDEFINED(NAME),                        \
+        .ptypes = PARSEC_DATATYPE_INIT_PTYPES_ARRAY_UNAVAILABLE                        \
     }
 
-#define OPAL_DATATYPE_INITIALIZER_LOOP(FLAGS)       OPAL_DATATYPE_INIT_BASIC_TYPE( OPAL_DATATYPE_LOOP, LOOP_S, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_END_LOOP(FLAGS)   OPAL_DATATYPE_INIT_BASIC_TYPE( OPAL_DATATYPE_END_LOOP, LOOP_E, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_LB(FLAGS)         OPAL_DATATYPE_INIT_BASIC_TYPE( OPAL_DATATYPE_LB, LB, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_UB(FLAGS)         OPAL_DATATYPE_INIT_BASIC_TYPE( OPAL_DATATYPE_UB, UB, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_INT1(FLAGS)       OPAL_DATATYPE_INIT_BASIC_DATATYPE( int8_t, OPAL_ALIGNMENT_INT8, INT1, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_INT2(FLAGS)       OPAL_DATATYPE_INIT_BASIC_DATATYPE( int16_t, OPAL_ALIGNMENT_INT16, INT2, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_INT4(FLAGS)       OPAL_DATATYPE_INIT_BASIC_DATATYPE( int32_t, OPAL_ALIGNMENT_INT32, INT4, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_INT8(FLAGS)       OPAL_DATATYPE_INIT_BASIC_DATATYPE( int64_t, OPAL_ALIGNMENT_INT64, INT8, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_LOOP(FLAGS)       PARSEC_DATATYPE_INIT_BASIC_TYPE( PARSEC_DATATYPE_LOOP, LOOP_S, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_END_LOOP(FLAGS)   PARSEC_DATATYPE_INIT_BASIC_TYPE( PARSEC_DATATYPE_END_LOOP, LOOP_E, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_LB(FLAGS)         PARSEC_DATATYPE_INIT_BASIC_TYPE( PARSEC_DATATYPE_LB, LB, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_UB(FLAGS)         PARSEC_DATATYPE_INIT_BASIC_TYPE( PARSEC_DATATYPE_UB, UB, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_INT1(FLAGS)       PARSEC_DATATYPE_INIT_BASIC_DATATYPE( int8_t, PARSEC_ALIGNMENT_INT8, INT1, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_INT2(FLAGS)       PARSEC_DATATYPE_INIT_BASIC_DATATYPE( int16_t, PARSEC_ALIGNMENT_INT16, INT2, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_INT4(FLAGS)       PARSEC_DATATYPE_INIT_BASIC_DATATYPE( int32_t, PARSEC_ALIGNMENT_INT32, INT4, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_INT8(FLAGS)       PARSEC_DATATYPE_INIT_BASIC_DATATYPE( int64_t, PARSEC_ALIGNMENT_INT64, INT8, FLAGS )
 #ifdef HAVE_INT128_T
-#define OPAL_DATATYPE_INITIALIZER_INT16(FLAGS)      OPAL_DATATYPE_INIT_BASIC_DATATYPE( int128_t, OPAL_ALIGNMENT_INT128, INT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_INT16(FLAGS)      PARSEC_DATATYPE_INIT_BASIC_DATATYPE( int128_t, PARSEC_ALIGNMENT_INT128, INT16, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_INT16(FLAGS)      OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( INT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_INT16(FLAGS)      PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( INT16, FLAGS )
 #endif
-#define OPAL_DATATYPE_INITIALIZER_UINT1(FLAGS)      OPAL_DATATYPE_INIT_BASIC_DATATYPE( uint8_t, OPAL_ALIGNMENT_INT8, UINT1, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_UINT2(FLAGS)      OPAL_DATATYPE_INIT_BASIC_DATATYPE( uint16_t, OPAL_ALIGNMENT_INT16, UINT2, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_UINT4(FLAGS)      OPAL_DATATYPE_INIT_BASIC_DATATYPE( uint32_t, OPAL_ALIGNMENT_INT32, UINT4, FLAGS )
-#define OPAL_DATATYPE_INITIALIZER_UINT8(FLAGS)      OPAL_DATATYPE_INIT_BASIC_DATATYPE( uint64_t, OPAL_ALIGNMENT_INT64, UINT8, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_UINT1(FLAGS)      PARSEC_DATATYPE_INIT_BASIC_DATATYPE( uint8_t, PARSEC_ALIGNMENT_INT8, UINT1, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_UINT2(FLAGS)      PARSEC_DATATYPE_INIT_BASIC_DATATYPE( uint16_t, PARSEC_ALIGNMENT_INT16, UINT2, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_UINT4(FLAGS)      PARSEC_DATATYPE_INIT_BASIC_DATATYPE( uint32_t, PARSEC_ALIGNMENT_INT32, UINT4, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_UINT8(FLAGS)      PARSEC_DATATYPE_INIT_BASIC_DATATYPE( uint64_t, PARSEC_ALIGNMENT_INT64, UINT8, FLAGS )
 #ifdef HAVE_UINT128_T
-#define OPAL_DATATYPE_INITIALIZER_UINT16(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( uint128_t, OPAL_ALIGNMENT_INT128, UINT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_UINT16(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( uint128_t, PARSEC_ALIGNMENT_INT128, UINT16, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_UINT16(FLAGS)     OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( INT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_UINT16(FLAGS)     PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( INT16, FLAGS )
 #endif
 
 #if defined(HAVE_SHORT_FLOAT) && SIZEOF_SHORT_FLOAT == 2
-#define OPAL_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( short float, OPAL_ALIGNMENT_SHORT_FLOAT, FLOAT2, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( short float, PARSEC_ALIGNMENT_SHORT_FLOAT, FLOAT2, FLAGS )
 #elif SIZEOF_FLOAT == 2
-#define OPAL_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( float, OPAL_ALIGNMENT_FLOAT, FLOAT2, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( float, PARSEC_ALIGNMENT_FLOAT, FLOAT2, FLAGS )
 #elif SIZEOF_DOUBLE == 2
-#define OPAL_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( double, OPAL_ALIGNMENT_DOUBLE, FLOAT2, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( double, PARSEC_ALIGNMENT_DOUBLE, FLOAT2, FLAGS )
 #elif SIZEOF_LONG_DOUBLE == 2
-#define OPAL_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( long double, OPAL_ALIGNMENT_LONG_DOUBLE, FLOAT2, FLAGS )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 2
-#define OPAL_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( opal_short_float_t, OPAL_ALIGNMENT_OPAL_SHORT_FLOAT_T, FLOAT2, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( long double, PARSEC_ALIGNMENT_LONG_DOUBLE, FLOAT2, FLAGS )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 2
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( parsec_short_float_t, PARSEC_ALIGNMENT_PARSEC_SHORT_FLOAT_T, FLOAT2, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT2, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT2(FLAGS)     PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT2, FLAGS )
 #endif
 
 #if defined(HAVE_SHORT_FLOAT) && SIZEOF_SHORT_FLOAT == 4
-#define OPAL_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( short float, OPAL_ALIGNMENT_SHORT_FLOAT, FLOAT4, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( short float, PARSEC_ALIGNMENT_SHORT_FLOAT, FLOAT4, FLAGS )
 #elif SIZEOF_FLOAT == 4
-#define OPAL_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( float, OPAL_ALIGNMENT_FLOAT, FLOAT4, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( float, PARSEC_ALIGNMENT_FLOAT, FLOAT4, FLAGS )
 #elif SIZEOF_DOUBLE == 4
-#define OPAL_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( double, OPAL_ALIGNMENT_DOUBLE, FLOAT4, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( double, PARSEC_ALIGNMENT_DOUBLE, FLOAT4, FLAGS )
 #elif SIZEOF_LONG_DOUBLE == 4
-#define OPAL_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( long double, OPAL_ALIGNMENT_LONG_DOUBLE, FLOAT4, FLAGS )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 4
-#define OPAL_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( opal_short_float_t, OPAL_ALIGNMENT_OPAL_SHORT_FLOAT_T, FLOAT4, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( long double, PARSEC_ALIGNMENT_LONG_DOUBLE, FLOAT4, FLAGS )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 4
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( parsec_short_float_t, PARSEC_ALIGNMENT_PARSEC_SHORT_FLOAT_T, FLOAT4, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT4, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT4(FLAGS)     PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT4, FLAGS )
 #endif
 
 #if defined(HAVE_SHORT_FLOAT) && SIZEOF_SHORT_FLOAT == 8
-#define OPAL_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( short float, OPAL_ALIGNMENT_SHORT_FLOAT, FLOAT8, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( short float, PARSEC_ALIGNMENT_SHORT_FLOAT, FLOAT8, FLAGS )
 #elif SIZEOF_FLOAT == 8
-#define OPAL_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( float, OPAL_ALIGNMENT_FLOAT, FLOAT8, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( float, PARSEC_ALIGNMENT_FLOAT, FLOAT8, FLAGS )
 #elif SIZEOF_DOUBLE == 8
-#define OPAL_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( double, OPAL_ALIGNMENT_DOUBLE, FLOAT8, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( double, PARSEC_ALIGNMENT_DOUBLE, FLOAT8, FLAGS )
 #elif SIZEOF_LONG_DOUBLE == 8
-#define OPAL_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( long double, OPAL_ALIGNMENT_LONG_DOUBLE, FLOAT8, FLAGS )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 8
-#define OPAL_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     OPAL_DATATYPE_INIT_BASIC_DATATYPE( opal_short_float_t, OPAL_ALIGNMENT_OPAL_SHORT_FLOAT_T, FLOAT8, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( long double, PARSEC_ALIGNMENT_LONG_DOUBLE, FLOAT8, FLAGS )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 8
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     PARSEC_DATATYPE_INIT_BASIC_DATATYPE( parsec_short_float_t, PARSEC_ALIGNMENT_PARSEC_SHORT_FLOAT_T, FLOAT8, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT8, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT8(FLAGS)     PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT8, FLAGS )
 #endif
 
 #if defined(HAVE_SHORT_FLOAT) && SIZEOF_SHORT_FLOAT == 12
-#define OPAL_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( short float, OPAL_ALIGNMENT_SHORT_FLOAT, FLOAT12, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( short float, PARSEC_ALIGNMENT_SHORT_FLOAT, FLOAT12, FLAGS )
 #elif SIZEOF_FLOAT == 12
-#define OPAL_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( float, OPAL_ALIGNMENT_FLOAT, FLOAT12, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( float, PARSEC_ALIGNMENT_FLOAT, FLOAT12, FLAGS )
 #elif SIZEOF_DOUBLE == 12
-#define OPAL_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( double, OPAL_ALIGNMENT_DOUBLE, FLOAT12, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( double, PARSEC_ALIGNMENT_DOUBLE, FLOAT12, FLAGS )
 #elif SIZEOF_LONG_DOUBLE == 12
-#define OPAL_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( long double, OPAL_ALIGNMENT_LONG_DOUBLE, FLOAT12, FLAGS )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 12
-#define OPAL_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( opal_short_float_t, OPAL_ALIGNMENT_OPAL_SHORT_FLOAT_T, FLOAT12, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( long double, PARSEC_ALIGNMENT_LONG_DOUBLE, FLOAT12, FLAGS )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 12
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( parsec_short_float_t, PARSEC_ALIGNMENT_PARSEC_SHORT_FLOAT_T, FLOAT12, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT12, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT12(FLAGS)    PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT12, FLAGS )
 #endif
 
 #if defined(HAVE_SHORT_FLOAT) && SIZEOF_SHORT_FLOAT == 16
-#define OPAL_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( short float, OPAL_ALIGNMENT_SHORT_FLOAT, FLOAT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( short float, PARSEC_ALIGNMENT_SHORT_FLOAT, FLOAT16, FLAGS )
 #elif SIZEOF_FLOAT == 16
-#define OPAL_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( float, OPAL_ALIGNMENT_FLOAT, FLOAT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( float, PARSEC_ALIGNMENT_FLOAT, FLOAT16, FLAGS )
 #elif SIZEOF_DOUBLE == 16
-#define OPAL_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( double, OPAL_ALIGNMENT_DOUBLE, FLOAT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( double, PARSEC_ALIGNMENT_DOUBLE, FLOAT16, FLAGS )
 #elif SIZEOF_LONG_DOUBLE == 16
-#define OPAL_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( long double, OPAL_ALIGNMENT_LONG_DOUBLE, FLOAT16, FLAGS )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 16
-#define OPAL_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    OPAL_DATATYPE_INIT_BASIC_DATATYPE( opal_short_float_t, OPAL_ALIGNMENT_OPAL_SHORT_FLOAT_T, FLOAT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( long double, PARSEC_ALIGNMENT_LONG_DOUBLE, FLOAT16, FLAGS )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 16
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    PARSEC_DATATYPE_INIT_BASIC_DATATYPE( parsec_short_float_t, PARSEC_ALIGNMENT_PARSEC_SHORT_FLOAT_T, FLOAT16, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT16, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT16(FLAGS)    PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( FLOAT16, FLAGS )
 #endif
 
 #if defined(HAVE_SHORT_FLOAT__COMPLEX)
-#define OPAL_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(FLAGS) OPAL_DATATYPE_INIT_BASIC_DATATYPE( short float _Complex, OPAL_ALIGNMENT_SHORT_FLOAT_COMPLEX, SHORT_FLOAT_COMPLEX, FLAGS )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_COMPLEX_T)
-#define OPAL_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(FLAGS) OPAL_DATATYPE_INIT_BASIC_DATATYPE( opal_short_float_complex_t, OPAL_ALIGNMENT_OPAL_SHORT_FLOAT_T, SHORT_FLOAT_COMPLEX, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(FLAGS) PARSEC_DATATYPE_INIT_BASIC_DATATYPE( short float _Complex, PARSEC_ALIGNMENT_SHORT_FLOAT_COMPLEX, SHORT_FLOAT_COMPLEX, FLAGS )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_COMPLEX_T)
+#define PARSEC_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(FLAGS) PARSEC_DATATYPE_INIT_BASIC_DATATYPE( parsec_short_float_complex_t, PARSEC_ALIGNMENT_PARSEC_SHORT_FLOAT_T, SHORT_FLOAT_COMPLEX, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(FLAGS) OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( SHORT_FLOAT_COMPLEX, FLAGS)
+#define PARSEC_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(FLAGS) PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( SHORT_FLOAT_COMPLEX, FLAGS)
 #endif
 
-#define OPAL_DATATYPE_INITIALIZER_FLOAT_COMPLEX(FLAGS) OPAL_DATATYPE_INIT_BASIC_DATATYPE( float _Complex, OPAL_ALIGNMENT_FLOAT_COMPLEX, FLOAT_COMPLEX, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_FLOAT_COMPLEX(FLAGS) PARSEC_DATATYPE_INIT_BASIC_DATATYPE( float _Complex, PARSEC_ALIGNMENT_FLOAT_COMPLEX, FLOAT_COMPLEX, FLAGS )
 
-#define OPAL_DATATYPE_INITIALIZER_DOUBLE_COMPLEX(FLAGS) OPAL_DATATYPE_INIT_BASIC_DATATYPE( double _Complex, OPAL_ALIGNMENT_DOUBLE_COMPLEX, DOUBLE_COMPLEX, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_DOUBLE_COMPLEX(FLAGS) PARSEC_DATATYPE_INIT_BASIC_DATATYPE( double _Complex, PARSEC_ALIGNMENT_DOUBLE_COMPLEX, DOUBLE_COMPLEX, FLAGS )
 
-#define OPAL_DATATYPE_INITIALIZER_LONG_DOUBLE_COMPLEX(FLAGS) OPAL_DATATYPE_INIT_BASIC_DATATYPE( long double _Complex, OPAL_ALIGNMENT_LONG_DOUBLE_COMPLEX, LONG_DOUBLE_COMPLEX, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_LONG_DOUBLE_COMPLEX(FLAGS) PARSEC_DATATYPE_INIT_BASIC_DATATYPE( long double _Complex, PARSEC_ALIGNMENT_LONG_DOUBLE_COMPLEX, LONG_DOUBLE_COMPLEX, FLAGS )
 
-#define OPAL_DATATYPE_INITIALIZER_BOOL(FLAGS)       OPAL_DATATYPE_INIT_BASIC_DATATYPE( _Bool, OPAL_ALIGNMENT_BOOL, BOOL, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_BOOL(FLAGS)       PARSEC_DATATYPE_INIT_BASIC_DATATYPE( _Bool, PARSEC_ALIGNMENT_BOOL, BOOL, FLAGS )
 
-#if OPAL_ALIGNMENT_WCHAR != 0
-#define OPAL_DATATYPE_INITIALIZER_WCHAR(FLAGS)      OPAL_DATATYPE_INIT_BASIC_DATATYPE( wchar_t, OPAL_ALIGNMENT_WCHAR, WCHAR, FLAGS )
+#if PARSEC_ALIGNMENT_WCHAR != 0
+#define PARSEC_DATATYPE_INITIALIZER_WCHAR(FLAGS)      PARSEC_DATATYPE_INIT_BASIC_DATATYPE( wchar_t, PARSEC_ALIGNMENT_WCHAR, WCHAR, FLAGS )
 #else
-#define OPAL_DATATYPE_INITIALIZER_WCHAR(FLAGS)      OPAL_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( WCHAR, FLAGS )
+#define PARSEC_DATATYPE_INITIALIZER_WCHAR(FLAGS)      PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( WCHAR, FLAGS )
 #endif
 
-#define BASIC_DDT_FROM_ELEM( ELEM ) (opal_datatype_basicDatatypes[(ELEM).elem.common.type])
+#define BASIC_DDT_FROM_ELEM( ELEM ) (parsec_datatype_basicDatatypes[(ELEM).elem.common.type])
 
 #define SAVE_STACK( PSTACK, INDEX, TYPE, COUNT, DISP) \
 do { \
@@ -467,8 +467,8 @@ do { \
    (PSTACK) = pTempStack; \
 } while(0)
 
-#if OPAL_ENABLE_DEBUG
-#define OPAL_DATATYPE_SAFEGUARD_POINTER( ACTPTR, LENGTH, INITPTR, PDATA, COUNT ) \
+#if PARSEC_ENABLE_DEBUG
+#define PARSEC_DATATYPE_SAFEGUARD_POINTER( ACTPTR, LENGTH, INITPTR, PDATA, COUNT ) \
     {                                                                   \
         unsigned char *__lower_bound = (INITPTR), *__upper_bound;       \
         assert( ((LENGTH) != 0) && ((COUNT) != 0) );                    \
@@ -476,17 +476,17 @@ do { \
         __upper_bound = (INITPTR) + (PDATA)->true_ub +                  \
             ((PDATA)->ub - (PDATA)->lb) * ((COUNT) - 1);                \
         if( ((ACTPTR) < __lower_bound) || ((ACTPTR) >= __upper_bound) ) { \
-            opal_datatype_safeguard_pointer_debug_breakpoint( (ACTPTR), (LENGTH), (INITPTR), (PDATA), (COUNT) ); \
-            opal_output( 0, "%s:%d\n\tPointer %p size %lu is outside [%p,%p] for\n\tbase ptr %p count %lu and data \n", \
+            parsec_datatype_safeguard_pointer_debug_breakpoint( (ACTPTR), (LENGTH), (INITPTR), (PDATA), (COUNT) ); \
+            parsec_output( 0, "%s:%d\n\tPointer %p size %lu is outside [%p,%p] for\n\tbase ptr %p count %lu and data \n", \
                          __FILE__, __LINE__, (void*)(ACTPTR), (unsigned long)(LENGTH), (void*)__lower_bound, (void*)__upper_bound, \
                          (void*)(INITPTR), (unsigned long)(COUNT) );    \
-            opal_datatype_dump( (PDATA) );                              \
+            parsec_datatype_dump( (PDATA) );                              \
         }                                                               \
     }
 
 #else
-#define OPAL_DATATYPE_SAFEGUARD_POINTER( ACTPTR, LENGTH, INITPTR, PDATA, COUNT )
-#endif  /* OPAL_ENABLE_DEBUG */
+#define PARSEC_DATATYPE_SAFEGUARD_POINTER( ACTPTR, LENGTH, INITPTR, PDATA, COUNT )
+#endif  /* PARSEC_ENABLE_DEBUG */
 
 static inline int GET_FIRST_NON_LOOP( const union dt_elem_desc* _pElem )
 {
@@ -495,7 +495,7 @@ static inline int GET_FIRST_NON_LOOP( const union dt_elem_desc* _pElem )
     /* We dont have to check for the end as we always put an END_LOOP
      * at the end of all datatype descriptions.
      */
-    while( _pElem->elem.common.type == OPAL_DATATYPE_LOOP ) {
+    while( _pElem->elem.common.type == PARSEC_DATATYPE_LOOP ) {
         ++_pElem; element_index++;
     }
     return element_index;
@@ -504,21 +504,21 @@ static inline int GET_FIRST_NON_LOOP( const union dt_elem_desc* _pElem )
 #define UPDATE_INTERNAL_COUNTERS( DESCRIPTION, POSITION, ELEMENT, COUNTER ) \
     do {                                                                    \
         (ELEMENT) = &((DESCRIPTION)[(POSITION)]);                           \
-        if( OPAL_DATATYPE_LOOP == (ELEMENT)->elem.common.type )             \
+        if( PARSEC_DATATYPE_LOOP == (ELEMENT)->elem.common.type )             \
             (COUNTER) = (ELEMENT)->loop.loops;                              \
         else                                                                \
             (COUNTER) = (ELEMENT)->elem.count * (ELEMENT)->elem.blocklen;   \
     } while (0)
 
-OPAL_DECLSPEC int opal_datatype_contain_basic_datatypes( const struct opal_datatype_t* pData, char* ptr, size_t length );
-OPAL_DECLSPEC int opal_datatype_dump_data_flags( unsigned short usflags, char* ptr, size_t length );
-OPAL_DECLSPEC int opal_datatype_dump_data_desc( union dt_elem_desc* pDesc, int nbElems, char* ptr, size_t length );
+PARSEC_DECLSPEC int parsec_datatype_contain_basic_datatypes( const struct parsec_datatype_t* pData, char* ptr, size_t length );
+PARSEC_DECLSPEC int parsec_datatype_dump_data_flags( unsigned short usflags, char* ptr, size_t length );
+PARSEC_DECLSPEC int parsec_datatype_dump_data_desc( union dt_elem_desc* pDesc, int nbElems, char* ptr, size_t length );
 
-extern bool opal_ddt_position_debug;
-extern bool opal_ddt_copy_debug;
-extern bool opal_ddt_unpack_debug;
-extern bool opal_ddt_pack_debug;
-extern bool opal_ddt_raw_debug;
+extern bool parsec_ddt_position_debug;
+extern bool parsec_ddt_copy_debug;
+extern bool parsec_ddt_unpack_debug;
+extern bool parsec_ddt_pack_debug;
+extern bool parsec_ddt_raw_debug;
 
 END_C_DECLS
-#endif  /* OPAL_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED */
+#endif  /* PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED */

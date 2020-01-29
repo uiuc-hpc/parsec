@@ -14,7 +14,7 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #ifdef HAVE_IEEE754_H
 #include <ieee754.h>
@@ -23,14 +23,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "opal/util/arch.h"
+#include "parsec/util/arch.h"
 
-#include "opal/types.h"
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_convertor.h"
-#include "opal/datatype/opal_datatype_internal.h"
-#include "opal/datatype/opal_datatype_checksum.h"
-#include "opal/datatype/opal_convertor_internal.h"
+#include "parsec/types.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_convertor.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
+#include "parsec/datatype/parsec_datatype_checksum.h"
+#include "parsec/datatype/parsec_convertor_internal.h"
 
 
 /*
@@ -45,7 +45,7 @@
  */
 
 static inline void
-opal_dt_swap_bytes(void *to_p, const void *from_p, const size_t size, size_t count)
+parsec_dt_swap_bytes(void *to_p, const void *from_p, const size_t size, size_t count)
 {
     size_t i;
     size_t back_i = size - 1;
@@ -87,12 +87,12 @@ struct bit80 {
 };
 
 static inline void
-opal_dt_swap_long_double(void *to_p, const void *from_p, const size_t size, size_t count, uint32_t remoteArch)
+parsec_dt_swap_long_double(void *to_p, const void *from_p, const size_t size, size_t count, uint32_t remoteArch)
 {
 
 #ifdef HAVE_IEEE754_H
 
-    if ((opal_local_arch&OPAL_ARCH_LDISINTEL) && !(remoteArch&OPAL_ARCH_LDISINTEL)) {
+    if ((parsec_local_arch&PARSEC_ARCH_LDISINTEL) && !(remoteArch&PARSEC_ARCH_LDISINTEL)) {
 #ifdef __x86_64
         long double*to = (long double *) to_p;
 
@@ -107,7 +107,7 @@ opal_dt_swap_long_double(void *to_p, const void *from_p, const size_t size, size
             MEMCPY( to, &ld, sizeof(long double));
         }
 #endif
-    } else if (!(opal_local_arch&OPAL_ARCH_LDISINTEL) && (remoteArch&OPAL_ARCH_LDISINTEL)) {
+    } else if (!(parsec_local_arch&PARSEC_ARCH_LDISINTEL) && (remoteArch&PARSEC_ARCH_LDISINTEL)) {
 #ifdef __sparcv9
         long double*to = (long double *) to_p;
 
@@ -129,7 +129,7 @@ opal_dt_swap_long_double(void *to_p, const void *from_p, const size_t size, size
 #endif
 }
 #else
-#define opal_dt_swap_long_double(to_p, from_p, size, count, remoteArch)
+#define parsec_dt_swap_long_double(to_p, from_p, size, count, remoteArch)
 #endif
 
 /**
@@ -143,7 +143,7 @@ opal_dt_swap_long_double(void *to_p, const void *from_p, const size_t size, size
 
 #define COPY_TYPE_HETEROGENEOUS_INTERNAL( TYPENAME, TYPE, LONG_DOUBLE )                   \
 static int32_t                                                                            \
-copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count,               \
+copy_##TYPENAME##_heterogeneous(parsec_convertor_t *pConvertor, size_t count,               \
                                 const char* from, size_t from_len, ptrdiff_t from_extent, \
                                 char* to, size_t to_length, ptrdiff_t to_extent,          \
                                 ptrdiff_t *advance)             \
@@ -154,18 +154,18 @@ copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count,     
                    from, from_len, from_extent,                         \
                    to, to_length, to_extent);                           \
                                                                         \
-    if ((pConvertor->remoteArch & OPAL_ARCH_ISBIGENDIAN) !=             \
-        (opal_local_arch & OPAL_ARCH_ISBIGENDIAN)) {                    \
+    if ((pConvertor->remoteArch & PARSEC_ARCH_ISBIGENDIAN) !=             \
+        (parsec_local_arch & PARSEC_ARCH_ISBIGENDIAN)) {                    \
         if( (to_extent == from_extent) && (to_extent == sizeof(TYPE)) ) { \
-            opal_dt_swap_bytes(to, from, sizeof(TYPE), count);          \
+            parsec_dt_swap_bytes(to, from, sizeof(TYPE), count);          \
             if (LONG_DOUBLE) {                                          \
-                opal_dt_swap_long_double(to, from, sizeof(TYPE), count, pConvertor->remoteArch);\
+                parsec_dt_swap_long_double(to, from, sizeof(TYPE), count, pConvertor->remoteArch);\
             }                                                           \
         } else {                                                        \
             for( i = 0; i < count; i++ ) {                              \
-                opal_dt_swap_bytes(to, from, sizeof(TYPE), 1);          \
+                parsec_dt_swap_bytes(to, from, sizeof(TYPE), 1);          \
                 if (LONG_DOUBLE) {                                      \
-                    opal_dt_swap_long_double(to, from, sizeof(TYPE), 1, pConvertor->remoteArch);\
+                    parsec_dt_swap_long_double(to, from, sizeof(TYPE), 1, pConvertor->remoteArch);\
                 }                                                       \
                 to += to_extent;                                        \
                 from += from_extent;                                    \
@@ -191,7 +191,7 @@ copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count,     
 
 #define COPY_2SAMETYPE_HETEROGENEOUS_INTERNAL( TYPENAME, TYPE, LONG_DOUBLE)                 \
 static int32_t                                                                            \
-copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count,               \
+copy_##TYPENAME##_heterogeneous(parsec_convertor_t *pConvertor, size_t count,               \
                                 const char* from, size_t from_len, ptrdiff_t from_extent, \
                                 char* to, size_t to_length, ptrdiff_t to_extent,          \
                                 ptrdiff_t *advance)             \
@@ -202,18 +202,18 @@ copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count,     
                    from, from_len, from_extent,                         \
                    to, to_length, to_extent);                           \
                                                                         \
-    if ((pConvertor->remoteArch & OPAL_ARCH_ISBIGENDIAN) !=             \
-        (opal_local_arch & OPAL_ARCH_ISBIGENDIAN)) {                    \
+    if ((pConvertor->remoteArch & PARSEC_ARCH_ISBIGENDIAN) !=             \
+        (parsec_local_arch & PARSEC_ARCH_ISBIGENDIAN)) {                    \
         if( (to_extent == from_extent) && (to_extent == (2 * sizeof(TYPE))) ) { \
-            opal_dt_swap_bytes(to, from, sizeof(TYPE), 2 * count);      \
+            parsec_dt_swap_bytes(to, from, sizeof(TYPE), 2 * count);      \
             if (LONG_DOUBLE) {                                          \
-                opal_dt_swap_long_double(to, from, sizeof(TYPE), 2*count, pConvertor->remoteArch);\
+                parsec_dt_swap_long_double(to, from, sizeof(TYPE), 2*count, pConvertor->remoteArch);\
             }                                                           \
         } else {                                                        \
             for( i = 0; i < count; i++ ) {                              \
-                opal_dt_swap_bytes(to, from, sizeof(TYPE), 2);          \
+                parsec_dt_swap_bytes(to, from, sizeof(TYPE), 2);          \
                 if (LONG_DOUBLE) {                                      \
-                    opal_dt_swap_long_double(to, from, sizeof(TYPE), 2, pConvertor->remoteArch);\
+                    parsec_dt_swap_long_double(to, from, sizeof(TYPE), 2, pConvertor->remoteArch);\
                 }                                                       \
                 to += to_extent;                                        \
                 from += from_extent;                                    \
@@ -236,7 +236,7 @@ copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count,     
 
 #define COPY_2TYPE_HETEROGENEOUS( TYPENAME, TYPE1, TYPE2 )              \
 static int32_t                                                          \
-copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count, \
+copy_##TYPENAME##_heterogeneous(parsec_convertor_t *pConvertor, size_t count, \
                                 const char* from, size_t from_len, ptrdiff_t from_extent, \
                                 char* to, size_t to_length, ptrdiff_t to_extent, \
                                 ptrdiff_t *advance)             \
@@ -248,16 +248,16 @@ copy_##TYPENAME##_heterogeneous(opal_convertor_t *pConvertor, size_t count, \
                    from, from_len, from_extent,                         \
                    to, to_length, to_extent);                           \
                                                                         \
-    if ((pConvertor->remoteArch & OPAL_ARCH_ISBIGENDIAN) !=             \
-        (opal_local_arch & OPAL_ARCH_ISBIGENDIAN)) {                    \
+    if ((pConvertor->remoteArch & PARSEC_ARCH_ISBIGENDIAN) !=             \
+        (parsec_local_arch & PARSEC_ARCH_ISBIGENDIAN)) {                    \
         /* source and destination are different endianness */           \
         for( i = 0; i < count; i++ ) {                                  \
             TYPE1* to_1, *from_1;                                       \
             TYPE2* to_2, *from_2;                                       \
             to_1 = (TYPE1*) to; from_1 = (TYPE1*) from;                 \
-            opal_dt_swap_bytes(to_1, from_1, sizeof(TYPE1), 1);         \
+            parsec_dt_swap_bytes(to_1, from_1, sizeof(TYPE1), 1);         \
             to_2 = (TYPE2*) (to_1 + 1); from_2 = (TYPE2*) (from_1 + 1); \
-            opal_dt_swap_bytes(to_2, from_2, sizeof(TYPE2), 1);         \
+            parsec_dt_swap_bytes(to_2, from_2, sizeof(TYPE2), 1);         \
             to += to_extent;                                            \
             from += from_extent;                                        \
         }                                                               \
@@ -306,22 +306,22 @@ datatype_check(char *type, size_t local_size, size_t remote_size, size_t *count,
         from += from_extent;                            \
     }
 static int32_t
-copy_cxx_bool_heterogeneous(opal_convertor_t *pConvertor, size_t count,
+copy_cxx_bool_heterogeneous(parsec_convertor_t *pConvertor, size_t count,
                             const char* from, size_t from_len, ptrdiff_t from_extent,
                             char* to, size_t to_length, ptrdiff_t to_extent,
                             ptrdiff_t *advance)
 {
     /* fix up the from extent */
-    if ((pConvertor->remoteArch & OPAL_ARCH_BOOLISxx) !=
-        (opal_local_arch & OPAL_ARCH_BOOLISxx)) {
-        switch (pConvertor->remoteArch & OPAL_ARCH_BOOLISxx) {
-        case OPAL_ARCH_BOOLIS8:
+    if ((pConvertor->remoteArch & PARSEC_ARCH_BOOLISxx) !=
+        (parsec_local_arch & PARSEC_ARCH_BOOLISxx)) {
+        switch (pConvertor->remoteArch & PARSEC_ARCH_BOOLISxx) {
+        case PARSEC_ARCH_BOOLIS8:
             from_extent = 1;
             break;
-        case OPAL_ARCH_BOOLIS16:
+        case PARSEC_ARCH_BOOLIS16:
             from_extent = 2;
             break;
-        case OPAL_ARCH_BOOLIS32:
+        case PARSEC_ARCH_BOOLIS32:
             from_extent = 4;
             break;
         }
@@ -332,16 +332,16 @@ copy_cxx_bool_heterogeneous(opal_convertor_t *pConvertor, size_t count,
                    to, to_length, to_extent);
 
     if ((to_extent != sizeof(bool) || from_extent != sizeof(bool)) ||
-        ((pConvertor->remoteArch & OPAL_ARCH_BOOLISxx) !=
-         (opal_local_arch & OPAL_ARCH_BOOLISxx))) {
-        switch (pConvertor->remoteArch & OPAL_ARCH_BOOLISxx) {
-        case OPAL_ARCH_BOOLIS8:
+        ((pConvertor->remoteArch & PARSEC_ARCH_BOOLISxx) !=
+         (parsec_local_arch & PARSEC_ARCH_BOOLISxx))) {
+        switch (pConvertor->remoteArch & PARSEC_ARCH_BOOLISxx) {
+        case PARSEC_ARCH_BOOLIS8:
             CXX_BOOL_COPY_LOOP(int8_t);
             break;
-        case OPAL_ARCH_BOOLIS16:
+        case PARSEC_ARCH_BOOLIS16:
             CXX_BOOL_COPY_LOOP(int16_t);
             break;
-        case OPAL_ARCH_BOOLIS32:
+        case PARSEC_ARCH_BOOLIS32:
             CXX_BOOL_COPY_LOOP(int32_t);
             break;
         }
@@ -378,10 +378,10 @@ COPY_TYPE_HETEROGENEOUS( float2, float )
 COPY_TYPE_HETEROGENEOUS( float2, double )
 #elif SIZEOF_LONG_DOUBLE == 2
 COPY_TYPE_HETEROGENEOUS( float2, long double )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 2
-COPY_TYPE_HETEROGENEOUS( float2, opal_short_float_t )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 2
+COPY_TYPE_HETEROGENEOUS( float2, parsec_short_float_t )
 #else
-/* #error No basic type for copy function for opal_datatype_float2 found */
+/* #error No basic type for copy function for parsec_datatype_float2 found */
 #define copy_float2_heterogeneous NULL
 #endif
 
@@ -393,10 +393,10 @@ COPY_TYPE_HETEROGENEOUS( float4, float )
 COPY_TYPE_HETEROGENEOUS( float4, double )
 #elif SIZEOF_LONG_DOUBLE == 4
 COPY_TYPE_HETEROGENEOUS( float4, long double )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 4
-COPY_TYPE_HETEROGENEOUS( float4, opal_short_float_t )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 4
+COPY_TYPE_HETEROGENEOUS( float4, parsec_short_float_t )
 #else
-/* #error No basic type for copy function for opal_datatype_float4 found */
+/* #error No basic type for copy function for parsec_datatype_float4 found */
 #define copy_float4_heterogeneous NULL
 #endif
 
@@ -408,10 +408,10 @@ COPY_TYPE_HETEROGENEOUS( float8, float )
 COPY_TYPE_HETEROGENEOUS( float8, double )
 #elif SIZEOF_LONG_DOUBLE == 8
 COPY_TYPE_HETEROGENEOUS( float8, long double )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 8
-COPY_TYPE_HETEROGENEOUS( float8, opal_short_float_t )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 8
+COPY_TYPE_HETEROGENEOUS( float8, parsec_short_float_t )
 #else
-/* #error No basic type for copy function for opal_datatype_float8 found */
+/* #error No basic type for copy function for parsec_datatype_float8 found */
 #define copy_float8_heterogeneous NULL
 #endif
 
@@ -423,10 +423,10 @@ COPY_TYPE_HETEROGENEOUS( float12, float )
 COPY_TYPE_HETEROGENEOUS( float12, double )
 #elif SIZEOF_LONG_DOUBLE == 12
 COPY_TYPE_HETEROGENEOUS( float12, long double )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 12
-COPY_TYPE_HETEROGENEOUS( float12, opal_short_float_t )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 12
+COPY_TYPE_HETEROGENEOUS( float12, parsec_short_float_t )
 #else
-/* #error No basic type for copy function for opal_datatype_float12 found */
+/* #error No basic type for copy function for parsec_datatype_float12 found */
 #define copy_float12_heterogeneous NULL
 #endif
 
@@ -438,19 +438,19 @@ COPY_TYPE_HETEROGENEOUS( float16, float )
 COPY_TYPE_HETEROGENEOUS( float16, double )
 #elif SIZEOF_LONG_DOUBLE == 16
 COPY_TYPE_HETEROGENEOUS_INTERNAL( float16, long double, 1)
-#elif defined(HAVE_OPAL_SHORT_FLOAT_T) && SIZEOF_OPAL_SHORT_FLOAT_T == 16
-COPY_TYPE_HETEROGENEOUS( float16, opal_short_float_t )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_T) && SIZEOF_PARSEC_SHORT_FLOAT_T == 16
+COPY_TYPE_HETEROGENEOUS( float16, parsec_short_float_t )
 #else
-/* #error No basic type for copy function for opal_datatype_float16 found */
+/* #error No basic type for copy function for parsec_datatype_float16 found */
 #define copy_float16_heterogeneous NULL
 #endif
 
 #if defined(HAVE_SHORT_FLOAT__COMPLEX)
 COPY_2SAMETYPE_HETEROGENEOUS( short_float_complex, short float _Complex )
-#elif defined(HAVE_OPAL_SHORT_FLOAT_COMPLEX_T)
-COPY_2SAMETYPE_HETEROGENEOUS( short_float_complex, opal_short_float_complex_t )
+#elif defined(HAVE_PARSEC_SHORT_FLOAT_COMPLEX_T)
+COPY_2SAMETYPE_HETEROGENEOUS( short_float_complex, parsec_short_float_complex_t )
 #else
-/* #error No basic type for copy function for opal_datatype_short_float_complex found */
+/* #error No basic type for copy function for parsec_datatype_short_float_complex found */
 #define copy_short_float_complex_heterogeneous NULL
 #endif
 
@@ -463,31 +463,31 @@ COPY_2SAMETYPE_HETEROGENEOUS_INTERNAL( long_double_complex, long double, 1)
 COPY_TYPE_HETEROGENEOUS (wchar, wchar_t)
 
 /* table of predefined copy functions - one for each MPI type */
-conversion_fct_t opal_datatype_heterogeneous_copy_functions[OPAL_DATATYPE_MAX_PREDEFINED] = {
-   [OPAL_DATATYPE_LOOP]                = NULL,
-   [OPAL_DATATYPE_END_LOOP]            = NULL,
-   [OPAL_DATATYPE_LB]                  = NULL,
-   [OPAL_DATATYPE_UB]                  = NULL,
-   [OPAL_DATATYPE_INT1]                = (conversion_fct_t) copy_int1_heterogeneous,
-   [OPAL_DATATYPE_INT2]                = (conversion_fct_t) copy_int2_heterogeneous,
-   [OPAL_DATATYPE_INT4]                = (conversion_fct_t) copy_int4_heterogeneous,
-   [OPAL_DATATYPE_INT8]                = (conversion_fct_t) copy_int8_heterogeneous,
-   [OPAL_DATATYPE_INT16]               = (conversion_fct_t) copy_int16_heterogeneous,
-   [OPAL_DATATYPE_UINT1]               = (conversion_fct_t) copy_int1_heterogeneous,
-   [OPAL_DATATYPE_UINT2]               = (conversion_fct_t) copy_int2_heterogeneous,
-   [OPAL_DATATYPE_UINT4]               = (conversion_fct_t) copy_int4_heterogeneous,
-   [OPAL_DATATYPE_UINT8]               = (conversion_fct_t) copy_int8_heterogeneous,
-   [OPAL_DATATYPE_UINT16]              = (conversion_fct_t) copy_int16_heterogeneous,
-   [OPAL_DATATYPE_FLOAT2]              = (conversion_fct_t) copy_float2_heterogeneous,
-   [OPAL_DATATYPE_FLOAT4]              = (conversion_fct_t) copy_float4_heterogeneous,
-   [OPAL_DATATYPE_FLOAT8]              = (conversion_fct_t) copy_float8_heterogeneous,
-   [OPAL_DATATYPE_FLOAT12]             = (conversion_fct_t) copy_float12_heterogeneous,
-   [OPAL_DATATYPE_FLOAT16]             = (conversion_fct_t) copy_float16_heterogeneous,
-   [OPAL_DATATYPE_SHORT_FLOAT_COMPLEX] = (conversion_fct_t) copy_short_float_complex_heterogeneous,
-   [OPAL_DATATYPE_FLOAT_COMPLEX]       = (conversion_fct_t) copy_float_complex_heterogeneous,
-   [OPAL_DATATYPE_DOUBLE_COMPLEX]      = (conversion_fct_t) copy_double_complex_heterogeneous,
-   [OPAL_DATATYPE_LONG_DOUBLE_COMPLEX] = (conversion_fct_t) copy_long_double_complex_heterogeneous,
-   [OPAL_DATATYPE_BOOL]                = (conversion_fct_t) copy_cxx_bool_heterogeneous,
-   [OPAL_DATATYPE_WCHAR]               = (conversion_fct_t) copy_wchar_heterogeneous,
-   [OPAL_DATATYPE_UNAVAILABLE]         = NULL,
+conversion_fct_t parsec_datatype_heterogeneous_copy_functions[PARSEC_DATATYPE_MAX_PREDEFINED] = {
+   [PARSEC_DATATYPE_LOOP]                = NULL,
+   [PARSEC_DATATYPE_END_LOOP]            = NULL,
+   [PARSEC_DATATYPE_LB]                  = NULL,
+   [PARSEC_DATATYPE_UB]                  = NULL,
+   [PARSEC_DATATYPE_INT1]                = (conversion_fct_t) copy_int1_heterogeneous,
+   [PARSEC_DATATYPE_INT2]                = (conversion_fct_t) copy_int2_heterogeneous,
+   [PARSEC_DATATYPE_INT4]                = (conversion_fct_t) copy_int4_heterogeneous,
+   [PARSEC_DATATYPE_INT8]                = (conversion_fct_t) copy_int8_heterogeneous,
+   [PARSEC_DATATYPE_INT16]               = (conversion_fct_t) copy_int16_heterogeneous,
+   [PARSEC_DATATYPE_UINT1]               = (conversion_fct_t) copy_int1_heterogeneous,
+   [PARSEC_DATATYPE_UINT2]               = (conversion_fct_t) copy_int2_heterogeneous,
+   [PARSEC_DATATYPE_UINT4]               = (conversion_fct_t) copy_int4_heterogeneous,
+   [PARSEC_DATATYPE_UINT8]               = (conversion_fct_t) copy_int8_heterogeneous,
+   [PARSEC_DATATYPE_UINT16]              = (conversion_fct_t) copy_int16_heterogeneous,
+   [PARSEC_DATATYPE_FLOAT2]              = (conversion_fct_t) copy_float2_heterogeneous,
+   [PARSEC_DATATYPE_FLOAT4]              = (conversion_fct_t) copy_float4_heterogeneous,
+   [PARSEC_DATATYPE_FLOAT8]              = (conversion_fct_t) copy_float8_heterogeneous,
+   [PARSEC_DATATYPE_FLOAT12]             = (conversion_fct_t) copy_float12_heterogeneous,
+   [PARSEC_DATATYPE_FLOAT16]             = (conversion_fct_t) copy_float16_heterogeneous,
+   [PARSEC_DATATYPE_SHORT_FLOAT_COMPLEX] = (conversion_fct_t) copy_short_float_complex_heterogeneous,
+   [PARSEC_DATATYPE_FLOAT_COMPLEX]       = (conversion_fct_t) copy_float_complex_heterogeneous,
+   [PARSEC_DATATYPE_DOUBLE_COMPLEX]      = (conversion_fct_t) copy_double_complex_heterogeneous,
+   [PARSEC_DATATYPE_LONG_DOUBLE_COMPLEX] = (conversion_fct_t) copy_long_double_complex_heterogeneous,
+   [PARSEC_DATATYPE_BOOL]                = (conversion_fct_t) copy_cxx_bool_heterogeneous,
+   [PARSEC_DATATYPE_WCHAR]               = (conversion_fct_t) copy_wchar_heterogeneous,
+   [PARSEC_DATATYPE_UNAVAILABLE]         = NULL,
 };

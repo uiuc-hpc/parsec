@@ -27,21 +27,21 @@
  */
 
 /**
- * opal_datatype_t interface for OPAL internal data type representation
+ * parsec_datatype_t interface for PARSEC internal data type representation
  *
- * opal_datatype_t is a class which represents contiguous or
+ * parsec_datatype_t is a class which represents contiguous or
  * non-contiguous data together with constituent type-related
  * information.
  */
 
-#ifndef OPAL_DATATYPE_H_HAS_BEEN_INCLUDED
-#define OPAL_DATATYPE_H_HAS_BEEN_INCLUDED
+#ifndef PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED
+#define PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <stddef.h>
 
-#include "opal/class/opal_object.h"
+#include "parsec/class/parsec_object.h"
 
 BEGIN_C_DECLS
 
@@ -49,10 +49,10 @@ BEGIN_C_DECLS
  * If there are more basic datatypes than the number of bytes in the int type
  * the bdt_used field of the data description struct should be changed to long.
  *
- * This must match the same definition as in opal_datatype_internal.h
+ * This must match the same definition as in parsec_datatype_internal.h
  */
-#if !defined(OPAL_DATATYPE_MAX_PREDEFINED)
-#define OPAL_DATATYPE_MAX_PREDEFINED 26
+#if !defined(PARSEC_DATATYPE_MAX_PREDEFINED)
+#define PARSEC_DATATYPE_MAX_PREDEFINED 26
 #endif
 /*
  * No more than this number of _Basic_ datatypes in C/CPP or Fortran
@@ -61,41 +61,41 @@ BEGIN_C_DECLS
  *
  * BEWARE: This constant should reflect whatever the OMPI-layer needs.
  */
-#define OPAL_DATATYPE_MAX_SUPPORTED  50
+#define PARSEC_DATATYPE_MAX_SUPPORTED  50
 
 
 /* flags for the datatypes. */
-#define OPAL_DATATYPE_FLAG_UNAVAILABLE   0x0001  /**< datatypes unavailable on the build (OS or compiler dependant) */
-#define OPAL_DATATYPE_FLAG_PREDEFINED    0x0002  /**< cannot be removed: initial and predefined datatypes */
-#define OPAL_DATATYPE_FLAG_COMMITTED     0x0004  /**< ready to be used for a send/recv operation */
-#define OPAL_DATATYPE_FLAG_OVERLAP       0x0008  /**< datatype is unpropper for a recv operation */
-#define OPAL_DATATYPE_FLAG_CONTIGUOUS    0x0010  /**< contiguous datatype */
-#define OPAL_DATATYPE_FLAG_NO_GAPS       0x0020  /**< no gaps around the datatype, aka OPAL_DATATYPE_FLAG_CONTIGUOUS and extent == size */
-#define OPAL_DATATYPE_FLAG_USER_LB       0x0040  /**< has a user defined LB */
-#define OPAL_DATATYPE_FLAG_USER_UB       0x0080  /**< has a user defined UB */
-#define OPAL_DATATYPE_FLAG_DATA          0x0100  /**< data or control structure */
+#define PARSEC_DATATYPE_FLAG_UNAVAILABLE   0x0001  /**< datatypes unavailable on the build (OS or compiler dependant) */
+#define PARSEC_DATATYPE_FLAG_PREDEFINED    0x0002  /**< cannot be removed: initial and predefined datatypes */
+#define PARSEC_DATATYPE_FLAG_COMMITTED     0x0004  /**< ready to be used for a send/recv operation */
+#define PARSEC_DATATYPE_FLAG_OVERLAP       0x0008  /**< datatype is unpropper for a recv operation */
+#define PARSEC_DATATYPE_FLAG_CONTIGUOUS    0x0010  /**< contiguous datatype */
+#define PARSEC_DATATYPE_FLAG_NO_GAPS       0x0020  /**< no gaps around the datatype, aka PARSEC_DATATYPE_FLAG_CONTIGUOUS and extent == size */
+#define PARSEC_DATATYPE_FLAG_USER_LB       0x0040  /**< has a user defined LB */
+#define PARSEC_DATATYPE_FLAG_USER_UB       0x0080  /**< has a user defined UB */
+#define PARSEC_DATATYPE_FLAG_DATA          0x0100  /**< data or control structure */
 /*
  * We should make the difference here between the predefined contiguous and non contiguous
- * datatypes. The OPAL_DATATYPE_FLAG_BASIC is held by all predefined contiguous datatypes.
+ * datatypes. The PARSEC_DATATYPE_FLAG_BASIC is held by all predefined contiguous datatypes.
  */
-#define OPAL_DATATYPE_FLAG_BASIC         (OPAL_DATATYPE_FLAG_PREDEFINED | \
-                                          OPAL_DATATYPE_FLAG_CONTIGUOUS | \
-                                          OPAL_DATATYPE_FLAG_NO_GAPS |    \
-                                          OPAL_DATATYPE_FLAG_DATA |       \
-                                          OPAL_DATATYPE_FLAG_COMMITTED)
+#define PARSEC_DATATYPE_FLAG_BASIC         (PARSEC_DATATYPE_FLAG_PREDEFINED | \
+                                          PARSEC_DATATYPE_FLAG_CONTIGUOUS | \
+                                          PARSEC_DATATYPE_FLAG_NO_GAPS |    \
+                                          PARSEC_DATATYPE_FLAG_DATA |       \
+                                          PARSEC_DATATYPE_FLAG_COMMITTED)
 
 /**
  * The number of supported entries in the data-type definition and the
  * associated type.
  */
 #define MAX_DT_COMPONENT_COUNT UINT_MAX
-typedef size_t opal_datatype_count_t;
+typedef size_t parsec_datatype_count_t;
 
 typedef union dt_elem_desc dt_elem_desc_t;
 
 struct dt_type_desc_t {
-    opal_datatype_count_t  length;  /**< the maximum number of elements in the description array */
-    opal_datatype_count_t  used;    /**< the number of used elements in the description array */
+    parsec_datatype_count_t  length;  /**< the maximum number of elements in the description array */
+    parsec_datatype_count_t  used;    /**< the number of used elements in the description array */
     dt_elem_desc_t*        desc;
 };
 typedef struct dt_type_desc_t dt_type_desc_t;
@@ -104,8 +104,8 @@ typedef struct dt_type_desc_t dt_type_desc_t;
 /*
  * The datatype description.
  */
-struct opal_datatype_t {
-    opal_object_t      super;    /**< basic superclass */
+struct parsec_datatype_t {
+    parsec_object_t      super;    /**< basic superclass */
     uint16_t           flags;    /**< the flags */
     uint16_t           id;       /**< data id, normally the index in the data array. */
     uint32_t           bdt_used; /**< bitset of which basic datatypes are used in the data description */
@@ -121,7 +121,7 @@ struct opal_datatype_t {
     uint32_t           loops;    /**< number of loops on the iternal type stack */
 
     /* Attribute fields */
-    char               name[OPAL_MAX_OBJECT_NAME];  /**< name of the datatype */
+    char               name[PARSEC_MAX_OBJECT_NAME];  /**< name of the datatype */
     dt_type_desc_t     desc;     /**< the data description */
     dt_type_desc_t     opt_desc; /**< short description of the data used when conversion is useless
                                       or in the send case (without conversion) */
@@ -129,7 +129,7 @@ struct opal_datatype_t {
     size_t             *ptypes;  /**< array of basic predefined types that facilitate the computing
                                       of the remote size in heterogeneous environments. The length of the
                                       array is dependent on the maximum number of predefined datatypes of
-                                      all language interfaces (because Fortran is not known at the OPAL
+                                      all language interfaces (because Fortran is not known at the PARSEC
                                       layer). This field should never be initialized in homogeneous
                                       environments */
     /* --- cacheline 5 boundary (320 bytes) was 32-36 bytes ago --- */
@@ -138,80 +138,80 @@ struct opal_datatype_t {
     /* last cacheline: 28-32 bytes */
 };
 
-typedef struct opal_datatype_t opal_datatype_t;
+typedef struct parsec_datatype_t parsec_datatype_t;
 
-OPAL_DECLSPEC OBJ_CLASS_DECLARATION( opal_datatype_t );
+PARSEC_DECLSPEC OBJ_CLASS_DECLARATION( parsec_datatype_t );
 
-OPAL_DECLSPEC extern const opal_datatype_t* opal_datatype_basicDatatypes[OPAL_DATATYPE_MAX_PREDEFINED];
-OPAL_DECLSPEC extern const size_t opal_datatype_local_sizes[OPAL_DATATYPE_MAX_PREDEFINED];
+PARSEC_DECLSPEC extern const parsec_datatype_t* parsec_datatype_basicDatatypes[PARSEC_DATATYPE_MAX_PREDEFINED];
+PARSEC_DECLSPEC extern const size_t parsec_datatype_local_sizes[PARSEC_DATATYPE_MAX_PREDEFINED];
 
-/* Local Architecture as provided by opal_arch_compute_local_id() */
-OPAL_DECLSPEC extern uint32_t opal_local_arch;
+/* Local Architecture as provided by parsec_arch_compute_local_id() */
+PARSEC_DECLSPEC extern uint32_t parsec_local_arch;
 
 /*
- * The OPAL-layer's Basic datatypes themselves.
+ * The PARSEC-layer's Basic datatypes themselves.
  */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_empty;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_loop;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_end_loop;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_lb;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_ub;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_int1;       /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_int2;       /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_int4;       /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_int8;       /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_int16;      /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_uint1;      /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_uint2;      /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_uint4;      /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_uint8;      /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_uint16;     /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_float2;     /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_float4;     /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_float8;     /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_float12;    /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_float16;    /* in bytes */
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_short_float_complex;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_float_complex;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_double_complex;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_long_double_complex;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_bool;
-OPAL_DECLSPEC extern const opal_datatype_t opal_datatype_wchar;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_empty;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_loop;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_end_loop;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_lb;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_ub;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_int1;       /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_int2;       /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_int4;       /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_int8;       /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_int16;      /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_uint1;      /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_uint2;      /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_uint4;      /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_uint8;      /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_uint16;     /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_float2;     /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_float4;     /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_float8;     /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_float12;    /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_float16;    /* in bytes */
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_short_float_complex;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_float_complex;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_double_complex;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_long_double_complex;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_bool;
+PARSEC_DECLSPEC extern const parsec_datatype_t parsec_datatype_wchar;
 
 
 /*
  * Functions exported externally
  */
-int opal_datatype_register_params(void);
-OPAL_DECLSPEC int32_t opal_datatype_init( void );
-OPAL_DECLSPEC opal_datatype_t* opal_datatype_create( int32_t expectedSize );
-OPAL_DECLSPEC int32_t opal_datatype_create_desc( opal_datatype_t * datatype, int32_t expectedSize );
-OPAL_DECLSPEC int32_t opal_datatype_commit( opal_datatype_t * pData );
-OPAL_DECLSPEC int32_t opal_datatype_destroy( opal_datatype_t** );
-OPAL_DECLSPEC int32_t opal_datatype_is_monotonic( opal_datatype_t* type);
+int parsec_datatype_register_params(void);
+PARSEC_DECLSPEC int32_t parsec_datatype_init( void );
+PARSEC_DECLSPEC parsec_datatype_t* parsec_datatype_create( int32_t expectedSize );
+PARSEC_DECLSPEC int32_t parsec_datatype_create_desc( parsec_datatype_t * datatype, int32_t expectedSize );
+PARSEC_DECLSPEC int32_t parsec_datatype_commit( parsec_datatype_t * pData );
+PARSEC_DECLSPEC int32_t parsec_datatype_destroy( parsec_datatype_t** );
+PARSEC_DECLSPEC int32_t parsec_datatype_is_monotonic( parsec_datatype_t* type);
 
 static inline int32_t
-opal_datatype_is_committed( const opal_datatype_t* type )
+parsec_datatype_is_committed( const parsec_datatype_t* type )
 {
-    return ((type->flags & OPAL_DATATYPE_FLAG_COMMITTED) == OPAL_DATATYPE_FLAG_COMMITTED);
+    return ((type->flags & PARSEC_DATATYPE_FLAG_COMMITTED) == PARSEC_DATATYPE_FLAG_COMMITTED);
 }
 
 static inline int32_t
-opal_datatype_is_overlapped( const opal_datatype_t* type )
+parsec_datatype_is_overlapped( const parsec_datatype_t* type )
 {
-    return ((type->flags & OPAL_DATATYPE_FLAG_OVERLAP) == OPAL_DATATYPE_FLAG_OVERLAP);
+    return ((type->flags & PARSEC_DATATYPE_FLAG_OVERLAP) == PARSEC_DATATYPE_FLAG_OVERLAP);
 }
 
 static inline int32_t
-opal_datatype_is_valid( const opal_datatype_t* type )
+parsec_datatype_is_valid( const parsec_datatype_t* type )
 {
-    return !((type->flags & OPAL_DATATYPE_FLAG_UNAVAILABLE) == OPAL_DATATYPE_FLAG_UNAVAILABLE);
+    return !((type->flags & PARSEC_DATATYPE_FLAG_UNAVAILABLE) == PARSEC_DATATYPE_FLAG_UNAVAILABLE);
 }
 
 static inline int32_t
-opal_datatype_is_predefined( const opal_datatype_t* type )
+parsec_datatype_is_predefined( const parsec_datatype_t* type )
 {
-    return (type->flags & OPAL_DATATYPE_FLAG_PREDEFINED);
+    return (type->flags & PARSEC_DATATYPE_FLAG_PREDEFINED);
 }
 
 /*
@@ -219,152 +219,152 @@ opal_datatype_is_predefined( const opal_datatype_t* type )
  * is contiguous in the memory. And false (0) otherwise.
  */
 static inline int32_t
-opal_datatype_is_contiguous_memory_layout( const opal_datatype_t* datatype, int32_t count )
+parsec_datatype_is_contiguous_memory_layout( const parsec_datatype_t* datatype, int32_t count )
 {
-    if( !(datatype->flags & OPAL_DATATYPE_FLAG_CONTIGUOUS) ) return 0;
-    if( (count == 1) || (datatype->flags & OPAL_DATATYPE_FLAG_NO_GAPS) ) return 1;
+    if( !(datatype->flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS) ) return 0;
+    if( (count == 1) || (datatype->flags & PARSEC_DATATYPE_FLAG_NO_GAPS) ) return 1;
     return 0;
 }
 
 
-OPAL_DECLSPEC void
-opal_datatype_dump( const opal_datatype_t* pData );
+PARSEC_DECLSPEC void
+parsec_datatype_dump( const parsec_datatype_t* pData );
 
 /* data creation functions */
 
 /**
  * Create a duplicate of the source datatype.
  */
-OPAL_DECLSPEC int32_t
-opal_datatype_clone( const opal_datatype_t* src_type,
-                     opal_datatype_t* dest_type );
+PARSEC_DECLSPEC int32_t
+parsec_datatype_clone( const parsec_datatype_t* src_type,
+                     parsec_datatype_t* dest_type );
 /**
  * A contiguous array of identical datatypes.
  */
-OPAL_DECLSPEC int32_t
-opal_datatype_create_contiguous( int count, const opal_datatype_t* oldType,
-                                 opal_datatype_t** newType );
+PARSEC_DECLSPEC int32_t
+parsec_datatype_create_contiguous( int count, const parsec_datatype_t* oldType,
+                                 parsec_datatype_t** newType );
 /**
  * Add a new datatype to the base type description. The count is the number
  * repetitions of the same element to be added, and the extent is the extent
  * of each element. The displacement is the initial displacement of the
  * first element.
  */
-OPAL_DECLSPEC int32_t
-opal_datatype_add( opal_datatype_t* pdtBase,
-                   const opal_datatype_t* pdtAdd, size_t count,
+PARSEC_DECLSPEC int32_t
+parsec_datatype_add( parsec_datatype_t* pdtBase,
+                   const parsec_datatype_t* pdtAdd, size_t count,
                    ptrdiff_t disp, ptrdiff_t extent );
 
 /**
  * Alter the lb and extent of an existing datatype in place.
  */
-OPAL_DECLSPEC int32_t
-opal_datatype_resize( opal_datatype_t* type,
+PARSEC_DECLSPEC int32_t
+parsec_datatype_resize( parsec_datatype_t* type,
                       ptrdiff_t lb,
                       ptrdiff_t extent );
 
 static inline int32_t
-opal_datatype_type_lb( const opal_datatype_t* pData, ptrdiff_t* disp )
+parsec_datatype_type_lb( const parsec_datatype_t* pData, ptrdiff_t* disp )
 {
     *disp = pData->lb;
     return 0;
 }
 
 static inline int32_t
-opal_datatype_type_ub( const opal_datatype_t* pData, ptrdiff_t* disp )
+parsec_datatype_type_ub( const parsec_datatype_t* pData, ptrdiff_t* disp )
 {
     *disp = pData->ub;
     return 0;
 }
 
 static inline int32_t
-opal_datatype_type_size( const opal_datatype_t* pData, size_t *size )
+parsec_datatype_type_size( const parsec_datatype_t* pData, size_t *size )
 {
     *size = pData->size;
     return 0;
 }
 
 static inline int32_t
-opal_datatype_type_extent( const opal_datatype_t* pData, ptrdiff_t* extent )
+parsec_datatype_type_extent( const parsec_datatype_t* pData, ptrdiff_t* extent )
 {
     *extent = pData->ub - pData->lb;
     return 0;
 }
 
 static inline int32_t
-opal_datatype_get_extent( const opal_datatype_t* pData, ptrdiff_t* lb, ptrdiff_t* extent)
+parsec_datatype_get_extent( const parsec_datatype_t* pData, ptrdiff_t* lb, ptrdiff_t* extent)
 {
     *lb = pData->lb; *extent = pData->ub - pData->lb;
     return 0;
 }
 
 static inline int32_t
-opal_datatype_get_true_extent( const opal_datatype_t* pData, ptrdiff_t* true_lb, ptrdiff_t* true_extent)
+parsec_datatype_get_true_extent( const parsec_datatype_t* pData, ptrdiff_t* true_lb, ptrdiff_t* true_extent)
 {
     *true_lb = pData->true_lb;
     *true_extent = (pData->true_ub - pData->true_lb);
     return 0;
 }
 
-OPAL_DECLSPEC ssize_t
-opal_datatype_get_element_count( const opal_datatype_t* pData, size_t iSize );
-OPAL_DECLSPEC int32_t
-opal_datatype_set_element_count( const opal_datatype_t* pData, size_t count, size_t* length );
-OPAL_DECLSPEC int32_t
-opal_datatype_copy_content_same_ddt( const opal_datatype_t* pData, int32_t count,
+PARSEC_DECLSPEC ssize_t
+parsec_datatype_get_element_count( const parsec_datatype_t* pData, size_t iSize );
+PARSEC_DECLSPEC int32_t
+parsec_datatype_set_element_count( const parsec_datatype_t* pData, size_t count, size_t* length );
+PARSEC_DECLSPEC int32_t
+parsec_datatype_copy_content_same_ddt( const parsec_datatype_t* pData, int32_t count,
                                      char* pDestBuf, char* pSrcBuf );
 
-OPAL_DECLSPEC int opal_datatype_compute_ptypes( opal_datatype_t* datatype );
+PARSEC_DECLSPEC int parsec_datatype_compute_ptypes( parsec_datatype_t* datatype );
 
-OPAL_DECLSPEC const opal_datatype_t*
-opal_datatype_match_size( int size, uint16_t datakind, uint16_t datalang );
-
-/*
- *
- */
-OPAL_DECLSPEC int32_t
-opal_datatype_sndrcv( void *sbuf, int32_t scount, const opal_datatype_t* sdtype, void *rbuf,
-                      int32_t rcount, const opal_datatype_t* rdtype);
+PARSEC_DECLSPEC const parsec_datatype_t*
+parsec_datatype_match_size( int size, uint16_t datakind, uint16_t datalang );
 
 /*
  *
  */
-OPAL_DECLSPEC int32_t
-opal_datatype_get_args( const opal_datatype_t* pData, int32_t which,
+PARSEC_DECLSPEC int32_t
+parsec_datatype_sndrcv( void *sbuf, int32_t scount, const parsec_datatype_t* sdtype, void *rbuf,
+                      int32_t rcount, const parsec_datatype_t* rdtype);
+
+/*
+ *
+ */
+PARSEC_DECLSPEC int32_t
+parsec_datatype_get_args( const parsec_datatype_t* pData, int32_t which,
                         int32_t * ci, int32_t * i,
                         int32_t * ca, ptrdiff_t* a,
-                        int32_t * cd, opal_datatype_t** d, int32_t * type);
-OPAL_DECLSPEC int32_t
-opal_datatype_set_args( opal_datatype_t* pData,
+                        int32_t * cd, parsec_datatype_t** d, int32_t * type);
+PARSEC_DECLSPEC int32_t
+parsec_datatype_set_args( parsec_datatype_t* pData,
                         int32_t ci, int32_t ** i,
                         int32_t ca, ptrdiff_t* a,
-                        int32_t cd, opal_datatype_t** d,int32_t type);
-OPAL_DECLSPEC int32_t
-opal_datatype_copy_args( const opal_datatype_t* source_data,
-                         opal_datatype_t* dest_data );
-OPAL_DECLSPEC int32_t
-opal_datatype_release_args( opal_datatype_t* pData );
+                        int32_t cd, parsec_datatype_t** d,int32_t type);
+PARSEC_DECLSPEC int32_t
+parsec_datatype_copy_args( const parsec_datatype_t* source_data,
+                         parsec_datatype_t* dest_data );
+PARSEC_DECLSPEC int32_t
+parsec_datatype_release_args( parsec_datatype_t* pData );
 
 /*
  *
  */
-OPAL_DECLSPEC size_t
-opal_datatype_pack_description_length( const opal_datatype_t* datatype );
+PARSEC_DECLSPEC size_t
+parsec_datatype_pack_description_length( const parsec_datatype_t* datatype );
 
 /*
  *
  */
-OPAL_DECLSPEC int
-opal_datatype_get_pack_description( opal_datatype_t* datatype,
+PARSEC_DECLSPEC int
+parsec_datatype_get_pack_description( parsec_datatype_t* datatype,
                                     const void** packed_buffer );
 
 /*
  *
  */
-struct opal_proc_t;
-OPAL_DECLSPEC opal_datatype_t*
-opal_datatype_create_from_packed_description( void** packed_buffer,
-                                              struct opal_proc_t* remote_processor );
+struct parsec_proc_t;
+PARSEC_DECLSPEC parsec_datatype_t*
+parsec_datatype_create_from_packed_description( void** packed_buffer,
+                                              struct parsec_proc_t* remote_processor );
 
 /* Compute the span in memory of count datatypes. This function help with temporary
  * memory allocations for receiving already typed data (such as those used for reduce
@@ -376,10 +376,10 @@ opal_datatype_create_from_packed_description( void** packed_buffer,
  *          argument, the number of bytes of the gap at the beginning.
  */
 static inline ptrdiff_t
-opal_datatype_span( const opal_datatype_t* pData, size_t count,
+parsec_datatype_span( const parsec_datatype_t* pData, size_t count,
                     ptrdiff_t* gap)
 {
-    if (OPAL_UNLIKELY(0 == pData->size) || (0 == count)) {
+    if (PARSEC_UNLIKELY(0 == pData->size) || (0 == count)) {
         *gap = 0;
         return 0;
     }
@@ -389,17 +389,17 @@ opal_datatype_span( const opal_datatype_t* pData, size_t count,
     return true_extent + extent * (count - 1);
 }
 
-#if OPAL_ENABLE_DEBUG
+#if PARSEC_ENABLE_DEBUG
 /*
  * Set a breakpoint to this function in your favorite debugger
  * to make it stop on all pack and unpack errors.
  */
-OPAL_DECLSPEC int
-opal_datatype_safeguard_pointer_debug_breakpoint( const void* actual_ptr, int length,
+PARSEC_DECLSPEC int
+parsec_datatype_safeguard_pointer_debug_breakpoint( const void* actual_ptr, int length,
                                                   const void* initial_ptr,
-                                                  const opal_datatype_t* pData,
+                                                  const parsec_datatype_t* pData,
                                                   int count );
-#endif  /* OPAL_ENABLE_DEBUG */
+#endif  /* PARSEC_ENABLE_DEBUG */
 
 END_C_DECLS
-#endif  /* OPAL_DATATYPE_H_HAS_BEEN_INCLUDED */
+#endif  /* PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED */

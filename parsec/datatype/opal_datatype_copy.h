@@ -40,7 +40,7 @@
 #define _copy_content_same_ddt  DT_CONCAT(MEM_OP_NAME,_copy_content_same_ddt)
 
 static inline void _predefined_data( const dt_elem_desc_t* ELEM,
-                                     const opal_datatype_t* DATATYPE,
+                                     const parsec_datatype_t* DATATYPE,
                                      unsigned char* SOURCE_BASE,
                                      size_t TOTAL_COUNT,
                                      size_t COUNT,
@@ -62,13 +62,13 @@ static inline void _predefined_data( const dt_elem_desc_t* ELEM,
     /**
      * Compute how many full blocklen we need to do and do them.
      */
-    do_now_bytes = _elem->blocklen * opal_datatype_basicDatatypes[_elem->common.type]->size;
+    do_now_bytes = _elem->blocklen * parsec_datatype_basicDatatypes[_elem->common.type]->size;
     assert( (do_now * do_now_bytes) <= (*SPACE) );
 
     for(size_t _i = 0; _i < do_now; _i++ ) {
-        OPAL_DATATYPE_SAFEGUARD_POINTER( _source, do_now_bytes, (SOURCE_BASE),
+        PARSEC_DATATYPE_SAFEGUARD_POINTER( _source, do_now_bytes, (SOURCE_BASE),
                                          (DATATYPE), (TOTAL_COUNT) );
-        DO_DEBUG( opal_output( 0, "copy %s( %p, %p, %" PRIsize_t " ) => space %" PRIsize_t "\n",
+        DO_DEBUG( parsec_output( 0, "copy %s( %p, %p, %" PRIsize_t " ) => space %" PRIsize_t "\n",
                                STRINGIFY(MEM_OP_NAME), (void*)_destination, (void*)_source, do_now_bytes, *(SPACE) - _i * do_now_bytes ); );
         MEM_OP( _destination, _source, do_now_bytes );
         _destination += _elem->extent;
@@ -78,7 +78,7 @@ static inline void _predefined_data( const dt_elem_desc_t* ELEM,
 }
 
 static inline void _contiguous_loop( const dt_elem_desc_t* ELEM,
-                                     const opal_datatype_t* DATATYPE,
+                                     const parsec_datatype_t* DATATYPE,
                                      unsigned char* SOURCE_BASE,
                                      size_t TOTAL_COUNT,
                                      size_t COUNT,
@@ -94,14 +94,14 @@ static inline void _contiguous_loop( const dt_elem_desc_t* ELEM,
 
     if( _loop->extent == (ptrdiff_t)_end_loop->size ) {  /* the loop is contiguous */
         _copy_loops *= _end_loop->size;
-        OPAL_DATATYPE_SAFEGUARD_POINTER( _source, _copy_loops, (SOURCE_BASE),
+        PARSEC_DATATYPE_SAFEGUARD_POINTER( _source, _copy_loops, (SOURCE_BASE),
                                     (DATATYPE), (TOTAL_COUNT) );
         MEM_OP( _destination, _source, _copy_loops );
     } else {
         for(size_t _i = 0; _i < _copy_loops; _i++ ) {
-            OPAL_DATATYPE_SAFEGUARD_POINTER( _source, _end_loop->size, (SOURCE_BASE),
+            PARSEC_DATATYPE_SAFEGUARD_POINTER( _source, _end_loop->size, (SOURCE_BASE),
                                         (DATATYPE), (TOTAL_COUNT) );
-            DO_DEBUG( opal_output( 0, "copy 3. %s( %p, %p, %" PRIsize_t " ) => space %" PRIsize_t "\n",
+            DO_DEBUG( parsec_output( 0, "copy 3. %s( %p, %p, %" PRIsize_t " ) => space %" PRIsize_t "\n",
                                    STRINGIFY(MEM_OP_NAME), (void*)_destination, (void*)_source, _end_loop->size, *(SPACE) - _i * _end_loop->size ); );
             MEM_OP( _destination, _source, _end_loop->size );
             _source      += _loop->extent;
@@ -112,7 +112,7 @@ static inline void _contiguous_loop( const dt_elem_desc_t* ELEM,
     *(SPACE)      -= _copy_loops;
 }
 
-static inline int32_t _copy_content_same_ddt( const opal_datatype_t* datatype, int32_t count,
+static inline int32_t _copy_content_same_ddt( const parsec_datatype_t* datatype, int32_t count,
                                               char* destination_base, char* source_base )
 {
     dt_stack_t* pStack;       /* pointer to the position on the stack */
@@ -125,7 +125,7 @@ static inline int32_t _copy_content_same_ddt( const opal_datatype_t* datatype, i
     unsigned char *source = (unsigned char*)source_base,
                   *destination = (unsigned char*)destination_base;
 
-    DO_DEBUG( opal_output( 0, "_copy_content_same_ddt( %p, %d, dst %p, src %p )\n",
+    DO_DEBUG( parsec_output( 0, "_copy_content_same_ddt( %p, %d, dst %p, src %p )\n",
                            (void*)datatype, count, (void*)destination_base, (void*)source_base ); );
 
     iov_len_local = (size_t)count * datatype->size;
@@ -133,7 +133,7 @@ static inline int32_t _copy_content_same_ddt( const opal_datatype_t* datatype, i
     /* If we have to copy a contiguous datatype then simply
      * do a MEM_OP.
      */
-    if( datatype->flags & OPAL_DATATYPE_FLAG_CONTIGUOUS ) {
+    if( datatype->flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS ) {
         ptrdiff_t extent = (datatype->ub - datatype->lb);
         /* Now that we know the datatype is contiguous, we should move the 2 pointers
          * source and destination to the correct displacement.
@@ -142,12 +142,12 @@ static inline int32_t _copy_content_same_ddt( const opal_datatype_t* datatype, i
         source      += datatype->true_lb;
         if( (ptrdiff_t)datatype->size == extent ) {  /* all contiguous == no gaps around */
             size_t total_length = iov_len_local;
-            size_t memop_chunk = opal_datatype_memop_block_size;
-            OPAL_DATATYPE_SAFEGUARD_POINTER( source, iov_len_local,
+            size_t memop_chunk = parsec_datatype_memop_block_size;
+            PARSEC_DATATYPE_SAFEGUARD_POINTER( source, iov_len_local,
                                              (unsigned char*)source_base, datatype, count );
             while( total_length > 0 ) {
                 if( memop_chunk > total_length ) memop_chunk = total_length;
-                DO_DEBUG( opal_output( 0, "copy c1. %s( %p, %p, %lu ) => space %lu\n",
+                DO_DEBUG( parsec_output( 0, "copy c1. %s( %p, %p, %lu ) => space %lu\n",
                                        STRINGIFY(MEM_OP_NAME), (void*)destination, (void*)source, (unsigned long)memop_chunk, (unsigned long)total_length ); );
                 MEM_OP( destination, source, memop_chunk );
                 destination   += memop_chunk;
@@ -157,11 +157,11 @@ static inline int32_t _copy_content_same_ddt( const opal_datatype_t* datatype, i
             return 0;  /* completed */
         }
         for( pos_desc = 0; (int32_t)pos_desc < count; pos_desc++ ) {
-            OPAL_DATATYPE_SAFEGUARD_POINTER( destination, datatype->size,
+            PARSEC_DATATYPE_SAFEGUARD_POINTER( destination, datatype->size,
                                         (unsigned char*)destination_base, datatype, count );
-            OPAL_DATATYPE_SAFEGUARD_POINTER( source, datatype->size,
+            PARSEC_DATATYPE_SAFEGUARD_POINTER( source, datatype->size,
                                         (unsigned char*)source_base, datatype, count );
-            DO_DEBUG( opal_output( 0, "copy c2. %s( %p, %p, %lu ) => space %lu\n",
+            DO_DEBUG( parsec_output( 0, "copy c2. %s( %p, %p, %lu ) => space %lu\n",
                                    STRINGIFY(MEM_OP_NAME), (void*)destination, (void*)source, (unsigned long)datatype->size,
                                    (unsigned long)(iov_len_local - (pos_desc * datatype->size)) ); );
             MEM_OP( destination, source, datatype->size );
@@ -186,15 +186,15 @@ static inline int32_t _copy_content_same_ddt( const opal_datatype_t* datatype, i
     UPDATE_INTERNAL_COUNTERS( description, 0, pElem, count_desc );
 
     while( 1 ) {
-        while( OPAL_LIKELY(pElem->elem.common.flags & OPAL_DATATYPE_FLAG_DATA) ) {
+        while( PARSEC_LIKELY(pElem->elem.common.flags & PARSEC_DATATYPE_FLAG_DATA) ) {
             /* now here we have a basic datatype */
             _predefined_data( pElem, datatype, (unsigned char*)source_base, count, count_desc,
                               source, destination, &iov_len_local );
             pos_desc++;  /* advance to the next data */
             UPDATE_INTERNAL_COUNTERS( description, pos_desc, pElem, count_desc );
         }
-        if( OPAL_DATATYPE_END_LOOP == pElem->elem.common.type ) { /* end of the current loop */
-            DO_DEBUG( opal_output( 0, "copy end_loop count %" PRIsize_t " stack_pos %d pos_desc %d disp %ld space %lu\n",
+        if( PARSEC_DATATYPE_END_LOOP == pElem->elem.common.type ) { /* end of the current loop */
+            DO_DEBUG( parsec_output( 0, "copy end_loop count %" PRIsize_t " stack_pos %d pos_desc %d disp %ld space %lu\n",
                                    pStack->count, stack_pos, pos_desc, pStack->disp, (unsigned long)iov_len_local ); );
             if( --(pStack->count) == 0 ) { /* end of loop */
                 if( stack_pos == 0 ) {
@@ -209,26 +209,26 @@ static inline int32_t _copy_content_same_ddt( const opal_datatype_t* datatype, i
                 if( pStack->index == -1 ) {
                     pStack->disp += (datatype->ub - datatype->lb);
                 } else {
-                    assert( OPAL_DATATYPE_LOOP == description[pStack->index].loop.common.type );
+                    assert( PARSEC_DATATYPE_LOOP == description[pStack->index].loop.common.type );
                     pStack->disp += description[pStack->index].loop.extent;
                 }
             }
             source      = (unsigned char*)source_base + pStack->disp;
             destination = (unsigned char*)destination_base + pStack->disp;
             UPDATE_INTERNAL_COUNTERS( description, pos_desc, pElem, count_desc );
-            DO_DEBUG( opal_output( 0, "copy new_loop count %" PRIsize_t " stack_pos %d pos_desc %d disp %ld space %lu\n",
+            DO_DEBUG( parsec_output( 0, "copy new_loop count %" PRIsize_t " stack_pos %d pos_desc %d disp %ld space %lu\n",
                                    pStack->count, stack_pos, pos_desc, pStack->disp, (unsigned long)iov_len_local ); );
         }
-        if( OPAL_DATATYPE_LOOP == pElem->elem.common.type ) {
+        if( PARSEC_DATATYPE_LOOP == pElem->elem.common.type ) {
             ptrdiff_t local_disp = (ptrdiff_t)source;
-            if( pElem->loop.common.flags & OPAL_DATATYPE_FLAG_CONTIGUOUS ) {
+            if( pElem->loop.common.flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS ) {
                 _contiguous_loop( pElem, datatype, (unsigned char*)source_base, count, count_desc,
                                   source, destination, &iov_len_local );
                 pos_desc += pElem->loop.items + 1;
                 goto update_loop_description;
             }
             local_disp = (ptrdiff_t)source - local_disp;
-            PUSH_STACK( pStack, stack_pos, pos_desc, OPAL_DATATYPE_LOOP, count_desc,
+            PUSH_STACK( pStack, stack_pos, pos_desc, PARSEC_DATATYPE_LOOP, count_desc,
                         pStack->disp + local_disp);
             pos_desc++;
         update_loop_description:  /* update the current state */

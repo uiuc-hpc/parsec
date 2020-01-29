@@ -21,28 +21,28 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
-#include "opal/constants.h"
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_datatype_internal.h"
+#include "parsec_config.h"
+#include "parsec/constants.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
 
 /*
  * As the new type has the same commit state as the old one, I have to copy the fake
- * OPAL_DATATYPE_END_LOOP from the description (both normal and optimized).
+ * PARSEC_DATATYPE_END_LOOP from the description (both normal and optimized).
  *
  * Clone all the values from oldType into newType without allocating a new datatype.
  */
-int32_t opal_datatype_clone( const opal_datatype_t * src_type, opal_datatype_t * dest_type )
+int32_t parsec_datatype_clone( const parsec_datatype_t * src_type, parsec_datatype_t * dest_type )
 {
-    int32_t desc_length = src_type->desc.used + 1;  /* +1 because of the fake OPAL_DATATYPE_END_LOOP entry */
+    int32_t desc_length = src_type->desc.used + 1;  /* +1 because of the fake PARSEC_DATATYPE_END_LOOP entry */
     dt_elem_desc_t* temp = dest_type->desc.desc;    /* temporary copy of the desc pointer */
 
     /* copy _excluding_ the super object, we want to keep the cls_destruct_array */
-    memcpy( (char*)dest_type + sizeof(opal_object_t),
-            (char*)src_type + sizeof(opal_object_t),
-            sizeof(opal_datatype_t)-sizeof(opal_object_t) );
+    memcpy( (char*)dest_type + sizeof(parsec_object_t),
+            (char*)src_type + sizeof(parsec_object_t),
+            sizeof(parsec_datatype_t)-sizeof(parsec_object_t) );
 
-    dest_type->flags &= (~OPAL_DATATYPE_FLAG_PREDEFINED);
+    dest_type->flags &= (~PARSEC_DATATYPE_FLAG_PREDEFINED);
     dest_type->ptypes = NULL;
     dest_type->desc.desc = temp;
 
@@ -71,5 +71,5 @@ int32_t opal_datatype_clone( const opal_datatype_t * src_type, opal_datatype_t *
     }
     dest_type->id  = src_type->id;  /* preserve the default id. This allow us to
                                      * copy predefined types. */
-    return OPAL_SUCCESS;
+    return PARSEC_SUCCESS;
 }

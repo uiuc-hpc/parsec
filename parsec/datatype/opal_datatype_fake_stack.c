@@ -20,7 +20,7 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -29,21 +29,21 @@
 #include <alloca.h>
 #endif
 
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_convertor.h"
-#include "opal/datatype/opal_datatype_internal.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_convertor.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
 
 
-extern int opal_convertor_create_stack_with_pos_general( opal_convertor_t* convertor,
+extern int parsec_convertor_create_stack_with_pos_general( parsec_convertor_t* convertor,
                                                          size_t starting_point, const size_t* sizes );
 
-int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
+int parsec_convertor_create_stack_with_pos_general( parsec_convertor_t* pConvertor,
                                                   size_t starting_point, const size_t* sizes )
 {
     dt_stack_t* pStack;   /* pointer to the position on the stack */
     int pos_desc;         /* actual position in the description of the derived datatype */
     size_t lastLength = 0;
-    const opal_datatype_t* pData = pConvertor->pDesc;
+    const parsec_datatype_t* pData = pConvertor->pDesc;
     size_t loop_length, *remoteLength, remote_size;
     size_t resting_place = starting_point;
     dt_elem_desc_t* pElems;
@@ -53,29 +53,29 @@ int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
     assert( pConvertor->bConverted != starting_point );
     assert( starting_point <=(pConvertor->count * pData->size) );
 
-    /*opal_output( 0, "Data extent %d size %d count %d total_size %d starting_point %d\n",
+    /*parsec_output( 0, "Data extent %d size %d count %d total_size %d starting_point %d\n",
                  pData->ub - pData->lb, pData->size, pConvertor->count,
                  pConvertor->local_size, starting_point );*/
     pConvertor->stack_pos = 0;
     pStack = pConvertor->pStack;
     /* Fill the first position on the stack. This one correspond to the
-     * last fake OPAL_DATATYPE_END_LOOP that we add to the data representation and
+     * last fake PARSEC_DATATYPE_END_LOOP that we add to the data representation and
      * allow us to move quickly inside the datatype when we have a count.
      */
     pElems = pConvertor->use_desc->desc;
 
-    if( (pConvertor->flags & CONVERTOR_HOMOGENEOUS) && (pData->flags & OPAL_DATATYPE_FLAG_CONTIGUOUS) ) {
+    if( (pConvertor->flags & CONVERTOR_HOMOGENEOUS) && (pData->flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS) ) {
         /* Special case for contiguous datatypes */
         int32_t cnt = (int32_t)(starting_point / pData->size);
         ptrdiff_t extent = pData->ub - pData->lb;
 
         loop_length = GET_FIRST_NON_LOOP( pElems );
         pStack[0].disp  = pElems[loop_length].elem.disp;
-        pStack[0].type  = OPAL_DATATYPE_LOOP;
+        pStack[0].type  = PARSEC_DATATYPE_LOOP;
         pStack[0].count = pConvertor->count - cnt;
         cnt = (int32_t)(starting_point - cnt * pData->size);  /* number of bytes after the loop */
         pStack[1].index    = 0;
-        pStack[1].type     = OPAL_DATATYPE_UINT1;
+        pStack[1].type     = PARSEC_DATATYPE_UINT1;
         pStack[1].disp     = pStack[0].disp;
         pStack[1].count    = pData->size - cnt;
 
@@ -87,12 +87,12 @@ int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
 
         pConvertor->bConverted = starting_point;
         pConvertor->stack_pos = 1;
-        return OPAL_SUCCESS;
+        return PARSEC_SUCCESS;
     }
 
     /* remove from the main loop all the complete datatypes */
     assert (! (pConvertor->flags & CONVERTOR_SEND));
-    remote_size    = opal_convertor_compute_remote_size( pConvertor );
+    remote_size    = parsec_convertor_compute_remote_size( pConvertor );
     count          = starting_point / remote_size;
     resting_place -= (remote_size * count);
     pStack->count  = pConvertor->count - count;
@@ -110,7 +110,7 @@ int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
      * when we finish the whole datatype.
      */
     while( pos_desc < (int32_t)pConvertor->use_desc->used ) {
-        if( OPAL_DATATYPE_END_LOOP == pElems->elem.common.type ) { /* end of the current loop */
+        if( PARSEC_DATATYPE_END_LOOP == pElems->elem.common.type ) { /* end of the current loop */
             ddt_endloop_desc_t* end_loop = (ddt_endloop_desc_t*)pElems;
             ptrdiff_t extent;
 
@@ -124,7 +124,7 @@ int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
                 if( pStack->index == -1 ) {
                     extent = pData->ub - pData->lb;
                 } else {
-                    assert( OPAL_DATATYPE_LOOP == (pElems - end_loop->items)->loop.common.type );
+                    assert( PARSEC_DATATYPE_LOOP == (pElems - end_loop->items)->loop.common.type );
                     extent = ((ddt_loop_desc_t*)(pElems - end_loop->items))->extent;
                 }
                 pStack->count -= (cnt + 1);
@@ -149,18 +149,18 @@ int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
             loop_length = remoteLength[pConvertor->stack_pos];
             continue;
         }
-        if( OPAL_DATATYPE_LOOP == pElems->elem.common.type ) {
+        if( PARSEC_DATATYPE_LOOP == pElems->elem.common.type ) {
             remoteLength[pConvertor->stack_pos] += loop_length;
-            PUSH_STACK( pStack, pConvertor->stack_pos, pos_desc, OPAL_DATATYPE_LOOP,
+            PUSH_STACK( pStack, pConvertor->stack_pos, pos_desc, PARSEC_DATATYPE_LOOP,
                         pElems->loop.loops, pStack->disp );
             pos_desc++;
             pElems++;
             remoteLength[pConvertor->stack_pos] = 0;
             loop_length = 0;  /* starting a new loop */
         }
-        while( pElems->elem.common.flags & OPAL_DATATYPE_FLAG_DATA ) {
+        while( pElems->elem.common.flags & PARSEC_DATATYPE_FLAG_DATA ) {
             /* now here we have a basic datatype */
-            const opal_datatype_t* basic_type = BASIC_DDT_FROM_ELEM( (*pElems) );
+            const parsec_datatype_t* basic_type = BASIC_DDT_FROM_ELEM( (*pElems) );
             lastLength = (size_t)pElems->elem.count * basic_type->size;
             if( resting_place < lastLength ) {
                 int32_t cnt = (int32_t)(resting_place / basic_type->size);
@@ -172,7 +172,7 @@ int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
                 pConvertor->bConverted = starting_point - resting_place;
                 DDT_DUMP_STACK( pConvertor->pStack, pConvertor->stack_pos,
                                 pConvertor->pDesc->desc.desc, pConvertor->pDesc->name );
-                return OPAL_SUCCESS;
+                return PARSEC_SUCCESS;
             }
             loop_length += lastLength;
             resting_place -= lastLength;
@@ -184,5 +184,5 @@ int opal_convertor_create_stack_with_pos_general( opal_convertor_t* pConvertor,
     /* Correctly update the bConverted field */
     pConvertor->flags |= CONVERTOR_COMPLETED;
     pConvertor->bConverted = pConvertor->local_size;
-    return OPAL_SUCCESS;
+    return PARSEC_SUCCESS;
 }

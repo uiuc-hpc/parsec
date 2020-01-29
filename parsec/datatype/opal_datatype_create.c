@@ -20,20 +20,20 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <stddef.h>
 
-#include "opal/constants.h"
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_datatype_internal.h"
+#include "parsec/constants.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
 #include "limits.h"
-#include "opal/prefetch.h"
+#include "parsec/prefetch.h"
 
-static void opal_datatype_construct( opal_datatype_t* pData )
+static void parsec_datatype_construct( parsec_datatype_t* pData )
 {
     pData->size               = 0;
-    pData->flags              = OPAL_DATATYPE_FLAG_CONTIGUOUS;
+    pData->flags              = PARSEC_DATATYPE_FLAG_CONTIGUOUS;
     pData->id                 = 0;
     pData->bdt_used           = 0;
     pData->size               = 0;
@@ -43,7 +43,7 @@ static void opal_datatype_construct( opal_datatype_t* pData )
     pData->ub                 = LONG_MIN;
     pData->align              = 1;
     pData->nbElems            = 0;
-    memset(pData->name, 0, OPAL_MAX_OBJECT_NAME);
+    memset(pData->name, 0, PARSEC_MAX_OBJECT_NAME);
 
     pData->desc.desc          = NULL;
     pData->desc.length        = 0;
@@ -57,7 +57,7 @@ static void opal_datatype_construct( opal_datatype_t* pData )
     pData->loops              = 0;
 }
 
-static void opal_datatype_destruct( opal_datatype_t* datatype )
+static void parsec_datatype_destruct( parsec_datatype_t* datatype )
 {
     /**
      * As the default description and the optimized description might point to the
@@ -70,7 +70,7 @@ static void opal_datatype_destruct( opal_datatype_t* datatype )
         datatype->opt_desc.used   = 0;
         datatype->opt_desc.desc   = NULL;
     }
-    if (!opal_datatype_is_predefined(datatype)) {
+    if (!parsec_datatype_is_predefined(datatype)) {
         if( NULL != datatype->desc.desc ) {
             free( datatype->desc.desc );
             datatype->desc.length = 0;
@@ -79,7 +79,7 @@ static void opal_datatype_destruct( opal_datatype_t* datatype )
         }
     }
     /* dont free the ptypes of predefined types (it was not dynamically allocated) */
-    if( (NULL != datatype->ptypes) && (!opal_datatype_is_predefined(datatype)) ) {
+    if( (NULL != datatype->ptypes) && (!parsec_datatype_is_predefined(datatype)) ) {
         free(datatype->ptypes);
         datatype->ptypes = NULL;
     }
@@ -88,22 +88,22 @@ static void opal_datatype_destruct( opal_datatype_t* datatype )
     datatype->name[0] = '\0';
 }
 
-OBJ_CLASS_INSTANCE(opal_datatype_t, opal_object_t, opal_datatype_construct, opal_datatype_destruct);
+OBJ_CLASS_INSTANCE(parsec_datatype_t, parsec_object_t, parsec_datatype_construct, parsec_datatype_destruct);
 
-opal_datatype_t* opal_datatype_create( int32_t expectedSize )
+parsec_datatype_t* parsec_datatype_create( int32_t expectedSize )
 {
-    opal_datatype_t* datatype = (opal_datatype_t*)OBJ_NEW(opal_datatype_t);
+    parsec_datatype_t* datatype = (parsec_datatype_t*)OBJ_NEW(parsec_datatype_t);
 
     if( expectedSize == -1 ) expectedSize = DT_INCREASE_STACK;
     datatype->desc.length = expectedSize + 1;  /* one for the fake elem at the end */
     datatype->desc.used   = 0;
     datatype->desc.desc   = (dt_elem_desc_t*)calloc(datatype->desc.length, sizeof(dt_elem_desc_t));
-    /* BEWARE: an upper-layer configured with OPAL_MAX_OBJECT_NAME different than the OPAL-layer will not work! */
-    memset( datatype->name, 0, OPAL_MAX_OBJECT_NAME );
+    /* BEWARE: an upper-layer configured with PARSEC_MAX_OBJECT_NAME different than the PARSEC-layer will not work! */
+    memset( datatype->name, 0, PARSEC_MAX_OBJECT_NAME );
     return datatype;
 }
 
-int32_t opal_datatype_create_desc( opal_datatype_t * datatype, int32_t expectedSize )
+int32_t parsec_datatype_create_desc( parsec_datatype_t * datatype, int32_t expectedSize )
 {
     if( expectedSize == -1 )
         expectedSize = DT_INCREASE_STACK;
@@ -111,6 +111,6 @@ int32_t opal_datatype_create_desc( opal_datatype_t * datatype, int32_t expectedS
     datatype->desc.used   = 0;
     datatype->desc.desc   = (dt_elem_desc_t*)calloc(datatype->desc.length, sizeof(dt_elem_desc_t));
     if (NULL == datatype->desc.desc)
-        return OPAL_ERR_OUT_OF_RESOURCE;
-    return OPAL_SUCCESS;
+        return PARSEC_ERR_OUT_OF_RESOURCE;
+    return PARSEC_SUCCESS;
 }

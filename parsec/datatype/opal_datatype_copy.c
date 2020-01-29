@@ -22,26 +22,26 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <stddef.h>
 #include <stdlib.h>
 
-#include "opal/prefetch.h"
-#include "opal/util/output.h"
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_convertor.h"
-#include "opal/datatype/opal_datatype_internal.h"
-#include "opal/datatype/opal_datatype_checksum.h"
+#include "parsec/prefetch.h"
+#include "parsec/util/output.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_convertor.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
+#include "parsec/datatype/parsec_datatype_checksum.h"
 
 
-#if OPAL_ENABLE_DEBUG
-#define DO_DEBUG(INST)  if( opal_ddt_copy_debug ) { INST }
+#if PARSEC_ENABLE_DEBUG
+#define DO_DEBUG(INST)  if( parsec_ddt_copy_debug ) { INST }
 #else
 #define DO_DEBUG(INST)
-#endif  /* OPAL_ENABLE_DEBUG */
+#endif  /* PARSEC_ENABLE_DEBUG */
 
-static size_t opal_datatype_memop_block_size = 128 * 1024;
+static size_t parsec_datatype_memop_block_size = 128 * 1024;
 
 /**
  * Non overlapping memory regions
@@ -50,7 +50,7 @@ static size_t opal_datatype_memop_block_size = 128 * 1024;
 #define MEM_OP_NAME  non_overlap
 #undef MEM_OP
 #define MEM_OP       MEMCPY
-#include "opal_datatype_copy.h"
+#include "parsec_datatype_copy.h"
 
 #define MEMMOVE(d, s, l)                                  \
     do {                                                  \
@@ -69,22 +69,22 @@ static size_t opal_datatype_memop_block_size = 128 * 1024;
 #define MEM_OP_NAME  overlap
 #undef MEM_OP
 #define MEM_OP       MEMMOVE
-#include "opal_datatype_copy.h"
+#include "parsec_datatype_copy.h"
 
-#if OPAL_CUDA_SUPPORT
-#include "opal_datatype_cuda.h"
+#if PARSEC_CUDA_SUPPORT
+#include "parsec_datatype_cuda.h"
 
 #undef MEM_OP_NAME
 #define MEM_OP_NAME non_overlap_cuda
 #undef MEM_OP
-#define MEM_OP opal_cuda_memcpy_sync
-#include "opal_datatype_copy.h"
+#define MEM_OP parsec_cuda_memcpy_sync
+#include "parsec_datatype_copy.h"
 
 #undef MEM_OP_NAME
 #define MEM_OP_NAME overlap_cuda
 #undef MEM_OP
-#define MEM_OP opal_cuda_memmove
-#include "opal_datatype_copy.h"
+#define MEM_OP parsec_cuda_memmove
+#include "parsec_datatype_copy.h"
 
 #define SET_CUDA_COPY_FCT(cuda_device_bufs, fct, copy_function)     \
     do {                                                            \
@@ -96,17 +96,17 @@ static size_t opal_datatype_memop_block_size = 128 * 1024;
 #define SET_CUDA_COPY_FCT(cuda_device_bufs, fct, copy_function)
 #endif
 
-int32_t opal_datatype_copy_content_same_ddt( const opal_datatype_t* datatype, int32_t count,
+int32_t parsec_datatype_copy_content_same_ddt( const parsec_datatype_t* datatype, int32_t count,
                                              char* destination_base, char* source_base )
 {
     ptrdiff_t extent;
-    int32_t (*fct)( const opal_datatype_t*, int32_t, char*, char*);
+    int32_t (*fct)( const parsec_datatype_t*, int32_t, char*, char*);
 
-#if OPAL_CUDA_SUPPORT
-    bool cuda_device_bufs = opal_cuda_check_bufs(destination_base, source_base);
+#if PARSEC_CUDA_SUPPORT
+    bool cuda_device_bufs = parsec_cuda_check_bufs(destination_base, source_base);
 #endif
 
-    DO_DEBUG( opal_output( 0, "opal_datatype_copy_content_same_ddt( %p, %d, dst %p, src %p )\n",
+    DO_DEBUG( parsec_output( 0, "parsec_datatype_copy_content_same_ddt( %p, %d, dst %p, src %p )\n",
                            (void*)datatype, count, (void*)destination_base, (void*)source_base ); );
 
     /* empty data ? then do nothing. This should normally be trapped

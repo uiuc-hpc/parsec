@@ -18,20 +18,20 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
-#include "opal/constants.h"
-#include "opal/datatype/opal_datatype.h"
-#include "opal/datatype/opal_datatype_internal.h"
+#include "parsec_config.h"
+#include "parsec/constants.h"
+#include "parsec/datatype/parsec_datatype.h"
+#include "parsec/datatype/parsec_datatype_internal.h"
 
-int32_t opal_datatype_destroy( opal_datatype_t** dt )
+int32_t parsec_datatype_destroy( parsec_datatype_t** dt )
 {
-    opal_datatype_t* pData = *dt;
+    parsec_datatype_t* pData = *dt;
 
-    if( (pData->flags & OPAL_DATATYPE_FLAG_PREDEFINED) &&
+    if( (pData->flags & PARSEC_DATATYPE_FLAG_PREDEFINED) &&
         (pData->super.obj_reference_count <= 1) )
-        return OPAL_ERROR;
+        return PARSEC_ERROR;
 
     OBJ_RELEASE( pData );
     *dt = NULL;
-    return OPAL_SUCCESS;
+    return PARSEC_SUCCESS;
 }

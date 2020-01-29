@@ -7,53 +7,53 @@
  * $HEADER$
  */
 
-#include "opal_config.h"
+#include "parsec_config.h"
 
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
 
-#include "opal/align.h"
-#include "opal/util/output.h"
-#include "opal/datatype/opal_convertor.h"
-#include "opal/datatype/opal_datatype_cuda.h"
+#include "parsec/align.h"
+#include "parsec/util/output.h"
+#include "parsec/datatype/parsec_convertor.h"
+#include "parsec/datatype/parsec_datatype_cuda.h"
 
 static bool initialized = false;
-int opal_cuda_verbose = 0;
-static int opal_cuda_enabled = 0; /* Starts out disabled */
-static int opal_cuda_output = 0;
-static void opal_cuda_support_init(void);
-static int (*common_cuda_initialization_function)(opal_common_cuda_function_table_t *) = NULL;
-static opal_common_cuda_function_table_t ftable;
+int parsec_cuda_verbose = 0;
+static int parsec_cuda_enabled = 0; /* Starts out disabled */
+static int parsec_cuda_output = 0;
+static void parsec_cuda_support_init(void);
+static int (*common_cuda_initialization_function)(parsec_common_cuda_function_table_t *) = NULL;
+static parsec_common_cuda_function_table_t ftable;
 
 /* This function allows the common cuda code to register an
  * initialization function that gets called the first time an attempt
  * is made to send or receive a GPU pointer.  This allows us to delay
  * some CUDA initialization until after MPI_Init().
  */
-void opal_cuda_add_initialization_function(int (*fptr)(opal_common_cuda_function_table_t *)) {
+void parsec_cuda_add_initialization_function(int (*fptr)(parsec_common_cuda_function_table_t *)) {
     common_cuda_initialization_function = fptr;
 }
 
 /**
  * This function is called when a convertor is instantiated.  It has to call
- * the opal_cuda_support_init() function once to figure out if CUDA support
+ * the parsec_cuda_support_init() function once to figure out if CUDA support
  * is enabled or not.  If CUDA is not enabled, then short circuit out
  * for all future calls.
  */
-void mca_cuda_convertor_init(opal_convertor_t* convertor, const void *pUserBuf)
+void mca_cuda_convertor_init(parsec_convertor_t* convertor, const void *pUserBuf)
 {
     /* Only do the initialization on the first GPU access */
     if (!initialized) {
-        opal_cuda_support_init();
+        parsec_cuda_support_init();
     }
 
     /* This is needed to handle case where convertor is not fully initialized
      * like when trying to do a sendi with convertor on the statck */
-    convertor->cbmemcpy = (memcpy_fct_t)&opal_cuda_memcpy;
+    convertor->cbmemcpy = (memcpy_fct_t)&parsec_cuda_memcpy;
 
     /* If not enabled, then nothing else to do */
-    if (!opal_cuda_enabled) {
+    if (!parsec_cuda_enabled) {
         return;
     }
 
@@ -67,14 +67,14 @@ void mca_cuda_convertor_init(opal_convertor_t* convertor, const void *pUserBuf)
  * @param dest   One pointer to check
  * @param source Another pointer to check
  */
-bool opal_cuda_check_bufs(char *dest, char *src)
+bool parsec_cuda_check_bufs(char *dest, char *src)
 {
     /* Only do the initialization on the first GPU access */
     if (!initialized) {
-        opal_cuda_support_init();
+        parsec_cuda_support_init();
     }
 
-    if (!opal_cuda_enabled) {
+    if (!parsec_cuda_enabled) {
         return false;
     }
 
@@ -97,14 +97,14 @@ bool opal_cuda_check_bufs(char *dest, char *src)
  * @param buf   check one pointer providing a convertor.
  *  Provides aditional information, e.g. managed vs. unmanaged GPU buffer
  */
-bool  opal_cuda_check_one_buf(char *buf, opal_convertor_t *convertor )
+bool  parsec_cuda_check_one_buf(char *buf, parsec_convertor_t *convertor )
 {
     /* Only do the initialization on the first GPU access */
     if (!initialized) {
-        opal_cuda_support_init();
+        parsec_cuda_support_init();
     }
 
-    if (!opal_cuda_enabled) {
+    if (!parsec_cuda_enabled) {
         return false;
     }
 
@@ -118,7 +118,7 @@ bool  opal_cuda_check_one_buf(char *buf, opal_convertor_t *convertor )
  * aborts as there is no recovering.
  */
 
-void *opal_cuda_memcpy(void *dest, const void *src, size_t size, opal_convertor_t* convertor)
+void *parsec_cuda_memcpy(void *dest, const void *src, size_t size, parsec_convertor_t* convertor)
 {
     int res;
 
@@ -133,7 +133,7 @@ void *opal_cuda_memcpy(void *dest, const void *src, size_t size, opal_convertor_
     }
 
     if (res != 0) {
-        opal_output(0, "CUDA: Error in cuMemcpy: res=%d, dest=%p, src=%p, size=%d",
+        parsec_output(0, "CUDA: Error in cuMemcpy: res=%d, dest=%p, src=%p, size=%d",
                     res, dest, src, (int)size);
         abort();
     } else {
@@ -146,12 +146,12 @@ void *opal_cuda_memcpy(void *dest, const void *src, size_t size, opal_convertor_
  * datatypes.  The current code has macros that cannot handle a convertor
  * argument to the memcpy call.
  */
-void *opal_cuda_memcpy_sync(void *dest, const void *src, size_t size)
+void *parsec_cuda_memcpy_sync(void *dest, const void *src, size_t size)
 {
     int res;
     res = ftable.gpu_cu_memcpy(dest, src, size);
     if (res != 0) {
-        opal_output(0, "CUDA: Error in cuMemcpy: res=%d, dest=%p, src=%p, size=%d",
+        parsec_output(0, "CUDA: Error in cuMemcpy: res=%d, dest=%p, src=%p, size=%d",
                     res, dest, src, (int)size);
         abort();
     } else {
@@ -163,13 +163,13 @@ void *opal_cuda_memcpy_sync(void *dest, const void *src, size_t size)
  * In some cases, need an implementation of memmove.  This is not fast, but
  * it is not often needed.
  */
-void *opal_cuda_memmove(void *dest, void *src, size_t size)
+void *parsec_cuda_memmove(void *dest, void *src, size_t size)
 {
     int res;
 
     res = ftable.gpu_memmove(dest, src, size);
     if(res != 0){
-        opal_output(0, "CUDA: Error in gpu memmove: res=%d, dest=%p, src=%p, size=%d",
+        parsec_output(0, "CUDA: Error in gpu memmove: res=%d, dest=%p, src=%p, size=%d",
                     res, dest, src, (int)size);
         abort();
     }
@@ -180,29 +180,29 @@ void *opal_cuda_memmove(void *dest, void *src, size_t size)
  * This function gets called once to check if the program is running in a cuda
  * environment.
  */
-static void opal_cuda_support_init(void)
+static void parsec_cuda_support_init(void)
 {
     if (initialized) {
         return;
     }
 
     /* Set different levels of verbosity in the cuda related code. */
-    opal_cuda_output = opal_output_open(NULL);
-    opal_output_set_verbosity(opal_cuda_output, opal_cuda_verbose);
+    parsec_cuda_output = parsec_output_open(NULL);
+    parsec_output_set_verbosity(parsec_cuda_output, parsec_cuda_verbose);
 
     /* Callback into the common cuda initialization routine. This is only
      * set if some work had been done already in the common cuda code.*/
     if (NULL != common_cuda_initialization_function) {
         if (0 == common_cuda_initialization_function(&ftable)) {
-            opal_cuda_enabled = 1;
+            parsec_cuda_enabled = 1;
         }
     }
 
-    if (1 == opal_cuda_enabled) {
-        opal_output_verbose(10, opal_cuda_output,
+    if (1 == parsec_cuda_enabled) {
+        parsec_output_verbose(10, parsec_cuda_output,
                             "CUDA: enabled successfully, CUDA device pointers will work");
     } else {
-        opal_output_verbose(10, opal_cuda_output,
+        parsec_output_verbose(10, parsec_cuda_output,
                             "CUDA: not enabled, CUDA device pointers will not work");
     }
 
@@ -213,7 +213,7 @@ static void opal_cuda_support_init(void)
  * Tell the convertor that copies will be asynchronous CUDA copies.  The
  * flags are cleared when the convertor is reinitialized.
  */
-void opal_cuda_set_copy_function_async(opal_convertor_t* convertor, void *stream)
+void parsec_cuda_set_copy_function_async(parsec_convertor_t* convertor, void *stream)
 {
     convertor->flags |= CONVERTOR_CUDA_ASYNC;
     convertor->stream = stream;
