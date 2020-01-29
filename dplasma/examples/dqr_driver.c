@@ -13,6 +13,16 @@
 #include <math.h>
 #include <sys/time.h>
 
+#if defined(PARSEC_HAVE_LCI)
+static void lci_max_op(void *dst, void *src, size_t count)
+{
+    double *d = dst;
+    double *s = src;
+    if (*s > *d)
+        *d = *s;
+}
+#endif
+
 int main(int argc, char ** argv)
 {
     parsec_context_t* parsec;
@@ -45,6 +55,12 @@ int main(int argc, char ** argv)
     }
     MPI_Comm_size(MPI_COMM_WORLD, &world);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_num_proc(&world);
+    lc_get_proc_num(&rank);
 #else
     world = 1;
     rank = 0;
@@ -177,6 +193,8 @@ int main(int argc, char ** argv)
 #if defined(PARSEC_HAVE_MPI)
         /** Simple synchronization of timing */
         MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lc_barrier(ep);
 #endif
         gettimeofday(&start, NULL);
 
@@ -199,6 +217,8 @@ int main(int argc, char ** argv)
         my_duration = (double)diff.tv_sec + (double)diff.tv_usec / 1e6;
 #if defined(PARSEC_HAVE_MPI)
         MPI_Allreduce(&my_duration, &duration, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lc_alreduce(&my_duration, &duration, sizeof(double), lci_max_op, ep);
 #else
         duration = my_duration;
 #endif
@@ -228,6 +248,8 @@ int main(int argc, char ** argv)
 #if defined(PARSEC_HAVE_MPI)
     /** Finalize MPI */
     MPI_Finalize();
+#elif defined(PAREC_HAVE_LCI)
+    lc_finalize();
 #endif
 
     return 0;
@@ -247,6 +269,10 @@ int main(int argc, char ** argv)
                 argv[1],
                 mb, nb);
     }
+#if defined(PARSEC_HAVE_MPI)
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
+#endif
     exit(1);
 }

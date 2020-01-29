@@ -45,6 +45,8 @@ int main(int argc, char ** argv)
 #if defined(PARSEC_HAVE_MPI)
     /* If we are in a distributed run, broadcast the seed of rank 0 */
     MPI_Bcast(&seed, 1, MPI_INT, 0, MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_bcast(&seed, sizeof(int), 0, *lci_global_ep);
 #endif  /* defined(PARSEC_HAVE_MPI) */
 
     LDA = max(M, LDA);

@@ -95,6 +95,16 @@ dplasma_ztrmdm_Destruct( parsec_taskpool_t *tp )
  * Blocking Interface
  */
 
+#if defined(PARSEC_HAVE_LCI)
+static void lci_max_op(void *dst, void *src, size_t count)
+{
+    int *d = dst;
+    int *s = src;
+    if (*s > *d)
+        *d = *s;
+}
+#endif
+
 int dplasma_zhetrf(parsec_context_t *parsec, parsec_tiled_matrix_dc_t *A)
 {
     parsec_taskpool_t *parsec_zhetrf/*, *parsec_ztrmdm*/;
@@ -118,6 +128,9 @@ int dplasma_zhetrf(parsec_context_t *parsec, parsec_tiled_matrix_dc_t *A)
     /* If we don't need to reduce, don't do it, this way we don't require MPI to be initialized */
     if( A->super.nodes > 1 )
         MPI_Allreduce( &info, &ginfo, 1, MPI_INT, MPI_MAX, *(MPI_Comm*)dplasma_pcomm);
+#elif defined(PARSEC_HAVE_LCI)
+    if( A->super.nodes > 1 )
+        lc_alreduce( &info, &ginfo, sizeof(int), lci_max_op, *lci_global_ep);
 #endif
     return ginfo;
 }

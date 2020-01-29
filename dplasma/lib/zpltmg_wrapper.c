@@ -428,6 +428,9 @@ dplasma_zpltmg_house( parsec_context_t *parsec,
     /* If we don't need to broadcast, don't do it, this way we don't require MPI to be initialized */
     if( A->super.nodes > 1 )
         MPI_Bcast( &tau, 1, parsec_datatype_double_complex_t, 0, *(MPI_Comm*)dplasma_pcomm );
+#elif defined(PARSEC_HAVE_LCI)
+    if( A->super.nodes > 1 )
+        lc_bcast(&tau, sizeof(parsec_complex64_t), 0, *lci_global_ep);
 #endif
 
     /* Compute the Householder matrix I - tau v * v' */

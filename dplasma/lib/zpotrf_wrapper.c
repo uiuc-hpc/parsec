@@ -178,6 +178,16 @@ dplasma_zpotrf_Destruct( parsec_taskpool_t *tp )
     parsec_taskpool_free(tp);
 }
 
+#if defined(PARSEC_HAVE_LCI)
+static void lci_max_op(void *dst, void *src, size_t count)
+{
+    int *d = dst;
+    int *s = src;
+    if (*s > *d)
+        *d = *s;
+}
+#endif
+
 /**
  *******************************************************************************
  *
@@ -247,6 +257,9 @@ dplasma_zpotrf( parsec_context_t *parsec,
     /* If we don't need to reduce, don't do it, this way we don't require MPI to be initialized */
     if( A->super.nodes > 1 )
         MPI_Allreduce( &info, &ginfo, 1, MPI_INT, MPI_MAX, *(MPI_Comm*)dplasma_pcomm);
+#elif defined(PARSEC_HAVE_LCI)
+    if( A->super.nodes > 1 )
+        lc_alreduce( &info, &ginfo, sizeof(int), lci_max_op, *lci_global_ep);
 #endif
 
     return ginfo;
@@ -328,6 +341,9 @@ dplasma_zpotrf_rec( parsec_context_t *parsec,
     /* If we don't need to reduce, don't do it, this way we don't require MPI to be initialized */
     if( A->super.nodes > 1 )
         MPI_Allreduce( &info, &ginfo, 1, MPI_INT, MPI_MAX, *(MPI_Comm*)dplasma_pcomm);
+#elif defined(PARSEC_HAVE_LCI)
+    if( A->super.nodes > 1 )
+        lc_alreduce( &info, &ginfo, sizeof(int), lci_max_op, *lci_global_ep);
 #endif
     return ginfo;
 }

@@ -57,6 +57,28 @@ static inline double get_cur_time(void)
 /* overload exit in MPI mode */
 #   define exit(ret) MPI_Abort(MPI_COMM_WORLD, ret)
 
+#elif defined(PARSEC_HAVE_LCI)
+#include "parsec/parsec_lci.h"
+# define SYNC_TIME_START() do {                 \
+        lc_barrier(*lci_global_ep);             \
+        PARSEC_PROFILING_START();               \
+        sync_time_elapsed = get_cur_time();     \
+    } while(0)
+# define SYNC_TIME_STOP() do {                                  \
+        lc_barrier(*lci_global_ep);                             \
+        sync_time_elapsed = get_cur_time() - sync_time_elapsed; \
+    } while(0)
+# define SYNC_TIME_PRINT(rank, print) do {                          \
+        SYNC_TIME_STOP();                                           \
+        if(0 == rank) {                                             \
+            printf("[****] TIME(s) %12.5f : ", sync_time_elapsed);        \
+            printf print;                                           \
+        }                                                           \
+  } while(0)
+
+/* overload exit in LCI mode */
+#   define exit(ret) lci_abort(ret)
+
 #else 
 # define SYNC_TIME_START() do { sync_time_elapsed = get_cur_time(); } while(0)
 # define SYNC_TIME_STOP() do { sync_time_elapsed = get_cur_time() - sync_time_elapsed; } while(0)

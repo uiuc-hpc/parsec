@@ -256,6 +256,8 @@ static int check_solution( parsec_context_t *parsec, int loud,
 
 #if defined(PARSEC_HAVE_MPI)
     MPI_Bcast(&info_solution, 1, MPI_INT, 0, MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_bcast(&info_solution, sizeof(int), 0, *lci_global_ep);
 #endif
 
     parsec_data_free(dcA.mat);
