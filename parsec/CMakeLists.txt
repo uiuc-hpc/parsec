@@ -103,11 +103,6 @@ set(SOURCES
   ${MCA_EXTRA_SOURCES}
 )
 
-if( NOT MPI_C_FOUND )
-  list(APPEND SOURCES datatype/datatype.c)
-else( NOT MPI_C_FOUND )
-  list(APPEND SOURCES datatype/datatype_mpi.c)
-endif( NOT MPI_C_FOUND )
 list(APPEND SOURCES parsec_hwloc.c)
 
 if( PARSEC_PROF_GRAPHER )
@@ -159,6 +154,13 @@ if( BUILD_PARSEC )
     endif( ${BUILD_SHARED_LIBS} )
   endif(NOT TARGET parsec)
   add_library(PaRSEC::parsec ALIAS parsec)
+
+  if( MPI_C_FOUND )
+    target_sources(parsec PRIVATE datatype_mpi.c)
+  else( MPI_C_FOUND )
+    add_subdirectory(datatype)
+    target_sources(parsec PRIVATE datatype.c $<TARGET_OBJECTS:parsec-datatype>)
+  endif( MPI_C_FOUND )
 
   add_subdirectory(data_dist)
 
