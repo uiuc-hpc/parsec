@@ -19,13 +19,6 @@
 
 #include "parsec_config.h"
 
-#if !defined(CHECKSUM) && PARSEC_CUDA_SUPPORT
-/* Make use of existing macro to do CUDA style memcpy */
-#undef MEMCPY_CSUM
-#define MEMCPY_CSUM( DST, SRC, BLENGTH, CONVERTOR ) \
-    CONVERTOR->cbmemcpy( (DST), (SRC), (BLENGTH), (CONVERTOR) )
-#endif
-
 /**
  * This function deals only with partial elements. The COUNT points however to the whole leftover count,
  * but this function is only expected to operate on an amount less than blength, that would allow the rest

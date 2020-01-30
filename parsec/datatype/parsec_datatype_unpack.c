@@ -190,15 +190,8 @@ parsec_unpack_partial_datatype( parsec_convertor_t* pConvertor, dt_elem_desc_t* 
     memset( temporary, unused_byte, data_length );
     MEMCPY( temporary + start_position, partial_data, length );
 
-#if PARSEC_CUDA_SUPPORT
-    /* In the case where the data is being unpacked from device memory, need to
-     * use the special host to device memory copy.  Note this code path was only
-     * seen on large receives of noncontiguous data via buffered sends. */
-    pConvertor->cbmemcpy(saved_data, user_data, data_length, pConvertor );
-#else
     /* Save the content of the user memory */
     MEMCPY( saved_data, user_data, data_length );
-#endif
 
     /* Then unpack the data into the user memory */
     UNPACK_PREDEFINED_DATATYPE( pConvertor, pElem, count_desc,
@@ -210,25 +203,10 @@ parsec_unpack_partial_datatype( parsec_convertor_t* pConvertor, dt_elem_desc_t* 
     /* For every occurence of the unused byte move data from the saved
      * buffer back into the user memory.
      */
-#if PARSEC_CUDA_SUPPORT
-    /* Need to copy the modified user_data again so we can see which
-     * bytes need to be converted back to their original values.  Note
-     * this code path was only seen on large receives of noncontiguous
-     * data via buffered sends. */
-    {
-        char resaved_data[16];
-        pConvertor->cbmemcpy(resaved_data, user_data, data_length, pConvertor );
-        for(size_t i = 0; i < data_length; i++ ) {
-            if( unused_byte == resaved_data[i] )
-                pConvertor->cbmemcpy(&user_data[i], &saved_data[i], 1, pConvertor);
-        }
-    }
-#else
     for(size_t i = 0; i < data_length; i++ ) {
         if( unused_byte == user_data[i] )
             user_data[i] = saved_data[i];
     }
-#endif
 }
 
 /* The pack/unpack functions need a cleanup. I have to create a proper interface to access

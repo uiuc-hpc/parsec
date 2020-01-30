@@ -38,11 +38,6 @@
 #include "parsec/datatype/parsec_datatype_checksum.h"
 #include "parsec/datatype/parsec_datatype_prototypes.h"
 #include "parsec/datatype/parsec_convertor_internal.h"
-#if PARSEC_CUDA_SUPPORT
-#include "parsec/datatype/parsec_datatype_cuda.h"
-#define MEMCPY_CUDA( DST, SRC, BLENGTH, CONVERTOR ) \
-    CONVERTOR->cbmemcpy( (DST), (SRC), (BLENGTH), (CONVERTOR) )
-#endif
 
 static void parsec_convertor_construct( parsec_convertor_t* convertor )
 {
@@ -51,9 +46,6 @@ static void parsec_convertor_construct( parsec_convertor_t* convertor )
     convertor->partial_length = 0;
     convertor->remoteArch     = parsec_local_arch;
     convertor->flags          = PARSEC_DATATYPE_FLAG_NO_GAPS | CONVERTOR_COMPLETED;
-#if PARSEC_CUDA_SUPPORT
-    convertor->cbmemcpy       = &parsec_cuda_memcpy;
-#endif
 }
 
 
@@ -241,11 +233,7 @@ int32_t parsec_convertor_pack( parsec_convertor_t* pConv,
             if( PARSEC_LIKELY(NULL == iov[i].iov_base) )
                 iov[i].iov_base = (IOVBASE_TYPE *) base_pointer;
             else
-#if PARSEC_CUDA_SUPPORT
-                MEMCPY_CUDA( iov[i].iov_base, base_pointer, iov[i].iov_len, pConv );
-#else
                 MEMCPY( iov[i].iov_base, base_pointer, iov[i].iov_len );
-#endif
             pending_length -= iov[i].iov_len;
             base_pointer += iov[i].iov_len;
         }
@@ -258,11 +246,7 @@ complete_contiguous_data_pack:
         if( PARSEC_LIKELY(NULL == iov[i].iov_base) )
             iov[i].iov_base = (IOVBASE_TYPE *) base_pointer;
         else
-#if PARSEC_CUDA_SUPPORT
-            MEMCPY_CUDA( iov[i].iov_base, base_pointer, iov[i].iov_len, pConv );
-#else
             MEMCPY( iov[i].iov_base, base_pointer, iov[i].iov_len );
-#endif
         pConv->bConverted = pConv->local_size;
         *out_size = i + 1;
         pConv->flags |= CONVERTOR_COMPLETED;
@@ -296,11 +280,7 @@ int32_t parsec_convertor_unpack( parsec_convertor_t* pConv,
             if( iov[i].iov_len >= pending_length ) {
                 goto complete_contiguous_data_unpack;
             }
-#if PARSEC_CUDA_SUPPORT
-            MEMCPY_CUDA( base_pointer, iov[i].iov_base, iov[i].iov_len, pConv );
-#else
             MEMCPY( base_pointer, iov[i].iov_base, iov[i].iov_len );
-#endif
             pending_length -= iov[i].iov_len;
             base_pointer += iov[i].iov_len;
         }
@@ -310,11 +290,7 @@ int32_t parsec_convertor_unpack( parsec_convertor_t* pConv,
 
 complete_contiguous_data_unpack:
         iov[i].iov_len = pending_length;
-#if PARSEC_CUDA_SUPPORT
-        MEMCPY_CUDA( base_pointer, iov[i].iov_base, iov[i].iov_len, pConv );
-#else
         MEMCPY( base_pointer, iov[i].iov_base, iov[i].iov_len );
-#endif
         pConv->bConverted = pConv->local_size;
         *out_size = i + 1;
         pConv->flags |= CONVERTOR_COMPLETED;
@@ -570,11 +546,6 @@ int32_t parsec_convertor_prepare_for_recv( parsec_convertor_t* convertor,
     /* Here I should check that the data is not overlapping */
 
     convertor->flags |= CONVERTOR_RECV;
-#if PARSEC_CUDA_SUPPORT
-    if (!( convertor->flags & CONVERTOR_SKIP_CUDA_INIT )) {
-        mca_cuda_convertor_init(convertor, pUserBuf);
-    }
-#endif
 
     assert(! (convertor->flags & CONVERTOR_SEND));
     PARSEC_CONVERTOR_PREPARE( convertor, datatype, count, pUserBuf );
@@ -611,11 +582,6 @@ int32_t parsec_convertor_prepare_for_send( parsec_convertor_t* convertor,
                                          const void* pUserBuf )
 {
     convertor->flags |= CONVERTOR_SEND;
-#if PARSEC_CUDA_SUPPORT
-    if (!( convertor->flags & CONVERTOR_SKIP_CUDA_INIT )) {
-        mca_cuda_convertor_init(convertor, pUserBuf);
-    }
-#endif
 
     PARSEC_CONVERTOR_PREPARE( convertor, datatype, count, pUserBuf );
 
@@ -693,9 +659,6 @@ int parsec_convertor_clone( const parsec_convertor_t* source,
         destination->bConverted = source->bConverted;
         destination->stack_pos  = source->stack_pos;
     }
-#if PARSEC_CUDA_SUPPORT
-    destination->cbmemcpy   = source->cbmemcpy;
-#endif
     return PARSEC_SUCCESS;
 }
 
@@ -717,8 +680,6 @@ void parsec_convertor_dump( parsec_convertor_t* convertor )
     else parsec_output( 0, "heterogeneous ");
     if( convertor->flags & CONVERTOR_NO_OP ) parsec_output( 0, "no_op ");
     if( convertor->flags & CONVERTOR_WITH_CHECKSUM ) parsec_output( 0, "checksum ");
-    if( convertor->flags & CONVERTOR_CUDA ) parsec_output( 0, "CUDA ");
-    if( convertor->flags & CONVERTOR_CUDA_ASYNC ) parsec_output( 0, "CUDA Async ");
     if( convertor->flags & CONVERTOR_COMPLETED ) parsec_output( 0, "COMPLETED ");
 
     parsec_datatype_dump( convertor->pDesc );

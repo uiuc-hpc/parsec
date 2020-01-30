@@ -48,8 +48,6 @@ bool parsec_ddt_copy_debug = false;
 bool parsec_ddt_raw_debug = false;
 int parsec_ddt_verbose = -1;  /* Has the datatype verbose it's own output stream */
 
-extern int parsec_cuda_verbose;
-
 /* Using this macro implies that at this point _all_ informations needed
  * to fill up the datatype are known.
  * We fill all the static information, the pointer to desc.desc is setup
@@ -209,18 +207,6 @@ int parsec_datatype_register_params(void)
     if (0 > ret) {
         return ret;
     }
-#if PARSEC_CUDA_SUPPORT
-    /* Set different levels of verbosity in the cuda related code. */
-    ret = mca_base_var_register ("parsec", "parsec", NULL, "cuda_verbose",
-                                 "Set level of parsec cuda verbosity",
-                                 MCA_BASE_VAR_TYPE_INT, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-                                 PARSEC_INFO_LVL_8, MCA_BASE_VAR_SCOPE_LOCAL,
-                                 &parsec_cuda_verbose);
-    if (0 > ret) {
-        return ret;
-    }
-#endif
-
 #endif /* PARSEC_ENABLE_DEBUG */
 
     return PARSEC_SUCCESS;

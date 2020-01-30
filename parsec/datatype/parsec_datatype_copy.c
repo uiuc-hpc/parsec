@@ -71,40 +71,11 @@ static size_t parsec_datatype_memop_block_size = 128 * 1024;
 #define MEM_OP       MEMMOVE
 #include "parsec_datatype_copy.h"
 
-#if PARSEC_CUDA_SUPPORT
-#include "parsec_datatype_cuda.h"
-
-#undef MEM_OP_NAME
-#define MEM_OP_NAME non_overlap_cuda
-#undef MEM_OP
-#define MEM_OP parsec_cuda_memcpy_sync
-#include "parsec_datatype_copy.h"
-
-#undef MEM_OP_NAME
-#define MEM_OP_NAME overlap_cuda
-#undef MEM_OP
-#define MEM_OP parsec_cuda_memmove
-#include "parsec_datatype_copy.h"
-
-#define SET_CUDA_COPY_FCT(cuda_device_bufs, fct, copy_function)     \
-    do {                                                            \
-        if (true == cuda_device_bufs) {                             \
-            fct = copy_function;                                    \
-        }                                                           \
-    } while(0)
-#else
-#define SET_CUDA_COPY_FCT(cuda_device_bufs, fct, copy_function)
-#endif
-
 int32_t parsec_datatype_copy_content_same_ddt( const parsec_datatype_t* datatype, int32_t count,
                                              char* destination_base, char* source_base )
 {
     ptrdiff_t extent;
     int32_t (*fct)( const parsec_datatype_t*, int32_t, char*, char*);
-
-#if PARSEC_CUDA_SUPPORT
-    bool cuda_device_bufs = parsec_cuda_check_bufs(destination_base, source_base);
-#endif
 
     DO_DEBUG( parsec_output( 0, "parsec_datatype_copy_content_same_ddt( %p, %d, dst %p, src %p )\n",
                            (void*)datatype, count, (void*)destination_base, (void*)source_base ); );
@@ -122,18 +93,15 @@ int32_t parsec_datatype_copy_content_same_ddt( const parsec_datatype_t* datatype
     extent = (datatype->true_ub - datatype->true_lb) + (count - 1) * (datatype->ub - datatype->lb);
 
     fct = non_overlap_copy_content_same_ddt;
-    SET_CUDA_COPY_FCT(cuda_device_bufs, fct, non_overlap_cuda_copy_content_same_ddt);
     if( destination_base < source_base ) {
         if( (destination_base + extent) > source_base ) {
             /* memmove */
             fct = overlap_copy_content_same_ddt;
-            SET_CUDA_COPY_FCT(cuda_device_bufs, fct, overlap_cuda_copy_content_same_ddt);
         }
     } else {
         if( (source_base + extent) > destination_base ) {
             /* memmove */
             fct = overlap_copy_content_same_ddt;
-            SET_CUDA_COPY_FCT(cuda_device_bufs, fct, overlap_cuda_copy_content_same_ddt);
         }
     }
     return fct( datatype, count, destination_base, source_base );

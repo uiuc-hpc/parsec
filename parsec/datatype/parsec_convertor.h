@@ -47,16 +47,12 @@ BEGIN_C_DECLS
 #define CONVERTOR_HOMOGENEOUS      0x00080000
 #define CONVERTOR_NO_OP            0x00100000
 #define CONVERTOR_WITH_CHECKSUM    0x00200000
-#define CONVERTOR_CUDA             0x00400000
-#define CONVERTOR_CUDA_ASYNC       0x00800000
 #define CONVERTOR_TYPE_MASK        0x10FF0000
 #define CONVERTOR_STATE_START      0x01000000
 #define CONVERTOR_STATE_COMPLETE   0x02000000
 #define CONVERTOR_STATE_ALLOC      0x04000000
 #define CONVERTOR_COMPLETED        0x08000000
-#define CONVERTOR_CUDA_UNIFIED     0x10000000
 #define CONVERTOR_HAS_REMOTE_SIZE  0x20000000
-#define CONVERTOR_SKIP_CUDA_INIT   0x40000000
 
 union dt_elem_desc;
 typedef struct parsec_convertor_t parsec_convertor_t;
@@ -116,11 +112,6 @@ struct parsec_convertor_t {
 
     /* --- fields are no more aligned on cacheline --- */
     dt_stack_t                    static_stack[DT_STATIC_STACK_SIZE];  /**< local stack for small datatypes */
-
-#if PARSEC_CUDA_SUPPORT
-    memcpy_fct_t                  cbmemcpy;       /**< memcpy or cuMemcpy */
-    void *                        stream;         /**< CUstream for async copy */
-#endif
 };
 PARSEC_DECLSPEC OBJ_CLASS_DECLARATION( parsec_convertor_t );
 
@@ -185,9 +176,6 @@ static inline int parsec_convertor_cleanup( parsec_convertor_t* convertor )
 static inline int32_t parsec_convertor_need_buffers( const parsec_convertor_t* pConvertor )
 {
     if (PARSEC_UNLIKELY(0 == (pConvertor->flags & CONVERTOR_HOMOGENEOUS))) return 1;
-#if PARSEC_CUDA_SUPPORT
-    if( pConvertor->flags & (CONVERTOR_CUDA | CONVERTOR_CUDA_UNIFIED)) return 1;
-#endif
     if( pConvertor->flags & PARSEC_DATATYPE_FLAG_NO_GAPS ) return 0;
     if( (pConvertor->count == 1) && (pConvertor->flags & PARSEC_DATATYPE_FLAG_CONTIGUOUS) ) return 0;
     return 1;
