@@ -16,14 +16,14 @@
  *
  * $HEADER$
  */
-#include "opal_config.h"
+#include "parsec/parsec_config.h"
 
-#include "opal/constants.h"
-#include "opal/util/arch.h"
+#include "parsec/constants.h"
+#include "parsec/datatype/util/arch.h"
 
-uint32_t opal_local_arch = 0xFFFFFFFF;
+uint32_t parsec_local_arch = 0xFFFFFFFF;
 
-static inline int32_t opal_arch_isbigendian ( void )
+static inline int32_t parsec_arch_isbigendian ( void )
 {
     const uint32_t value = 0x12345678;
     const char *ptr = (char*)&value;
@@ -47,7 +47,7 @@ static inline int32_t opal_arch_isbigendian ( void )
  * of the mantissa. If it's 1 then we have an intel representaion, if not
  * we have a sparc one. QED
  */
-static inline int32_t opal_arch_ldisintel( void )
+static inline int32_t parsec_arch_ldisintel( void )
 {
     long double ld = 2.0;
     int i, j;
@@ -55,7 +55,7 @@ static inline int32_t opal_arch_ldisintel( void )
 
     j = LDBL_MANT_DIG / 32;
     i = (LDBL_MANT_DIG % 32) - 1;
-    if( opal_arch_isbigendian() ) { /* big endian */
+    if( parsec_arch_isbigendian() ) { /* big endian */
         j = (sizeof(long double) / sizeof(unsigned int)) - j;
         if( i < 0 ) {
             i = 31;
@@ -70,26 +70,26 @@ static inline int32_t opal_arch_ldisintel( void )
     return (pui[j] & (1 << i) ? 1 : 0);
 }
 
-static inline void opal_arch_setmask ( uint32_t *var, uint32_t mask)
+static inline void parsec_arch_setmask ( uint32_t *var, uint32_t mask)
 {
     *var |= mask;
 }
 
-int opal_arch_init(void)
+int parsec_arch_init(void)
 {
-    opal_local_arch = (OPAL_ARCH_HEADERMASK | OPAL_ARCH_UNUSEDMASK);
+    parsec_local_arch = (PARSEC_ARCH_HEADERMASK | PARSEC_ARCH_UNUSEDMASK);
 
     /* Handle the size of long (can hold a pointer) */
     if( 8 == sizeof(long) )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LONGIS64 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LONGIS64 );
 
     /* sizeof bool */
     if (1 == sizeof(bool) ) {
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_BOOLIS8);
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_BOOLIS8);
     } else if (2 == sizeof(bool)) {
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_BOOLIS16);
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_BOOLIS16);
     } else if (4 == sizeof(bool)) {
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_BOOLIS32);
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_BOOLIS32);
     }
 
     /* Note that fortran logical size is set later, to make
@@ -97,45 +97,45 @@ int opal_arch_init(void)
 
     /* Initialize the information regarding the long double */
     if( 12 == sizeof(long double) )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LONGDOUBLEIS96 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LONGDOUBLEIS96 );
     else if( 16 == sizeof(long double) )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LONGDOUBLEIS128 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LONGDOUBLEIS128 );
 
     /* Big endian or little endian ? That's the question */
-    if( opal_arch_isbigendian() )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_ISBIGENDIAN );
+    if( parsec_arch_isbigendian() )
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_ISBIGENDIAN );
 
     /* What's the maximum exponent ? */
     if ( LDBL_MAX_EXP == 16384 )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LDEXPSIZEIS15 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LDEXPSIZEIS15 );
 
     /* How about the length in bits of the mantissa */
     if ( LDBL_MANT_DIG == 64 )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LDMANTDIGIS64 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LDMANTDIGIS64 );
     else if ( LDBL_MANT_DIG == 105 )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LDMANTDIGIS105 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LDMANTDIGIS105 );
     else if ( LDBL_MANT_DIG == 106 )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LDMANTDIGIS106 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LDMANTDIGIS106 );
     else if ( LDBL_MANT_DIG == 107 )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LDMANTDIGIS107 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LDMANTDIGIS107 );
     else if ( LDBL_MANT_DIG == 113 )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LDMANTDIGIS113 );
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LDMANTDIGIS113 );
 
     /* Intel data representation or Sparc ? */
-    if( opal_arch_ldisintel() )
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LDISINTEL );
+    if( parsec_arch_ldisintel() )
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LDISINTEL );
 
-    return OPAL_SUCCESS;
+    return PARSEC_SUCCESS;
 }
 
-int32_t opal_arch_checkmask ( uint32_t *var, uint32_t mask )
+int32_t parsec_arch_checkmask ( uint32_t *var, uint32_t mask )
 {
     unsigned int tmpvar = *var;
 
     /* Check whether the headers are set correctly,
        or whether this is an erroneous integer */
-    if( !((*var) & OPAL_ARCH_HEADERMASK) ) {
-        if( (*var) & OPAL_ARCH_HEADERMASK2 ) {
+    if( !((*var) & PARSEC_ARCH_HEADERMASK) ) {
+        if( (*var) & PARSEC_ARCH_HEADERMASK2 ) {
             char* pcDest, *pcSrc;
             /* Both ends of this integer have the wrong settings,
                maybe its just the wrong endian-representation. Try
@@ -150,7 +150,7 @@ int32_t opal_arch_checkmask ( uint32_t *var, uint32_t mask )
             *pcDest++ = *pcSrc--;
             *pcDest++ = *pcSrc--;
 
-            if( (tmpvar & OPAL_ARCH_HEADERMASK) && (!(tmpvar & OPAL_ARCH_HEADERMASK2)) ) {
+            if( (tmpvar & PARSEC_ARCH_HEADERMASK) && (!(tmpvar & PARSEC_ARCH_HEADERMASK2)) ) {
                 *var = tmpvar;
             } else
                 return -1;
@@ -163,15 +163,15 @@ int32_t opal_arch_checkmask ( uint32_t *var, uint32_t mask )
 }
 
 int
-opal_arch_set_fortran_logical_size(uint32_t size)
+parsec_arch_set_fortran_logical_size(uint32_t size)
 {
     if (1 == size) {
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LOGICALIS8);
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LOGICALIS8);
     } else if (2 == size) {
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LOGICALIS16);
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LOGICALIS16);
     } else if (4 == size) {
-        opal_arch_setmask( &opal_local_arch, OPAL_ARCH_LOGICALIS32);
+        parsec_arch_setmask( &parsec_local_arch, PARSEC_ARCH_LOGICALIS32);
     }
 
-    return OPAL_SUCCESS;
+    return PARSEC_SUCCESS;
 }

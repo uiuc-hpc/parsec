@@ -17,10 +17,10 @@
  *
  * $HEADER$
  */
-#ifndef OPAL_ARCH_H_HAS_BEEN_INCLUDED
-#define OPAL_ARCH_H_HAS_BEEN_INCLUDED
+#ifndef PARSEC_ARCH_H_HAS_BEEN_INCLUDED
+#define PARSEC_ARCH_H_HAS_BEEN_INCLUDED
 
-#include "opal_config.h"
+#include "parsec/parsec_config.h"
 
 #include <float.h>
 #include <assert.h>
@@ -193,56 +193,56 @@
 
 /* These masks implement the specification above above */
 
-#define OPAL_ARCH_HEADERMASK      0x03000000 /* set the fields for the header */
-#define OPAL_ARCH_HEADERMASK2     0x00000003 /* other end, needed for checks */
-#define OPAL_ARCH_UNUSEDMASK      0xfc000000 /* mark the unused fields */
+#define PARSEC_ARCH_HEADERMASK      0x03000000 /* set the fields for the header */
+#define PARSEC_ARCH_HEADERMASK2     0x00000003 /* other end, needed for checks */
+#define PARSEC_ARCH_UNUSEDMASK      0xfc000000 /* mark the unused fields */
 
 /* BYTE 1 */
-#define OPAL_ARCH_ISBIGENDIAN     0x00000008
+#define PARSEC_ARCH_ISBIGENDIAN     0x00000008
 
 /* BYTE 2 */
-#define OPAL_ARCH_LONGISxx        0x0000c000  /* mask for sizeof long */
-#define OPAL_ARCH_LONGIS64        0x00001000
-#define OPAL_ARCH_LONGLONGISxx    0x00003000  /* mask for sizeof long long */
+#define PARSEC_ARCH_LONGISxx        0x0000c000  /* mask for sizeof long */
+#define PARSEC_ARCH_LONGIS64        0x00001000
+#define PARSEC_ARCH_LONGLONGISxx    0x00003000  /* mask for sizeof long long */
 
-#define OPAL_ARCH_BOOLISxx        0x00000c00  /* mask for sizeof bool */
-#define OPAL_ARCH_BOOLIS8         0x00000000  /* bool is 8 bits */
-#define OPAL_ARCH_BOOLIS16        0x00000400  /* bool is 16 bits */
-#define OPAL_ARCH_BOOLIS32        0x00000800  /* bool is 32 bits */
+#define PARSEC_ARCH_BOOLISxx        0x00000c00  /* mask for sizeof bool */
+#define PARSEC_ARCH_BOOLIS8         0x00000000  /* bool is 8 bits */
+#define PARSEC_ARCH_BOOLIS16        0x00000400  /* bool is 16 bits */
+#define PARSEC_ARCH_BOOLIS32        0x00000800  /* bool is 32 bits */
 
-#define OPAL_ARCH_LOGICALISxx     0x00000300  /* mask for sizeof Fortran logical */
-#define OPAL_ARCH_LOGICALIS8      0x00000000  /* logical is 8 bits */
-#define OPAL_ARCH_LOGICALIS16     0x00000100  /* logical is 16 bits */
-#define OPAL_ARCH_LOGICALIS32     0x00000200  /* logical is 32 bits */
+#define PARSEC_ARCH_LOGICALISxx     0x00000300  /* mask for sizeof Fortran logical */
+#define PARSEC_ARCH_LOGICALIS8      0x00000000  /* logical is 8 bits */
+#define PARSEC_ARCH_LOGICALIS16     0x00000100  /* logical is 16 bits */
+#define PARSEC_ARCH_LOGICALIS32     0x00000200  /* logical is 32 bits */
 
 /* BYTE 3 */
-#define OPAL_ARCH_LONGDOUBLEIS96  0x00020000
-#define OPAL_ARCH_LONGDOUBLEIS128 0x00010000
+#define PARSEC_ARCH_LONGDOUBLEIS96  0x00020000
+#define PARSEC_ARCH_LONGDOUBLEIS128 0x00010000
 
-#define OPAL_ARCH_LDEXPSIZEIS15   0x00080000
+#define PARSEC_ARCH_LDEXPSIZEIS15   0x00080000
 
-#define OPAL_ARCH_LDMANTDIGIS64   0x00400000
-#define OPAL_ARCH_LDMANTDIGIS105  0x00200000
-#define OPAL_ARCH_LDMANTDIGIS106  0x00600000
-#define OPAL_ARCH_LDMANTDIGIS107  0x00100000
-#define OPAL_ARCH_LDMANTDIGIS113  0x00500000
+#define PARSEC_ARCH_LDMANTDIGIS64   0x00400000
+#define PARSEC_ARCH_LDMANTDIGIS105  0x00200000
+#define PARSEC_ARCH_LDMANTDIGIS106  0x00600000
+#define PARSEC_ARCH_LDMANTDIGIS107  0x00100000
+#define PARSEC_ARCH_LDMANTDIGIS113  0x00500000
 
-#define OPAL_ARCH_LDISINTEL       0x00800000
+#define PARSEC_ARCH_LDISINTEL       0x00800000
 
 BEGIN_C_DECLS
 
 /* Local Architecture */
-OPAL_DECLSPEC extern uint32_t opal_local_arch;
+PARSEC_DECLSPEC extern uint32_t parsec_local_arch;
 
 /* Initialize architecture and determine all but fortran logical fields */
-OPAL_DECLSPEC int opal_arch_init(void);
+PARSEC_DECLSPEC int parsec_arch_init(void);
 
-OPAL_DECLSPEC int32_t opal_arch_checkmask ( uint32_t *var, uint32_t mask );
+PARSEC_DECLSPEC int32_t parsec_arch_checkmask ( uint32_t *var, uint32_t mask );
 
-/* Set fortran logical fields after init, to keep fortran out of opal... */
-OPAL_DECLSPEC int opal_arch_set_fortran_logical_size(uint32_t size);
+/* Set fortran logical fields after init, to keep fortran out of parsec... */
+PARSEC_DECLSPEC int parsec_arch_set_fortran_logical_size(uint32_t size);
 
 END_C_DECLS
 
-#endif  /* OPAL_ARCH_H_HAS_BEEN_INCLUDED */
+#endif  /* PARSEC_ARCH_H_HAS_BEEN_INCLUDED */
 
