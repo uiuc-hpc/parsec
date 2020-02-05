@@ -33,9 +33,9 @@
 #include "parsec/datatype/util/crc.h"
 
 
-#if (PARSEC_ALIGNMENT_LONG == 8)
+#if (ALIGNOF_LONG == 8)
 #define PARSEC_CRC_WORD_MASK_ 0x7
-#elif (PARSEC_ALIGNMENT_LONG == 4)
+#elif (ALIGNOF_LONG == 4)
 #define PARSEC_CRC_WORD_MASK_ 0x3
 #else
 #define PARSEC_CRC_WORD_MASK_ 0xFFFF
