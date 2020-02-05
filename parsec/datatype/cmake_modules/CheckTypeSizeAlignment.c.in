@@ -1,0 +1,26 @@
+@headers@
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#define ALIGNMENT (_Alignof(@type@))
+#else
+#include <stddef.h>
+typedef struct { char x; @type@ y; } cmake_type_alignof;
+#define ALIGNMENT (offsetof(cmake_type_alignof, y))
+#endif
+static char info_alignment[] =  {'I', 'N', 'F', 'O', ':',
+                            'a', 'l', 'i', 'g', 'n', 'm', 'e', 'n', 't', '[',
+  ('0' + ((ALIGNMENT / 10000)%10)),
+  ('0' + ((ALIGNMENT / 1000)%10)),
+  ('0' + ((ALIGNMENT / 100)%10)),
+  ('0' + ((ALIGNMENT / 10)%10)),
+  ('0' +  (ALIGNMENT % 10)),
+  ']',
+  '\0'};
+
+int main(int argc, char *argv[])
+{
+  int require = 0;
+  require += info_alignment[argc];
+  (void)argv;
+  return require;
+}
