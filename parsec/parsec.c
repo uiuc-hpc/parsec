@@ -63,6 +63,10 @@
 #include <cuda_runtime_api.h>
 #endif
 
+#ifndef PARSEC_HAVE_MPI
+#include "parsec/datatype/parsec_datatype.h"
+#endif
+
 /*
  * Global variables.
  */
@@ -408,6 +412,11 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
         }
         free(environ);
     }
+
+#if !defined(PARSEC_HAVE_MPI)
+    parsec_datatype_init();
+#endif
+
 #if defined(DISTRIBUTED) && defined(PARSEC_HAVE_MPI)
     int mpi_is_up;
     MPI_Initialized(&mpi_is_up);
@@ -999,6 +1008,10 @@ int parsec_fini( parsec_context_t** pcontext )
     }
 
     parsec_taskpool_release_resources();
+
+#if !defined(PARSEC_HAVE_MPI)
+    parsec_datatype_finalize();
+#endif
 
     parsec_mca_param_finalize();
     parsec_installdirs_close();
