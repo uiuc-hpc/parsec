@@ -21,7 +21,7 @@
 
 
 #include "parsec/datatype/parsec_datatype_memcpy.h"
-#include "parsec/util/crc.h"
+#include "parsec/datatype/util/crc.h"
 
 #if defined(CHECKSUM)
 

@@ -1,6 +1,7 @@
 set(DATATYPE_RELIABLE_SOURCES
   parsec_datatype_pack.c
   parsec_datatype_unpack.c
+  util/crc.c
 )
 
 if (NOT TARGET parsec-datatype-reliable)
