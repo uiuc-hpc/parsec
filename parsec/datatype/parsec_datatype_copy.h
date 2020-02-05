@@ -13,9 +13,7 @@
  * $HEADER$
  */
 
-#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
-#endif
 
 #if !defined(MEM_OP_NAME)
 #error

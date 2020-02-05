@@ -27,13 +27,14 @@
 #ifndef _PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
 #define _PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include <stdarg.h>
 #include <string.h>
 
 #if defined(VERBOSE)
-#include "parsec/util/output.h"
+#include "parsec/utils/output.h"
 
 extern int parsec_datatype_dfd;
 

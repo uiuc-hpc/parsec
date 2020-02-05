@@ -17,6 +17,7 @@
  * $HEADER$
  */
 #include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include "parsec/constants.h"
 #include "parsec/datatype/util/arch.h"

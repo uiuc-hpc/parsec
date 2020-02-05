@@ -11,14 +11,13 @@
  * $HEADER$
  */
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 #include "parsec/datatype/parsec_datatype.h"
 #include "parsec/datatype/parsec_convertor.h"
 #include "parsec/datatype/parsec_datatype_internal.h"
 
-#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
-#endif
 
 /* Get the number of elements from the data-type that can be
  * retrieved from a received buffer with the size iSize.

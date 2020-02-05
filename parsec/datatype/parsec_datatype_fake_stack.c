@@ -20,14 +20,13 @@
  * $HEADER$
  */
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include <stddef.h>
 #include <stdlib.h>
 
-#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
-#endif
 
 #include "parsec/datatype/parsec_datatype.h"
 #include "parsec/datatype/parsec_convertor.h"

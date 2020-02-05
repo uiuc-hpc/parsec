@@ -18,18 +18,13 @@
  */
 
 
-#include "parsec_config.h"
-#ifdef HAVE_STDIO_H
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 #include <stdio.h>
-#endif /* HAVE_STDIO_H */
 #include <stdlib.h>
-#ifdef HAVE_STRINGS_H
 #include <strings.h>
-#endif  /* HAVE_STRINGS_H */
 #include <string.h>
-#ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
 #include "parsec/datatype/util/crc.h"
 
 

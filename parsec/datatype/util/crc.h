@@ -22,7 +22,7 @@
 #ifndef _PARSEC_CRC_H_
 #define _PARSEC_CRC_H_
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
 
 #include <stddef.h>
 

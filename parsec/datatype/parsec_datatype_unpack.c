@@ -22,7 +22,8 @@
  * $HEADER$
  */
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -31,7 +32,7 @@
 #include "parsec/datatype/parsec_datatype_internal.h"
 
 #if PARSEC_ENABLE_DEBUG
-#include "parsec/util/output.h"
+#include "parsec/utils/output.h"
 
 #define DO_DEBUG(INST)  if( parsec_ddt_unpack_debug ) { INST }
 #else

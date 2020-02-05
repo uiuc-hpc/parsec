@@ -14,16 +14,16 @@
  * $HEADER$
  */
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include <stddef.h>
 
 #include "parsec/datatype/parsec_convertor_internal.h"
 #include "parsec/datatype/parsec_datatype_internal.h"
-#include "parsec_stdint.h"
 
 #if PARSEC_ENABLE_DEBUG
-#include "parsec/util/output.h"
+#include "parsec/utils/output.h"
 
 #define DO_DEBUG(INST)  if( parsec_ddt_raw_debug ) { INST }
 #else

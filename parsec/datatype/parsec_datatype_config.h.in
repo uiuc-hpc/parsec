@@ -1,0 +1,118 @@
+#ifndef PARSEC_DATATYPE_CONFIG_H
+#define PARSEC_DATATYPE_CONFIG_H
+
+#define PRIsize_t "zu"
+#define IOVBASE_TYPE void
+
+#include <limits.h>
+#include <stdbool.h>
+
+#cmakedefine PARSEC_MAX_DATATYPE_NAME @PARSEC_MAX_DATATYPE_NAME@
+
+#cmakedefine parsec_short_float_t         @parsec_short_float_t@
+#cmakedefine parsec_short_float_complex_t @parsec_short_float_complex_t@
+
+/* HAVE_TYPE_T */
+#cmakedefine HAVE_SHORT_FLOAT
+#cmakedefine HAVE_FLOAT
+#cmakedefine HAVE_DOUBLE
+#cmakedefine HAVE_LONG_DOUBLE
+
+#cmakedefine HAVE_SHORT_FLOAT__COMPLEX
+#cmakedefine HAVE_FLOAT__COMPLEX
+#cmakedefine HAVE_DOUBLE__COMPLEX
+#cmakedefine HAVE_LONG_DOUBLE__COMPLEX
+
+#cmakedefine HAVE__BOOL
+#cmakedefine HAVE_CHAR
+#cmakedefine HAVE_SHORT
+#cmakedefine HAVE_INT
+#cmakedefine HAVE_LONG
+#cmakedefine HAVE_LONG_LONG
+
+#cmakedefine HAVE_INT8_T
+#cmakedefine HAVE_INT16_T
+#cmakedefine HAVE_INT32_T
+#cmakedefine HAVE_INT64_T
+#cmakedefine HAVE_INT128_T
+
+#cmakedefine HAVE_UINT8_T
+#cmakedefine HAVE_UINT16_T
+#cmakedefine HAVE_UINT32_T
+#cmakedefine HAVE_UINT64_T
+#cmakedefine HAVE_UINT128_T
+
+#cmakedefine HAVE_PARSEC_SHORT_FLOAT_T
+#cmakedefine HAVE_PARSEC_SHORT_FLOAT_COMPLEX_T
+
+
+
+/* SIZEOF_TYPE_T */
+#cmakedefine SIZEOF_SHORT_FLOAT @SIZEOF_SHORT_FLOAT@
+#cmakedefine SIZEOF_FLOAT       @SIZEOF_FLOAT@
+#cmakedefine SIZEOF_DOUBLE      @SIZEOF_DOUBLE@
+#cmakedefine SIZEOF_LONG_DOUBLE @SIZEOF_LONG_DOUBLE@
+
+#cmakedefine SIZEOF_SHORT_FLOAT__COMPLEX @SIZEOF_SHORT_FLOAT__COMPLEX@
+#cmakedefine SIZEOF_FLOAT__COMPLEX       @SIZEOF_FLOAT__COMPLEX@
+#cmakedefine SIZEOF_DOUBLE__COMPLEX      @SIZEOF_DOUBLE__COMPLEX@
+#cmakedefine SIZEOF_LONG_DOUBLE__COMPLEX @SIZEOF_LONG_DOUBLE__COMPLEX@
+
+#cmakedefine SIZEOF__BOOL     @SIZEOF__BOOL@
+#cmakedefine SIZEOF_CHAR      @SIZEOF_CHAR@
+#cmakedefine SIZEOF_SHORT     @SIZEOF_SHORT@
+#cmakedefine SIZEOF_INT       @SIZEOF_INT@
+#cmakedefine SIZEOF_LONG      @SIZEOF_LONG@
+#cmakedefine SIZEOF_LONG_LONG @SIZEOF_LONG_LONG@
+
+#cmakedefine SIZEOF_INT8_T   @SIZEOF_INT8_T@
+#cmakedefine SIZEOF_INT16_T  @SIZEOF_INT16_T@
+#cmakedefine SIZEOF_INT32_T  @SIZEOF_INT32_T@
+#cmakedefine SIZEOF_INT64_T  @SIZEOF_INT64_T@
+#cmakedefine SIZEOF_INT128_T @SIZEOF_INT128_T@
+
+#cmakedefine SIZEOF_UINT8_T   @SIZEOF_UINT8_T@
+#cmakedefine SIZEOF_UINT16_T  @SIZEOF_UINT16_T@
+#cmakedefine SIZEOF_UINT32_T  @SIZEOF_UINT32_T@
+#cmakedefine SIZEOF_UINT64_T  @SIZEOF_UINT64_T@
+#cmakedefine SIZEOF_UINT128_T @SIZEOF_UINT128_T@
+
+#cmakedefine SIZEOF_PARSEC_SHORT_FLOAT_T         @SIZEOF_PARSEC_SHORT_FLOAT_T@
+#cmakedefine SIZEOF_PARSEC_SHORT_FLOAT_COMPLEX_T @SIZEOF_PARSEC_SHORT_FLOAT_COMPLEX_T@
+
+
+
+/* ALIGNOF_TYPE_T */
+#cmakedefine ALIGNOF_SHORT_FLOAT @ALIGNOF_SHORT_FLOAT@
+#cmakedefine ALIGNOF_FLOAT       @ALIGNOF_FLOAT@
+#cmakedefine ALIGNOF_DOUBLE      @ALIGNOF_DOUBLE@
+#cmakedefine ALIGNOF_LONG_DOUBLE @ALIGNOF_LONG_DOUBLE@
+
+#cmakedefine ALIGNOF_SHORT_FLOAT__COMPLEX @ALIGNOF_SHORT_FLOAT__COMPLEX@
+#cmakedefine ALIGNOF_FLOAT__COMPLEX       @ALIGNOF_FLOAT__COMPLEX@
+#cmakedefine ALIGNOF_DOUBLE__COMPLEX      @ALIGNOF_DOUBLE__COMPLEX@
+#cmakedefine ALIGNOF_LONG_DOUBLE__COMPLEX @ALIGNOF_LONG_DOUBLE__COMPLEX@
+
+#cmakedefine ALIGNOF__BOOL     @ALIGNOF__BOOL@
+#cmakedefine ALIGNOF_CHAR      @ALIGNOF_CHAR@
+#cmakedefine ALIGNOF_SHORT     @ALIGNOF_SHORT@
+#cmakedefine ALIGNOF_INT       @ALIGNOF_INT@
+#cmakedefine ALIGNOF_LONG      @ALIGNOF_LONG@
+#cmakedefine ALIGNOF_LONG_LONG @ALIGNOF_LONG_LONG@
+
+#cmakedefine ALIGNOF_INT8_T   @ALIGNOF_INT8_T@
+#cmakedefine ALIGNOF_INT16_T  @ALIGNOF_INT16_T@
+#cmakedefine ALIGNOF_INT32_T  @ALIGNOF_INT32_T@
+#cmakedefine ALIGNOF_INT64_T  @ALIGNOF_INT64_T@
+#cmakedefine ALIGNOF_INT128_T @ALIGNOF_INT128_T@
+
+#cmakedefine ALIGNOF_UINT8_T   @ALIGNOF_UINT8_T@
+#cmakedefine ALIGNOF_UINT16_T  @ALIGNOF_UINT16_T@
+#cmakedefine ALIGNOF_UINT32_T  @ALIGNOF_UINT32_T@
+#cmakedefine ALIGNOF_UINT64_T  @ALIGNOF_UINT64_T@
+#cmakedefine ALIGNOF_UINT128_T @ALIGNOF_UINT128_T@
+
+#cmakedefine ALIGNOF_PARSEC_SHORT_FLOAT_T         @ALIGNOF_PARSEC_SHORT_FLOAT_T@
+#cmakedefine ALIGNOF_PARSEC_SHORT_FLOAT_COMPLEX_T @ALIGNOF_PARSEC_SHORT_FLOAT_COMPLEX_T@
+
+#endif /* PARSEC_DATATYPE_CONFIG_H */

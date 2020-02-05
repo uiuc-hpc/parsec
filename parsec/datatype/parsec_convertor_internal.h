@@ -16,7 +16,8 @@
 #ifndef _PARSEC_CONVERTOR_INTERNAL_HAS_BEEN_INCLUDED
 #define _PARSEC_CONVERTOR_INTERNAL_HAS_BEEN_INCLUDED
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include "parsec/datatype/parsec_convertor.h"
 

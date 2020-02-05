@@ -14,7 +14,8 @@
 #ifndef _PARSEC_DATATYPE_PROTOTYPES_H_HAS_BEEN_INCLUDED
 #define _PARSEC_DATATYPE_PROTOTYPES_H_HAS_BEEN_INCLUDED
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 
 BEGIN_C_DECLS

@@ -27,13 +27,13 @@
  * $HEADER$
  */
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include <stddef.h>
 
-#include "parsec/runtime/parsec.h"
-#include "parsec/util/arch.h"
-#include "parsec/util/output.h"
+#include "parsec/datatype/util/arch.h"
+#include "parsec/utils/output.h"
 #include "parsec/datatype/parsec_datatype_internal.h"
 #include "parsec/datatype/parsec_datatype.h"
 #include "parsec/datatype/parsec_convertor_internal.h"

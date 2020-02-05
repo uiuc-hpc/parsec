@@ -17,7 +17,8 @@
 #ifndef _PARSEC_DATATYPE_PACK_H_HAS_BEEN_INCLUDED
 #define _PARSEC_DATATYPE_PACK_H_HAS_BEEN_INCLUDED
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 /**
  * This function deals only with partial elements. The COUNT points however to the whole leftover count,

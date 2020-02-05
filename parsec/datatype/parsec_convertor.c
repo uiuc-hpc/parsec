@@ -22,15 +22,15 @@
  * $HEADER$
  */
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
 
-#include "parsec/prefetch.h"
-#include "parsec/util/arch.h"
-#include "parsec/util/output.h"
+#include "parsec/datatype/util/arch.h"
+#include "parsec/utils/output.h"
 
 #include "parsec/datatype/parsec_datatype_internal.h"
 #include "parsec/datatype/parsec_datatype.h"

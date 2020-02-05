@@ -14,7 +14,8 @@
  * $HEADER$
  */
 
-#include "parsec_config.h"
+#include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #ifdef HAVE_IEEE754_H
 #include <ieee754.h>
@@ -23,9 +24,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "parsec/util/arch.h"
+#include "parsec/datatype/util/arch.h"
 
-#include "parsec/types.h"
 #include "parsec/datatype/parsec_datatype.h"
 #include "parsec/datatype/parsec_convertor.h"
 #include "parsec/datatype/parsec_datatype_internal.h"
