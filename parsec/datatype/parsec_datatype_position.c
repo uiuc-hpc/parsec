@@ -237,7 +237,7 @@ int parsec_convertor_generic_simple_position( parsec_convertor_t* pConvertor,
                 } else {
                     assert( PARSEC_DATATYPE_LOOP == description[pStack->index].loop.common.type );
                     pStack->disp += description[pStack->index].loop.extent;
-                    pos_desc = pStack->index;  /* go back to the loop start itself to give a chance 
+                    pos_desc = pStack->index;  /* go back to the loop start itself to give a chance
                                                 * to move forward by entire loops */
                 }
             }

@@ -370,7 +370,7 @@ parsec_generic_simple_unpack_function( parsec_convertor_t* pConvertor,
             parsec_unpack_partial_datatype( pConvertor, pElem,
                                           iov_ptr, 0, iov_len_local,
                                           &temp );
-                
+
             pConvertor->partial_length = iov_len_local;
             iov_len_local = 0;
         }

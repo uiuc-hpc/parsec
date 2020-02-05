@@ -455,7 +455,7 @@ parsec_datatype_compute_remote_size( const parsec_datatype_s* pData,
 size_t parsec_convertor_compute_remote_size( parsec_convertor_t* pConvertor )
 {
     parsec_datatype_s* datatype = (parsec_datatype_s*)pConvertor->pDesc;
-    
+
     pConvertor->remote_size = pConvertor->local_size;
     if( PARSEC_UNLIKELY(datatype->bdt_used & pConvertor->master->hetero_mask) ) {
         pConvertor->flags &= (~CONVERTOR_HOMOGENEOUS);
