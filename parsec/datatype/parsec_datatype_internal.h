@@ -40,49 +40,10 @@ extern int parsec_datatype_dfd;
 
 #  define DDT_DUMP_STACK( PSTACK, STACK_POS, PDESC, NAME ) \
      parsec_datatype_dump_stack( (PSTACK), (STACK_POS), (PDESC), (NAME) )
-#  if defined(ACCEPT_C99)
-#    define DUMP( ARGS... )          parsec_output(parsec_datatype_dfd, __VA_ARGS__)
-#  else
-#    if defined(__GNUC__) && !defined(__STDC__)
-#      define DUMP(ARGS...)          parsec_output( parsec_datatype_dfd, ARGS)
-#  else
-static inline void DUMP( char* fmt, ... )
-{
-   va_list list;
-
-   va_start( list, fmt );
-   parsec_output_vverbose( 0, parsec_datatype_dfd, fmt, list );
-   va_end( list );
-}
-#    endif  /* __GNUC__ && !__STDC__ */
-#  endif  /* ACCEPT_C99 */
+#  define DUMP( ... )          parsec_output(parsec_datatype_dfd, __VA_ARGS__)
 #else
 #  define DDT_DUMP_STACK( PSTACK, STACK_POS, PDESC, NAME )
-#  if defined(ACCEPT_C99)
-#    define DUMP(ARGS...)
-#  else
-#    if defined(__GNUC__) && !defined(__STDC__)
-#      define DUMP(ARGS...)
-#    else
-       /* If we do not compile with PGI, mark the parameter as unused */
-#      if !defined(__PGI)
-#        define __parsec_attribute_unused_tmp__  __parsec_attribute_unused__
-#      else
-#        define __parsec_attribute_unused_tmp__
-#      endif
-static inline void DUMP( char* fmt __parsec_attribute_unused_tmp__, ... )
-{
-#if defined(__PGI)
-           /* Some compilers complain if we have "..." arguments and no
-              corresponding va_start() */
-           va_list arglist;
-           va_start(arglist, fmt);
-           va_end(arglist);
-#endif
-}
-#         undef __parsec_attribute_unused_tmp__
-#    endif  /* __GNUC__ && !__STDC__ */
-#  endif  /* ACCEPT_C99 */
+#  define DUMP( ... )
 #endif  /* VERBOSE */
 
 
