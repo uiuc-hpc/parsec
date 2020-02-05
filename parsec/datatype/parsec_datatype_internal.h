@@ -239,7 +239,7 @@ union dt_elem_desc {
  * This array holds the descriptions desc.desc[2] of the predefined basic datatypes.
  */
 PARSEC_DECLSPEC extern union dt_elem_desc parsec_datatype_predefined_elem_desc[2 * PARSEC_DATATYPE_MAX_PREDEFINED];
-struct parsec_datatype_t;
+struct parsec_datatype_s;
 
 /* Other fields starting after bdt_used (index of PARSEC_DATATYPE_LOOP should be ONE) */
 /*
@@ -269,7 +269,7 @@ struct parsec_datatype_t;
 
 #define PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED( NAME, FLAGS )                   \
     {                                                                                \
-        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                              \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_s),                              \
         .flags = PARSEC_DATATYPE_FLAG_UNAVAILABLE | PARSEC_DATATYPE_FLAG_PREDEFINED | (FLAGS), \
         .id = PARSEC_DATATYPE_ ## NAME,                                                \
         .bdt_used = 0,                                                               \
@@ -288,7 +288,7 @@ struct parsec_datatype_t;
 
 #define PARSEC_DATATYPE_INITIALIZER_EMPTY( FLAGS )                        \
     {                                                                   \
-        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                 \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_s),                 \
         .flags = PARSEC_DATATYPE_FLAG_PREDEFINED | (FLAGS),               \
         .id = 0,                                                        \
         .bdt_used = 0,                                                  \
@@ -304,7 +304,7 @@ struct parsec_datatype_t;
 
 #define PARSEC_DATATYPE_INIT_BASIC_TYPE( TYPE, NAME, FLAGS )              \
     {                                                                   \
-        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                 \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_s),                 \
         .flags = PARSEC_DATATYPE_FLAG_PREDEFINED | (FLAGS),               \
         .id = TYPE,                                                     \
         .bdt_used = (((uint32_t)1)<<(TYPE)),                            \
@@ -320,7 +320,7 @@ struct parsec_datatype_t;
 
 #define PARSEC_DATATYPE_INIT_BASIC_DATATYPE( TYPE, ALIGN, NAME, FLAGS )                \
     {                                                                                \
-        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_t),                              \
+        .super = PARSEC_OBJ_STATIC_INIT(parsec_datatype_s),                              \
         .flags = PARSEC_DATATYPE_FLAG_BASIC | (FLAGS),                                 \
         .id = PARSEC_DATATYPE_ ## NAME,                                                \
         .bdt_used = (((uint32_t)1)<<(PARSEC_DATATYPE_ ## NAME)),                       \
@@ -510,7 +510,7 @@ static inline int GET_FIRST_NON_LOOP( const union dt_elem_desc* _pElem )
             (COUNTER) = (ELEMENT)->elem.count * (ELEMENT)->elem.blocklen;   \
     } while (0)
 
-PARSEC_DECLSPEC int parsec_datatype_contain_basic_datatypes( const struct parsec_datatype_t* pData, char* ptr, size_t length );
+PARSEC_DECLSPEC int parsec_datatype_contain_basic_datatypes( const struct parsec_datatype_s* pData, char* ptr, size_t length );
 PARSEC_DECLSPEC int parsec_datatype_dump_data_flags( unsigned short usflags, char* ptr, size_t length );
 PARSEC_DECLSPEC int parsec_datatype_dump_data_desc( union dt_elem_desc* pDesc, int nbElems, char* ptr, size_t length );
 

@@ -43,7 +43,7 @@ int parsec_convertor_create_stack_with_pos_general( parsec_convertor_t* pConvert
     dt_stack_t* pStack;   /* pointer to the position on the stack */
     int pos_desc;         /* actual position in the description of the derived datatype */
     size_t lastLength = 0;
-    const parsec_datatype_t* pData = pConvertor->pDesc;
+    const parsec_datatype_s* pData = pConvertor->pDesc;
     size_t loop_length, *remoteLength, remote_size;
     size_t resting_place = starting_point;
     dt_elem_desc_t* pElems;
@@ -160,7 +160,7 @@ int parsec_convertor_create_stack_with_pos_general( parsec_convertor_t* pConvert
         }
         while( pElems->elem.common.flags & PARSEC_DATATYPE_FLAG_DATA ) {
             /* now here we have a basic datatype */
-            const parsec_datatype_t* basic_type = BASIC_DDT_FROM_ELEM( (*pElems) );
+            const parsec_datatype_s* basic_type = BASIC_DDT_FROM_ELEM( (*pElems) );
             lastLength = (size_t)pElems->elem.count * basic_type->size;
             if( resting_place < lastLength ) {
                 int32_t cnt = (int32_t)(resting_place / basic_type->size);

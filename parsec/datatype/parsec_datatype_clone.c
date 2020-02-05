@@ -32,7 +32,7 @@
  *
  * Clone all the values from oldType into newType without allocating a new datatype.
  */
-int32_t parsec_datatype_clone( const parsec_datatype_t * src_type, parsec_datatype_t * dest_type )
+int32_t parsec_datatype_clone( const parsec_datatype_s * src_type, parsec_datatype_s * dest_type )
 {
     int32_t desc_length = src_type->desc.used + 1;  /* +1 because of the fake PARSEC_DATATYPE_END_LOOP entry */
     dt_elem_desc_t* temp = dest_type->desc.desc;    /* temporary copy of the desc pointer */
@@ -40,7 +40,7 @@ int32_t parsec_datatype_clone( const parsec_datatype_t * src_type, parsec_dataty
     /* copy _excluding_ the super object, we want to keep the cls_destruct_array */
     memcpy( (char*)dest_type + sizeof(parsec_object_t),
             (char*)src_type + sizeof(parsec_object_t),
-            sizeof(parsec_datatype_t)-sizeof(parsec_object_t) );
+            sizeof(parsec_datatype_s)-sizeof(parsec_object_t) );
 
     dest_type->flags &= (~PARSEC_DATATYPE_FLAG_PREDEFINED);
     dest_type->ptypes = NULL;

@@ -36,7 +36,7 @@
  * Data dumping functions
  ********************************************************/
 
-int parsec_datatype_contain_basic_datatypes( const parsec_datatype_t* pData, char* ptr, size_t length )
+int parsec_datatype_contain_basic_datatypes( const parsec_datatype_s* pData, char* ptr, size_t length )
 {
     int i;
     int32_t index = 0;
@@ -109,7 +109,7 @@ int parsec_datatype_dump_data_desc( dt_elem_desc_t* pDesc, int nbElems, char* pt
 }
 
 
-void parsec_datatype_dump( const parsec_datatype_t* pData )
+void parsec_datatype_dump( const parsec_datatype_s* pData )
 {
     size_t length;
     int index = 0;

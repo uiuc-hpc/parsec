@@ -71,11 +71,11 @@ static size_t parsec_datatype_memop_block_size = 128 * 1024;
 #define MEM_OP       MEMMOVE
 #include "parsec_datatype_copy.h"
 
-int32_t parsec_datatype_copy_content_same_ddt( const parsec_datatype_t* datatype, int32_t count,
+int32_t parsec_datatype_copy_content_same_ddt( const parsec_datatype_s* datatype, int32_t count,
                                              char* destination_base, char* source_base )
 {
     ptrdiff_t extent;
-    int32_t (*fct)( const parsec_datatype_t*, int32_t, char*, char*);
+    int32_t (*fct)( const parsec_datatype_s*, int32_t, char*, char*);
 
     DO_DEBUG( parsec_output( 0, "parsec_datatype_copy_content_same_ddt( %p, %d, dst %p, src %p )\n",
                            (void*)datatype, count, (void*)destination_base, (void*)source_base ); );

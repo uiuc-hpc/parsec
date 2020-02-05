@@ -28,7 +28,7 @@
  * the contiguous pieces are always advancing in the same direction, i.e.
  * there is no potential for overlap.
  */
-int32_t parsec_datatype_is_monotonic(parsec_datatype_t* type )
+int32_t parsec_datatype_is_monotonic(parsec_datatype_s* type )
 {
     struct iovec iov[PARSEC_DATATYPE_MAX_MONOTONIC_IOVEC];
     ptrdiff_t upper_limit = (ptrdiff_t)type->true_lb;  /* as conversion base will be NULL the first address is true_lb */

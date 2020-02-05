@@ -109,7 +109,7 @@ parsec_pack_homogeneous_contig_with_gaps_function( parsec_convertor_t* pConv,
                                                  size_t* max_data )
 {
     size_t remaining, length, initial_bytes_converted = pConv->bConverted;
-    const parsec_datatype_t* pData = pConv->pDesc;
+    const parsec_datatype_s* pData = pConv->pDesc;
     dt_stack_t* stack = pConv->pStack;
     ptrdiff_t extent = pData->ub - pData->lb;
     unsigned char *user_memory, *packed_buffer;
@@ -242,7 +242,7 @@ parsec_generic_simple_pack_function( parsec_convertor_t* pConvertor,
     size_t total_packed = 0;  /* total amount packed this time */
     dt_elem_desc_t* description;
     dt_elem_desc_t* pElem;
-    const parsec_datatype_t *pData = pConvertor->pDesc;
+    const parsec_datatype_s *pData = pConvertor->pDesc;
     unsigned char *conv_ptr, *iov_ptr;
     size_t iov_len_local;
     uint32_t iov_count;
@@ -432,7 +432,7 @@ parsec_pack_general_function( parsec_convertor_t* pConvertor,
     size_t total_packed = 0;  /* total amount packed this time */
     dt_elem_desc_t* description;
     dt_elem_desc_t* pElem;
-    const parsec_datatype_t *pData = pConvertor->pDesc;
+    const parsec_datatype_s *pData = pConvertor->pDesc;
     unsigned char *conv_ptr, *iov_ptr;
     size_t iov_len_local;
     uint32_t iov_count;

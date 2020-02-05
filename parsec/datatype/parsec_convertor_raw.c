@@ -63,7 +63,7 @@ parsec_convertor_raw( parsec_convertor_t* pConvertor,
                     struct iovec* iov, uint32_t* iov_count,
                     size_t* length )
 {
-    const parsec_datatype_t *pData = pConvertor->pDesc;
+    const parsec_datatype_s *pData = pConvertor->pDesc;
     dt_stack_t* pStack;       /* pointer to the position on the stack */
     uint32_t pos_desc;        /* actual position in the description of the derived datatype */
     size_t count_desc;        /* the number of items already done in the actual pos_desc */

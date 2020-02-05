@@ -40,7 +40,7 @@
 #define _copy_content_same_ddt  DT_CONCAT(MEM_OP_NAME,_copy_content_same_ddt)
 
 static inline void _predefined_data( const dt_elem_desc_t* ELEM,
-                                     const parsec_datatype_t* DATATYPE,
+                                     const parsec_datatype_s* DATATYPE,
                                      unsigned char* SOURCE_BASE,
                                      size_t TOTAL_COUNT,
                                      size_t COUNT,
@@ -78,7 +78,7 @@ static inline void _predefined_data( const dt_elem_desc_t* ELEM,
 }
 
 static inline void _contiguous_loop( const dt_elem_desc_t* ELEM,
-                                     const parsec_datatype_t* DATATYPE,
+                                     const parsec_datatype_s* DATATYPE,
                                      unsigned char* SOURCE_BASE,
                                      size_t TOTAL_COUNT,
                                      size_t COUNT,
@@ -112,7 +112,7 @@ static inline void _contiguous_loop( const dt_elem_desc_t* ELEM,
     *(SPACE)      -= _copy_loops;
 }
 
-static inline int32_t _copy_content_same_ddt( const parsec_datatype_t* datatype, int32_t count,
+static inline int32_t _copy_content_same_ddt( const parsec_datatype_s* datatype, int32_t count,
                                               char* destination_base, char* source_base )
 {
     dt_stack_t* pStack;       /* pointer to the position on the stack */

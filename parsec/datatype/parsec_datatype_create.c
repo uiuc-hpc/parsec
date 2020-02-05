@@ -30,7 +30,7 @@
 #include "limits.h"
 #include "parsec/prefetch.h"
 
-static void parsec_datatype_construct( parsec_datatype_t* pData )
+static void parsec_datatype_construct( parsec_datatype_s* pData )
 {
     pData->size               = 0;
     pData->flags              = PARSEC_DATATYPE_FLAG_CONTIGUOUS;
@@ -57,7 +57,7 @@ static void parsec_datatype_construct( parsec_datatype_t* pData )
     pData->loops              = 0;
 }
 
-static void parsec_datatype_destruct( parsec_datatype_t* datatype )
+static void parsec_datatype_destruct( parsec_datatype_s* datatype )
 {
     /**
      * As the default description and the optimized description might point to the
@@ -88,11 +88,11 @@ static void parsec_datatype_destruct( parsec_datatype_t* datatype )
     datatype->name[0] = '\0';
 }
 
-OBJ_CLASS_INSTANCE(parsec_datatype_t, parsec_object_t, parsec_datatype_construct, parsec_datatype_destruct);
+OBJ_CLASS_INSTANCE(parsec_datatype_s, parsec_object_t, parsec_datatype_construct, parsec_datatype_destruct);
 
-parsec_datatype_t* parsec_datatype_create( int32_t expectedSize )
+parsec_datatype_s* parsec_datatype_create( int32_t expectedSize )
 {
-    parsec_datatype_t* datatype = (parsec_datatype_t*)OBJ_NEW(parsec_datatype_t);
+    parsec_datatype_s* datatype = (parsec_datatype_s*)OBJ_NEW(parsec_datatype_s);
 
     if( expectedSize == -1 ) expectedSize = DT_INCREASE_STACK;
     datatype->desc.length = expectedSize + 1;  /* one for the fake elem at the end */
@@ -103,7 +103,7 @@ parsec_datatype_t* parsec_datatype_create( int32_t expectedSize )
     return datatype;
 }
 
-int32_t parsec_datatype_create_desc( parsec_datatype_t * datatype, int32_t expectedSize )
+int32_t parsec_datatype_create_desc( parsec_datatype_s * datatype, int32_t expectedSize )
 {
     if( expectedSize == -1 )
         expectedSize = DT_INCREASE_STACK;

@@ -31,7 +31,7 @@
 #include "parsec/datatype/parsec_datatype_internal.h"
 
 static int32_t
-parsec_datatype_optimize_short( parsec_datatype_t* pData,
+parsec_datatype_optimize_short( parsec_datatype_s* pData,
                               size_t count,
                               dt_type_desc_t* pTypeDesc )
 {
@@ -258,7 +258,7 @@ parsec_datatype_optimize_short( parsec_datatype_t* pData,
     return PARSEC_SUCCESS;
 }
 
-int32_t parsec_datatype_commit( parsec_datatype_t * pData )
+int32_t parsec_datatype_commit( parsec_datatype_s * pData )
 {
     ddt_endloop_desc_t* pLast = &(pData->desc.desc[pData->desc.used].end_loop);
     ptrdiff_t first_elem_disp = 0;

@@ -24,10 +24,10 @@
 #include "parsec/datatype/parsec_datatype.h"
 #include "parsec/datatype/parsec_datatype_internal.h"
 
-int32_t parsec_datatype_create_contiguous( int count, const parsec_datatype_t* oldType,
-                                         parsec_datatype_t** newType )
+int32_t parsec_datatype_create_contiguous( int count, const parsec_datatype_s* oldType,
+                                         parsec_datatype_s** newType )
 {
-    parsec_datatype_t* pdt;
+    parsec_datatype_s* pdt;
 
     if( 0 == count ) {
         pdt = parsec_datatype_create( 0 );

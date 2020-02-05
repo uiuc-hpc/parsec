@@ -28,7 +28,7 @@
  *   positive = number of basic elements inside
  *   negative = some error occurs
  */
-ssize_t parsec_datatype_get_element_count( const parsec_datatype_t* datatype, size_t iSize )
+ssize_t parsec_datatype_get_element_count( const parsec_datatype_s* datatype, size_t iSize )
 {
     dt_stack_t* pStack;   /* pointer to the position on the stack */
     uint32_t pos_desc;    /* actual position in the description of the derived datatype */
@@ -68,7 +68,7 @@ ssize_t parsec_datatype_get_element_count( const parsec_datatype_t* datatype, si
         }
         while( pElems[pos_desc].elem.common.flags & PARSEC_DATATYPE_FLAG_DATA ) {
             /* now here we have a basic datatype */
-            const parsec_datatype_t* basic_type = BASIC_DDT_FROM_ELEM(pElems[pos_desc]);
+            const parsec_datatype_s* basic_type = BASIC_DDT_FROM_ELEM(pElems[pos_desc]);
             local_size = ((size_t)pElems[pos_desc].elem.count * pElems[pos_desc].elem.blocklen) * basic_type->size;
             if( local_size >= iSize ) {
                 local_size = iSize / basic_type->size;
@@ -83,7 +83,7 @@ ssize_t parsec_datatype_get_element_count( const parsec_datatype_t* datatype, si
     }
 }
 
-int32_t parsec_datatype_set_element_count( const parsec_datatype_t* datatype, size_t count, size_t* length )
+int32_t parsec_datatype_set_element_count( const parsec_datatype_s* datatype, size_t count, size_t* length )
 {
     dt_stack_t* pStack;   /* pointer to the position on the stack */
     size_t pos_desc;    /* actual position in the description of the derived datatype */
@@ -130,7 +130,7 @@ int32_t parsec_datatype_set_element_count( const parsec_datatype_t* datatype, si
         }
         while( pElems[pos_desc].elem.common.flags & PARSEC_DATATYPE_FLAG_DATA ) {
             /* now here we have a basic datatype */
-            const parsec_datatype_t* basic_type = BASIC_DDT_FROM_ELEM(pElems[pos_desc]);
+            const parsec_datatype_s* basic_type = BASIC_DDT_FROM_ELEM(pElems[pos_desc]);
             local_length = ((size_t)pElems[pos_desc].elem.count * pElems[pos_desc].elem.blocklen);
             if( local_length >= count ) {
                 *length += count * basic_type->size;
@@ -150,7 +150,7 @@ int32_t parsec_datatype_set_element_count( const parsec_datatype_t* datatype, si
  * when we use get_element_count). Thus, we will pay the cost once per
  * datatype, but we will only update this array if/when needed.
  */
-int parsec_datatype_compute_ptypes( parsec_datatype_t* datatype )
+int parsec_datatype_compute_ptypes( parsec_datatype_s* datatype )
 {
     dt_stack_t* pStack;   /* pointer to the position on the stack */
     uint32_t pos_desc;    /* actual position in the description of the derived datatype */

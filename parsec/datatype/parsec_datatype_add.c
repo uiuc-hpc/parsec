@@ -102,7 +102,7 @@ static inline int  IMAX( int a, int b ) { return ( a < b ? b : a ); }
  * be sure that the pdtBase datatype is correctly initialized with all fields
  * set to ZERO if it's a empty datatype.
  */
-int32_t parsec_datatype_add( parsec_datatype_t* pdtBase, const parsec_datatype_t* pdtAdd,
+int32_t parsec_datatype_add( parsec_datatype_s* pdtBase, const parsec_datatype_s* pdtAdd,
                            size_t count, ptrdiff_t disp, ptrdiff_t extent )
 {
     uint32_t newLength, place_needed = 0, i;

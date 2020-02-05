@@ -23,9 +23,9 @@
 #include "parsec/datatype/parsec_datatype.h"
 #include "parsec/datatype/parsec_datatype_internal.h"
 
-int32_t parsec_datatype_destroy( parsec_datatype_t** dt )
+int32_t parsec_datatype_destroy( parsec_datatype_s** dt )
 {
-    parsec_datatype_t* pData = *dt;
+    parsec_datatype_s* pData = *dt;
 
     if( (pData->flags & PARSEC_DATATYPE_FLAG_PREDEFINED) &&
         (pData->super.obj_reference_count <= 1) )

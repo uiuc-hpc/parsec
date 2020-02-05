@@ -18,7 +18,7 @@
 #include "parsec/datatype/parsec_datatype.h"
 #include "parsec/datatype/parsec_datatype_internal.h"
 
-int32_t parsec_datatype_resize( parsec_datatype_t* type, ptrdiff_t lb, ptrdiff_t extent )
+int32_t parsec_datatype_resize( parsec_datatype_s* type, ptrdiff_t lb, ptrdiff_t extent )
 {
     type->lb = lb;
     type->ub = lb + extent;

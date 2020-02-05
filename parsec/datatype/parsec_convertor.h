@@ -87,7 +87,7 @@ struct parsec_convertor_t {
     uint32_t                      flags;          /**< the properties of this convertor */
     size_t                        local_size;     /**< overall length data on local machine, compared to bConverted */
     size_t                        remote_size;    /**< overall length data on remote machine, compared to bConverted */
-    const parsec_datatype_t*        pDesc;          /**< the datatype description associated with the convertor */
+    const parsec_datatype_s*        pDesc;          /**< the datatype description associated with the convertor */
     const dt_type_desc_t*         use_desc;       /**< the version used by the convertor (normal or optimized) */
     parsec_datatype_count_t         count;          /**< the total number of full datatype elements */
 
@@ -242,12 +242,12 @@ static inline void parsec_convertor_get_offset_pointer( const parsec_convertor_t
  *
  */
 PARSEC_DECLSPEC int32_t parsec_convertor_prepare_for_send( parsec_convertor_t* convertor,
-                                                       const struct parsec_datatype_t* datatype,
+                                                       const struct parsec_datatype_s* datatype,
                                                        size_t count,
                                                        const void* pUserBuf);
 
 static inline int32_t parsec_convertor_copy_and_prepare_for_send( const parsec_convertor_t* pSrcConv,
-                                                                const struct parsec_datatype_t* datatype,
+                                                                const struct parsec_datatype_s* datatype,
                                                                 size_t count,
                                                                 const void* pUserBuf,
                                                                 int32_t flags,
@@ -264,11 +264,11 @@ static inline int32_t parsec_convertor_copy_and_prepare_for_send( const parsec_c
  *
  */
 PARSEC_DECLSPEC int32_t parsec_convertor_prepare_for_recv( parsec_convertor_t* convertor,
-                                                       const struct parsec_datatype_t* datatype,
+                                                       const struct parsec_datatype_s* datatype,
                                                        size_t count,
                                                        const void* pUserBuf );
 static inline int32_t parsec_convertor_copy_and_prepare_for_recv( const parsec_convertor_t* pSrcConv,
-                                                                const struct parsec_datatype_t* datatype,
+                                                                const struct parsec_datatype_s* datatype,
                                                                 size_t count,
                                                                 const void* pUserBuf,
                                                                 int32_t flags,

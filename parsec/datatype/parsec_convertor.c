@@ -305,7 +305,7 @@ parsec_convertor_create_stack_with_pos_contig( parsec_convertor_t* pConvertor,
                                              size_t starting_point, const size_t* sizes )
 {
     dt_stack_t* pStack;   /* pointer to the position on the stack */
-    const parsec_datatype_t* pData = pConvertor->pDesc;
+    const parsec_datatype_s* pData = pConvertor->pDesc;
     dt_elem_desc_t* pElems;
     size_t count;
     ptrdiff_t extent;
@@ -423,7 +423,7 @@ int32_t parsec_convertor_set_position_nocheck( parsec_convertor_t* convertor,
 }
 
 static size_t
-parsec_datatype_compute_remote_size( const parsec_datatype_t* pData,
+parsec_datatype_compute_remote_size( const parsec_datatype_s* pData,
                                    const size_t* sizes )
 {
     uint32_t typeMask = pData->bdt_used;
@@ -435,7 +435,7 @@ parsec_datatype_compute_remote_size( const parsec_datatype_t* pData,
 
     if( PARSEC_UNLIKELY(NULL == pData->ptypes) ) {
         /* Allocate and fill the array of types used in the datatype description */
-        parsec_datatype_compute_ptypes( (parsec_datatype_t*)pData );
+        parsec_datatype_compute_ptypes( (parsec_datatype_s*)pData );
     }
 
     for( int i = PARSEC_DATATYPE_FIRST_TYPE; typeMask && (i < PARSEC_DATATYPE_MAX_PREDEFINED); i++ ) {
@@ -454,7 +454,7 @@ parsec_datatype_compute_remote_size( const parsec_datatype_t* pData,
  */
 size_t parsec_convertor_compute_remote_size( parsec_convertor_t* pConvertor )
 {
-    parsec_datatype_t* datatype = (parsec_datatype_t*)pConvertor->pDesc;
+    parsec_datatype_s* datatype = (parsec_datatype_s*)pConvertor->pDesc;
     
     pConvertor->remote_size = pConvertor->local_size;
     if( PARSEC_UNLIKELY(datatype->bdt_used & pConvertor->master->hetero_mask) ) {
@@ -485,7 +485,7 @@ size_t parsec_convertor_compute_remote_size( parsec_convertor_t* pConvertor )
         convertor->local_size = count * datatype->size;                 \
         convertor->pBaseBuf   = (unsigned char*)pUserBuf;               \
         convertor->count      = count;                                  \
-        convertor->pDesc      = (parsec_datatype_t*)datatype;             \
+        convertor->pDesc      = (parsec_datatype_s*)datatype;             \
         convertor->bConverted = 0;                                      \
         convertor->use_desc   = &(datatype->opt_desc);                  \
         /* If the data is empty we just mark the convertor as           \
@@ -539,7 +539,7 @@ size_t parsec_convertor_compute_remote_size( parsec_convertor_t* pConvertor )
 
 
 int32_t parsec_convertor_prepare_for_recv( parsec_convertor_t* convertor,
-                                         const struct parsec_datatype_t* datatype,
+                                         const struct parsec_datatype_s* datatype,
                                          size_t count,
                                          const void* pUserBuf )
 {
@@ -577,7 +577,7 @@ int32_t parsec_convertor_prepare_for_recv( parsec_convertor_t* convertor,
 
 
 int32_t parsec_convertor_prepare_for_send( parsec_convertor_t* convertor,
-                                         const struct parsec_datatype_t* datatype,
+                                         const struct parsec_datatype_s* datatype,
                                          size_t count,
                                          const void* pUserBuf )
 {

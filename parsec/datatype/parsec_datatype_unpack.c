@@ -68,7 +68,7 @@ parsec_unpack_homogeneous_contig_function( parsec_convertor_t* pConv,
                                          uint32_t* out_size,
                                          size_t* max_data )
 {
-    const parsec_datatype_t *pData = pConv->pDesc;
+    const parsec_datatype_s *pData = pConv->pDesc;
     unsigned char *user_memory, *packed_buffer;
     uint32_t iov_idx, i;
     size_t remaining, initial_bytes_converted = pConv->bConverted;
@@ -230,7 +230,7 @@ parsec_generic_simple_unpack_function( parsec_convertor_t* pConvertor,
     size_t total_unpacked = 0;         /* total size unpacked this time */
     dt_elem_desc_t* description;
     dt_elem_desc_t* pElem;
-    const parsec_datatype_t *pData = pConvertor->pDesc;
+    const parsec_datatype_s *pData = pConvertor->pDesc;
     unsigned char *conv_ptr, *iov_ptr;
     size_t iov_len_local;
     uint32_t iov_count;
@@ -416,7 +416,7 @@ parsec_unpack_general_function( parsec_convertor_t* pConvertor,
     size_t total_unpacked = 0;         /* total size unpacked this time */
     dt_elem_desc_t* description;
     dt_elem_desc_t* pElem;
-    const parsec_datatype_t *pData = pConvertor->pDesc;
+    const parsec_datatype_s *pData = pConvertor->pDesc;
     unsigned char *conv_ptr, *iov_ptr;
     uint32_t iov_count;
     size_t iov_len_local;
