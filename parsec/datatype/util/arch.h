@@ -17,8 +17,8 @@
  *
  * $HEADER$
  */
-#ifndef PARSEC_ARCH_H_HAS_BEEN_INCLUDED
-#define PARSEC_ARCH_H_HAS_BEEN_INCLUDED
+#ifndef _PARSEC_ARCH_H_HAS_BEEN_INCLUDED
+#define _PARSEC_ARCH_H_HAS_BEEN_INCLUDED
 
 #include "parsec/parsec_config.h"
 
@@ -244,5 +244,5 @@ PARSEC_DECLSPEC int parsec_arch_set_fortran_logical_size(uint32_t size);
 
 END_C_DECLS
 
-#endif  /* PARSEC_ARCH_H_HAS_BEEN_INCLUDED */
+#endif  /* _PARSEC_ARCH_H_HAS_BEEN_INCLUDED */
 

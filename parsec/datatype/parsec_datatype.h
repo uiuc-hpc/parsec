@@ -34,8 +34,8 @@
  * information.
  */
 
-#ifndef PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED
-#define PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED
+#ifndef _PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED
+#define _PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED
 
 #include "parsec_config.h"
 
@@ -402,4 +402,4 @@ parsec_datatype_safeguard_pointer_debug_breakpoint( const void* actual_ptr, int 
 #endif  /* PARSEC_ENABLE_DEBUG */
 
 END_C_DECLS
-#endif  /* PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED */
+#endif  /* _PARSEC_DATATYPE_H_HAS_BEEN_INCLUDED */

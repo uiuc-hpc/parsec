@@ -22,8 +22,8 @@
  * $HEADER$
  */
 
-#ifndef PARSEC_CONVERTOR_H_HAS_BEEN_INCLUDED
-#define PARSEC_CONVERTOR_H_HAS_BEEN_INCLUDED
+#ifndef _PARSEC_CONVERTOR_H_HAS_BEEN_INCLUDED
+#define _PARSEC_CONVERTOR_H_HAS_BEEN_INCLUDED
 
 #include "parsec_config.h"
 
@@ -387,4 +387,4 @@ parsec_convertor_generic_simple_position( parsec_convertor_t* pConvertor,
 
 END_C_DECLS
 
-#endif  /* PARSEC_CONVERTOR_H_HAS_BEEN_INCLUDED */
+#endif  /* _PARSEC_CONVERTOR_H_HAS_BEEN_INCLUDED */

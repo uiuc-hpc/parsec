@@ -24,8 +24,8 @@
  * $HEADER$
  */
 
-#ifndef PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
-#define PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
+#ifndef _PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
+#define _PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED
 
 #include "parsec_config.h"
 
@@ -521,4 +521,4 @@ extern bool parsec_ddt_pack_debug;
 extern bool parsec_ddt_raw_debug;
 
 END_C_DECLS
-#endif  /* PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED */
+#endif  /* _PARSEC_DATATYPE_INTERNAL_H_HAS_BEEN_INCLUDED */
