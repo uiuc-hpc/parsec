@@ -185,6 +185,7 @@ PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_wchar;
  */
 int parsec_datatype_register_params(void);
 PARSEC_DECLSPEC int32_t parsec_datatype_init( void );
+PARSEC_DECLSPEC void parsec_datatype_finalize( void );
 PARSEC_DECLSPEC parsec_datatype_s* parsec_datatype_create( int32_t expectedSize );
 PARSEC_DECLSPEC int32_t parsec_datatype_create_desc( parsec_datatype_s * datatype, int32_t expectedSize );
 PARSEC_DECLSPEC int32_t parsec_datatype_commit( parsec_datatype_s * pData );

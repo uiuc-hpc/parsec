@@ -205,7 +205,7 @@ int parsec_datatype_register_params(void)
     return PARSEC_SUCCESS;
 }
 
-static void parsec_datatype_finalize (void)
+void parsec_datatype_finalize (void)
 {
     /* As the synonyms are just copies of the internal data we should not free them.
      * Anyway they are over the limit of PARSEC_DATATYPE_MAX_PREDEFINED so they will never get freed.
@@ -225,6 +225,9 @@ int32_t parsec_datatype_init( void )
 {
     const parsec_datatype_s* datatype;
     int32_t i;
+
+    /* Initialize arch */
+    parsec_arch_init();
 
     /**
      * Force he initialization of the parsec_datatype_s class. This will allow us to
@@ -257,8 +260,6 @@ int32_t parsec_datatype_init( void )
         parsec_datatype_dfd = parsec_output_open(NULL);
         parsec_output_set_verbosity(parsec_datatype_dfd, parsec_ddt_verbose);
     }
-
-    parsec_finalize_register_cleanup (parsec_datatype_finalize);
 
     return PARSEC_SUCCESS;
 }
