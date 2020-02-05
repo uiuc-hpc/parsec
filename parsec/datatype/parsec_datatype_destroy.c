@@ -32,7 +32,7 @@ int32_t parsec_datatype_destroy( parsec_datatype_s** dt )
         (pData->super.obj_reference_count <= 1) )
         return PARSEC_ERROR;
 
-    OBJ_RELEASE( pData );
+    PARSEC_OBJ_RELEASE( pData );
     *dt = NULL;
     return PARSEC_SUCCESS;
 }

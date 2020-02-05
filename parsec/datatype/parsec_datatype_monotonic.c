@@ -45,7 +45,7 @@ int32_t parsec_datatype_is_monotonic(parsec_datatype_s* type )
     }
     rc = parsec_convertor_prepare_for_send( pConv, type, 1, NULL );
     if( PARSEC_UNLIKELY(PARSEC_SUCCESS != rc)) {
-        OBJ_RELEASE(pConv);
+        PARSEC_OBJ_RELEASE(pConv);
         return -1;
     }
 
@@ -63,7 +63,7 @@ int32_t parsec_datatype_is_monotonic(parsec_datatype_s* type )
     } while (rc != 1);
 
   cleanup:
-    OBJ_RELEASE( pConv );
+    PARSEC_OBJ_RELEASE( pConv );
 
     return monotonic;
 }

@@ -141,7 +141,7 @@ struct parsec_datatype_s {
 
 typedef struct parsec_datatype_s parsec_datatype_s;
 
-PARSEC_DECLSPEC OBJ_CLASS_DECLARATION( parsec_datatype_s );
+PARSEC_DECLSPEC PARSEC_OBJ_CLASS_DECLARATION( parsec_datatype_s );
 
 PARSEC_DECLSPEC extern const parsec_datatype_s* parsec_datatype_basicDatatypes[PARSEC_DATATYPE_MAX_PREDEFINED];
 PARSEC_DECLSPEC extern const size_t parsec_datatype_local_sizes[PARSEC_DATATYPE_MAX_PREDEFINED];

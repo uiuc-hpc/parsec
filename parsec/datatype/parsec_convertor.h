@@ -111,7 +111,7 @@ struct parsec_convertor_t {
     /* --- fields are no more aligned on cacheline --- */
     dt_stack_t                    static_stack[DT_STATIC_STACK_SIZE];  /**< local stack for small datatypes */
 };
-PARSEC_DECLSPEC OBJ_CLASS_DECLARATION( parsec_convertor_t );
+PARSEC_DECLSPEC PARSEC_OBJ_CLASS_DECLARATION( parsec_convertor_t );
 
 
 /*
@@ -143,9 +143,9 @@ PARSEC_DECLSPEC parsec_convertor_t* parsec_convertor_create( int32_t remote_arch
 
 /**
  * The cleanup function will put the convertor in exactly the same state as after a call
- * to parsec_convertor_construct. Therefore, all PML can call OBJ_DESTRUCT on the request's
- * convertors without having to call OBJ_CONSTRUCT everytime they grab a new one from the
- * cache. The OBJ_CONSTRUCT on the convertor should be called only on the first creation
+ * to parsec_convertor_construct. Therefore, all PML can call PARSEC_OBJ_DESTRUCT on the request's
+ * convertors without having to call PARSEC_OBJ_CONSTRUCT everytime they grab a new one from the
+ * cache. The PARSEC_OBJ_CONSTRUCT on the convertor should be called only on the first creation
  * of a request (not when extracted from the cache).
  */
 static inline int parsec_convertor_cleanup( parsec_convertor_t* convertor )

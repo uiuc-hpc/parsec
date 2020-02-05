@@ -88,11 +88,11 @@ static void parsec_datatype_destruct( parsec_datatype_s* datatype )
     datatype->name[0] = '\0';
 }
 
-OBJ_CLASS_INSTANCE(parsec_datatype_s, parsec_object_t, parsec_datatype_construct, parsec_datatype_destruct);
+PARSEC_OBJ_CLASS_INSTANCE(parsec_datatype_s, parsec_object_t, parsec_datatype_construct, parsec_datatype_destruct);
 
 parsec_datatype_s* parsec_datatype_create( int32_t expectedSize )
 {
-    parsec_datatype_s* datatype = (parsec_datatype_s*)OBJ_NEW(parsec_datatype_s);
+    parsec_datatype_s* datatype = (parsec_datatype_s*)PARSEC_OBJ_NEW(parsec_datatype_s);
 
     if( expectedSize == -1 ) expectedSize = DT_INCREASE_STACK;
     datatype->desc.length = expectedSize + 1;  /* one for the fake elem at the end */

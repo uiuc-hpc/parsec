@@ -219,7 +219,7 @@ static void parsec_datatype_finalize (void)
      */
 
     /* As they are statically allocated they cannot be released. But we
-     * can call OBJ_DESTRUCT, just to free all internally allocated ressources.
+     * can call PARSEC_OBJ_DESTRUCT, just to free all internally allocated ressources.
      */
     /* clear all master convertors */
     parsec_convertor_destroy_masters();
@@ -234,10 +234,10 @@ int32_t parsec_datatype_init( void )
     int32_t i;
 
     /**
-     * Force he initialization of the parsec_datatype_t class. This will allow us to
-     * call OBJ_DESTRUCT without going too deep in the initialization process.
+     * Force he initialization of the parsec_datatype_s class. This will allow us to
+     * call PARSEC_OBJ_DESTRUCT without going too deep in the initialization process.
      */
-    parsec_class_initialize(OBJ_CLASS(parsec_datatype_s));
+    parsec_class_initialize(PARSEC_OBJ_CLASS(parsec_datatype_s));
     for( i = PARSEC_DATATYPE_FIRST_TYPE; i < PARSEC_DATATYPE_MAX_PREDEFINED; i++ ) {
         datatype = parsec_datatype_basicDatatypes[i];
 

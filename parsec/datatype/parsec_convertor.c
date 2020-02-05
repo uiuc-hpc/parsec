@@ -54,7 +54,7 @@ static void parsec_convertor_destruct( parsec_convertor_t* convertor )
     parsec_convertor_cleanup( convertor );
 }
 
-OBJ_CLASS_INSTANCE(parsec_convertor_t, parsec_object_t, parsec_convertor_construct, parsec_convertor_destruct );
+PARSEC_OBJ_CLASS_INSTANCE(parsec_convertor_t, parsec_object_t, parsec_convertor_construct, parsec_convertor_destruct );
 
 static parsec_convertor_master_t* parsec_convertor_master_list = NULL;
 
@@ -173,7 +173,7 @@ parsec_convertor_master_t* parsec_convertor_find_or_create_master( uint32_t remo
 
 parsec_convertor_t* parsec_convertor_create( int32_t remote_arch, int32_t mode )
 {
-    parsec_convertor_t* convertor = OBJ_NEW(parsec_convertor_t);
+    parsec_convertor_t* convertor = PARSEC_OBJ_NEW(parsec_convertor_t);
     parsec_convertor_master_t* master;
 
     master = parsec_convertor_find_or_create_master( remote_arch );
