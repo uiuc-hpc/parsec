@@ -56,13 +56,12 @@ add_subdirectory(util)
 set(DATATYPE_RELIABLE_SOURCES
   parsec_datatype_pack.c
   parsec_datatype_unpack.c
-  util/crc.c
 )
 
 if (NOT TARGET parsec-datatype-reliable)
   add_library(parsec-datatype-reliable OBJECT ${DATATYPE_RELIABLE_SOURCES})
 endif (NOT TARGET parsec-datatype-reliable)
-
+set_target_properties(parsec-datatype-reliable PROPERTIES POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 target_compile_definitions(parsec-datatype-reliable PRIVATE CHECKSUM)
 
 set(DATATYPE_SOURCES
@@ -89,5 +88,8 @@ set(DATATYPE_SOURCES
 )
 
 if (NOT TARGET parsec-datatype)
-  add_library(parsec-datatype OBJECT ${DATATYPE_SOURCES} $<TARGET_OBJECTS:parsec-datatype-reliable>)
+  add_library(parsec-datatype OBJECT ${DATATYPE_SOURCES})
+  target_sources(parsec-datatype PUBLIC $<TARGET_OBJECTS:parsec-datatype-reliable>
+                                        $<TARGET_OBJECTS:parsec-datatype-util>)
 endif (NOT TARGET parsec-datatype)
+set_target_properties(parsec-datatype PROPERTIES POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
