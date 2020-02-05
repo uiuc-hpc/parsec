@@ -152,32 +152,32 @@ PARSEC_DECLSPEC extern uint32_t parsec_local_arch;
 /*
  * The PARSEC-layer's Basic datatypes themselves.
  */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_empty;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_loop;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_end_loop;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_lb;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_ub;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_int1;       /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_int2;       /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_int4;       /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_int8;       /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_int16;      /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_uint1;      /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_uint2;      /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_uint4;      /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_uint8;      /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_uint16;     /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_float2;     /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_float4;     /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_float8;     /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_float12;    /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_float16;    /* in bytes */
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_short_float_complex;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_float_complex;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_double_complex;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_long_double_complex;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_bool;
-PARSEC_DECLSPEC extern const parsec_datatype_s parsec_datatype_wchar;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_empty;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_loop;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_end_loop;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_lb;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_ub;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_int1;       /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_int2;       /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_int4;       /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_int8;       /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_int16;      /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_uint1;      /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_uint2;      /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_uint4;      /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_uint8;      /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_uint16;     /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_float2;     /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_float4;     /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_float8;     /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_float12;    /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_float16;    /* in bytes */
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_short_float_complex;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_float_complex;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_double_complex;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_long_double_complex;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_bool;
+PARSEC_DECLSPEC extern parsec_datatype_s parsec_datatype_wchar;
 
 
 /*

@@ -54,34 +54,34 @@ int parsec_ddt_verbose = -1;  /* Has the datatype verbose it's own output stream
  * into an array, which is initialized at runtime.
  * Everything is constant.
  */
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_empty =       PARSEC_DATATYPE_INITIALIZER_EMPTY(PARSEC_DATATYPE_FLAG_CONTIGUOUS);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_empty =       PARSEC_DATATYPE_INITIALIZER_EMPTY(PARSEC_DATATYPE_FLAG_CONTIGUOUS);
 
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_loop =        PARSEC_DATATYPE_INITIALIZER_LOOP(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_end_loop =    PARSEC_DATATYPE_INITIALIZER_END_LOOP(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_lb =          PARSEC_DATATYPE_INITIALIZER_LB(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_ub =          PARSEC_DATATYPE_INITIALIZER_UB(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_int1 =        PARSEC_DATATYPE_INITIALIZER_INT1(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_int2 =        PARSEC_DATATYPE_INITIALIZER_INT2(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_int4 =        PARSEC_DATATYPE_INITIALIZER_INT4(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_int8 =        PARSEC_DATATYPE_INITIALIZER_INT8(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_int16 =       PARSEC_DATATYPE_INITIALIZER_INT16(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_uint1 =       PARSEC_DATATYPE_INITIALIZER_UINT1(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_uint2 =       PARSEC_DATATYPE_INITIALIZER_UINT2(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_uint4 =       PARSEC_DATATYPE_INITIALIZER_UINT4(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_uint8 =       PARSEC_DATATYPE_INITIALIZER_UINT8(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_uint16 =      PARSEC_DATATYPE_INITIALIZER_UINT16(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_float2 =      PARSEC_DATATYPE_INITIALIZER_FLOAT2(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_float4 =      PARSEC_DATATYPE_INITIALIZER_FLOAT4(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_float8 =      PARSEC_DATATYPE_INITIALIZER_FLOAT8(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_float12 =     PARSEC_DATATYPE_INITIALIZER_FLOAT12(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_float16 =     PARSEC_DATATYPE_INITIALIZER_FLOAT16(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_short_float_complex = PARSEC_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_float_complex = PARSEC_DATATYPE_INITIALIZER_FLOAT_COMPLEX(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_double_complex = PARSEC_DATATYPE_INITIALIZER_DOUBLE_COMPLEX(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_long_double_complex = PARSEC_DATATYPE_INITIALIZER_LONG_DOUBLE_COMPLEX(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_bool =        PARSEC_DATATYPE_INITIALIZER_BOOL(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_wchar =       PARSEC_DATATYPE_INITIALIZER_WCHAR(0);
-PARSEC_DECLSPEC const parsec_datatype_s parsec_datatype_unavailable = PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED(UNAVAILABLE, 0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_loop =        PARSEC_DATATYPE_INITIALIZER_LOOP(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_end_loop =    PARSEC_DATATYPE_INITIALIZER_END_LOOP(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_lb =          PARSEC_DATATYPE_INITIALIZER_LB(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_ub =          PARSEC_DATATYPE_INITIALIZER_UB(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_int1 =        PARSEC_DATATYPE_INITIALIZER_INT1(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_int2 =        PARSEC_DATATYPE_INITIALIZER_INT2(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_int4 =        PARSEC_DATATYPE_INITIALIZER_INT4(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_int8 =        PARSEC_DATATYPE_INITIALIZER_INT8(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_int16 =       PARSEC_DATATYPE_INITIALIZER_INT16(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_uint1 =       PARSEC_DATATYPE_INITIALIZER_UINT1(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_uint2 =       PARSEC_DATATYPE_INITIALIZER_UINT2(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_uint4 =       PARSEC_DATATYPE_INITIALIZER_UINT4(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_uint8 =       PARSEC_DATATYPE_INITIALIZER_UINT8(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_uint16 =      PARSEC_DATATYPE_INITIALIZER_UINT16(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_float2 =      PARSEC_DATATYPE_INITIALIZER_FLOAT2(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_float4 =      PARSEC_DATATYPE_INITIALIZER_FLOAT4(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_float8 =      PARSEC_DATATYPE_INITIALIZER_FLOAT8(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_float12 =     PARSEC_DATATYPE_INITIALIZER_FLOAT12(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_float16 =     PARSEC_DATATYPE_INITIALIZER_FLOAT16(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_short_float_complex = PARSEC_DATATYPE_INITIALIZER_SHORT_FLOAT_COMPLEX(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_float_complex = PARSEC_DATATYPE_INITIALIZER_FLOAT_COMPLEX(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_double_complex = PARSEC_DATATYPE_INITIALIZER_DOUBLE_COMPLEX(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_long_double_complex = PARSEC_DATATYPE_INITIALIZER_LONG_DOUBLE_COMPLEX(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_bool =        PARSEC_DATATYPE_INITIALIZER_BOOL(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_wchar =       PARSEC_DATATYPE_INITIALIZER_WCHAR(0);
+PARSEC_DECLSPEC parsec_datatype_s parsec_datatype_unavailable = PARSEC_DATATYPE_INITIALIZER_UNAVAILABLE_NAMED(UNAVAILABLE, 0);
 
 PARSEC_DECLSPEC dt_elem_desc_t parsec_datatype_predefined_elem_desc[2 * PARSEC_DATATYPE_MAX_PREDEFINED] = {{{{0}}}};
 
