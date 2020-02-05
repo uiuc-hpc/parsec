@@ -43,7 +43,7 @@ static void parsec_datatype_construct( parsec_datatype_s* pData )
     pData->ub                 = LONG_MIN;
     pData->align              = 1;
     pData->nbElems            = 0;
-    memset(pData->name, 0, PARSEC_MAX_OBJECT_NAME);
+    memset(pData->name, 0, PARSEC_MAX_DATATYPE_NAME);
 
     pData->desc.desc          = NULL;
     pData->desc.length        = 0;
@@ -98,8 +98,8 @@ parsec_datatype_s* parsec_datatype_create( int32_t expectedSize )
     datatype->desc.length = expectedSize + 1;  /* one for the fake elem at the end */
     datatype->desc.used   = 0;
     datatype->desc.desc   = (dt_elem_desc_t*)calloc(datatype->desc.length, sizeof(dt_elem_desc_t));
-    /* BEWARE: an upper-layer configured with PARSEC_MAX_OBJECT_NAME different than the PARSEC-layer will not work! */
-    memset( datatype->name, 0, PARSEC_MAX_OBJECT_NAME );
+    /* BEWARE: an upper-layer configured with PARSEC_MAX_DATATYPE_NAME different than the PARSEC-layer will not work! */
+    memset( datatype->name, 0, PARSEC_MAX_DATATYPE_NAME );
     return datatype;
 }
 

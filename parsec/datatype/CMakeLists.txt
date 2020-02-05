@@ -1,3 +1,13 @@
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules)
+include(MinMaxOption)
+
+MinMaxOption(PARSEC_MAX_DATATYPE_NAME 64 64 256 "Maximum Datatype Name Length" TRUE)
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/parsec_datatype_config.h.in
+               ${CMAKE_CURRENT_BINARY_DIR}/parsec_datatype_config.h)
+
+add_subdirectory(util)
+
 set(DATATYPE_RELIABLE_SOURCES
   parsec_datatype_pack.c
   parsec_datatype_unpack.c

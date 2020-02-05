@@ -122,7 +122,7 @@ struct parsec_datatype_s {
     uint32_t           loops;    /**< number of loops on the iternal type stack */
 
     /* Attribute fields */
-    char               name[PARSEC_MAX_OBJECT_NAME];  /**< name of the datatype */
+    char               name[PARSEC_MAX_DATATYPE_NAME];  /**< name of the datatype */
     dt_type_desc_t     desc;     /**< the data description */
     dt_type_desc_t     opt_desc; /**< short description of the data used when conversion is useless
                                       or in the send case (without conversion) */
