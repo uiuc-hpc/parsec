@@ -5,8 +5,10 @@
  */
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "parsec/parsec_config.h"
+#include "parsec/datatype/parsec_datatype_config.h"
 
 #include "parsec/datatype/parsec_datatype.h"
 
@@ -93,6 +95,27 @@ int parsec_type_size( parsec_datatype_t type,
 
 int parsec_type_extent(parsec_datatype_t type, ptrdiff_t* lb, ptrdiff_t* extent) {
     parsec_datatype_get_extent(type, lb, extent);
+    return PARSEC_SUCCESS;
+}
+
+int parsec_type_get_name(parsec_datatype_t type, char *type_name, int *len)
+{
+    /* need *len <= PARSEC_MAX_DATATYPE_NAME-1
+     * type_name[*len] == '\0'
+     * and type_name be null-terminated string */
+    size_t name_len = strlen(type->name);
+    *len = (int)name_len;
+    strncpy(type_name, type->name, name_len);
+    type_name[name_len] = '\0';
+    return PARSEC_SUCCESS;
+}
+
+int parsec_type_set_name(parsec_datatype_t type, const char *type_name)
+{
+    /* type->name at most PARSEC_MAX_DATATYPE_NAME-1 (non-null) characters
+     * and null-terminated at PARSEC_MAX_DATATYPE_NAME-1 */
+    strncpy(type->name, type_name, PARSEC_MAX_DATATYPE_NAME-1);
+    type->name[PARSEC_MAX_DATATYPE_NAME-1] = '\0';
     return PARSEC_SUCCESS;
 }
 

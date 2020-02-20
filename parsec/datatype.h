@@ -21,6 +21,12 @@
  *  @{
  */
 
+#if defined(PARSEC_HAVE_MPI_20)
+#define PARSEC_MAX_DATATYPE_NAME MPI_MAX_OBJECT_NAME
+#else
+#define PARSEC_MAX_DATATYPE_NAME 1
+#endif
+
 #define PARSEC_DATATYPE_NULL  MPI_DATATYPE_NULL
 typedef MPI_Datatype parsec_datatype_t;
 
@@ -41,6 +47,7 @@ typedef MPI_Datatype parsec_datatype_t;
 
 #else  /* !defined(PARSEC_HAVE_MPI) */
 
+#include "parsec/datatype/parsec_datatype_config.h"
 #include "parsec/datatype/parsec_datatype.h"
 
 typedef parsec_datatype_s * parsec_datatype_t;
@@ -74,6 +81,8 @@ BEGIN_C_DECLS
 int parsec_type_size(parsec_datatype_t type,
                      int *size);
 int parsec_type_extent(parsec_datatype_t type, ptrdiff_t *lb, ptrdiff_t *extent);
+int parsec_type_get_name(parsec_datatype_t type, char *type_name, int *len);
+int parsec_type_set_name(parsec_datatype_t type, const char *type_name);
 
 int parsec_type_free(parsec_datatype_t* type);
 int parsec_type_create_contiguous(int count,

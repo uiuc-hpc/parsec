@@ -34,6 +34,32 @@ parsec_type_extent( parsec_datatype_t type, ptrdiff_t* lb, ptrdiff_t* extent)
 }
 
 int
+parsec_type_get_name(parsec_datatype_t type, char *type_name, int *len)
+{
+    int rc;
+#if defined(PARSEC_HAVE_MPI_20)
+    rc = MPI_Type_get_name(type, type_name, len);
+#else
+    *len = 0;
+    type_name[0] = '\0';
+    rc = MPI_SUCCESS;
+#endif  /* defined(PARSEC_HAVE_MPI_20) */
+    return (MPI_SUCCESS == rc ? PARSEC_SUCCESS : PARSEC_ERROR);
+}
+
+int
+parsec_type_set_name(parsec_datatype_t type, const char *type_name)
+{
+    int rc;
+#if defined(PARSEC_HAVE_MPI_20)
+    rc = MPI_Type_set_name(type, type_name);
+#else
+    rc = MPI_SUCCESS;
+#endif  /* defined(PARSEC_HAVE_MPI_20) */
+    return (MPI_SUCCESS == rc ? PARSEC_SUCCESS : PARSEC_ERROR);
+}
+
+int
 parsec_type_free( parsec_datatype_t* type )
 {
     int rc = MPI_Type_free(type);
