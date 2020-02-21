@@ -7,19 +7,16 @@
 #include "parsec/runtime.h"
 #include "parsec/constants.h"
 #include "parsec/arena.h"
+#include "parsec/datatype.h"
 #include "parsec/data_dist/matrix/matrix.h"
-
-#if defined(PARSEC_HAVE_MPI)
-/* just for the type names */
-#include <mpi.h>
-#endif
 
 int parsec_matrix_define_contiguous( parsec_datatype_t oldtype,
                                     unsigned int nb_elem,
                                     int resized,
                                     parsec_datatype_t* newtype )
 {
-    int oldsize, rc;
+    char newtype_name[PARSEC_MAX_DATATYPE_NAME], oldtype_name[PARSEC_MAX_DATATYPE_NAME];
+    int oldsize, len, rc;
 
     /* Check if the type is valid and supported by the MPI library */
     rc = parsec_type_size(oldtype, &oldsize);
@@ -41,18 +38,17 @@ int parsec_matrix_define_contiguous( parsec_datatype_t oldtype,
         }
         parsec_type_free(&tmp);
     }
-#if defined(PARSEC_HAVE_MPI_20)
-    {
-        char newtype_name[MPI_MAX_OBJECT_NAME], oldtype_name[MPI_MAX_OBJECT_NAME];
-        int len, mpi_is_on;
-        MPI_Initialized(&mpi_is_on);
-        if(mpi_is_on) {
-            MPI_Type_get_name(oldtype, oldtype_name, &len);
-            snprintf(newtype_name, MPI_MAX_OBJECT_NAME, "CONT %s*%4u", oldtype_name, nb_elem);
-            MPI_Type_set_name(*newtype, newtype_name);
-        }
+
+    rc = parsec_type_get_name(oldtype, oldtype_name, &len);
+    if( PARSEC_SUCCESS != rc ) {
+        return rc;
     }
-#endif  /* defined(PARSEC_HAVE_MPI_20) */
+    snprintf(newtype_name, PARSEC_MAX_DATATYPE_NAME, "CONT %s*%4u", oldtype_name, nb_elem);
+    rc = parsec_type_set_name(*newtype, newtype_name);
+    if( PARSEC_SUCCESS != rc ) {
+        return rc;
+    }
+
     return PARSEC_SUCCESS;
 }
 
@@ -63,7 +59,8 @@ int parsec_matrix_define_rectangle( parsec_datatype_t oldtype,
                                    int resized,
                                    parsec_datatype_t* newtype )
 {
-    int oldsize, rc;
+    char newtype_name[PARSEC_MAX_DATATYPE_NAME], oldtype_name[PARSEC_MAX_DATATYPE_NAME];
+    int oldsize, len, rc;
 
     if ( mb == ld ) {
         return parsec_matrix_define_contiguous( oldtype, ld*nb, resized, newtype );
@@ -89,18 +86,17 @@ int parsec_matrix_define_rectangle( parsec_datatype_t oldtype,
         }
         parsec_type_free(&tmp);
     }
-#if defined(PARSEC_HAVE_MPI_20)
-    {
-        char newtype_name[MPI_MAX_OBJECT_NAME], oldtype_name[MPI_MAX_OBJECT_NAME];
-        int len, mpi_is_on;
-        MPI_Initialized(&mpi_is_on);
-        if(mpi_is_on) {
-            MPI_Type_get_name(oldtype, oldtype_name, &len);
-            snprintf(newtype_name, MPI_MAX_OBJECT_NAME, "RECT %s*%4u*%4u", oldtype_name, mb, nb);
-            MPI_Type_set_name(*newtype, newtype_name);
-        }
+
+    rc = parsec_type_get_name(oldtype, oldtype_name, &len);
+    if( PARSEC_SUCCESS != rc ) {
+        return rc;
     }
-#endif  /* defined(PARSEC_HAVE_MPI_20) */
+    snprintf(newtype_name, PARSEC_MAX_DATATYPE_NAME, "RECT %s*%4u*%4u", oldtype_name, mb, nb);
+    rc = parsec_type_set_name(*newtype, newtype_name);
+    if( PARSEC_SUCCESS != rc ) {
+        return rc;
+    }
+
     return PARSEC_SUCCESS;
 }
 
@@ -111,7 +107,8 @@ int parsec_matrix_define_triangle( parsec_datatype_t oldtype,
                                   unsigned int ld,
                                   parsec_datatype_t* newtype )
 {
-    int *blocklens, *indices, oldsize, rc;
+    char newtype_name[PARSEC_MAX_DATATYPE_NAME], oldtype_name[PARSEC_MAX_DATATYPE_NAME];
+    int *blocklens, *indices, oldsize, len, rc;
     unsigned int i;
     parsec_datatype_t tmp;
     unsigned int nmax;
@@ -150,18 +147,17 @@ int parsec_matrix_define_triangle( parsec_datatype_t oldtype,
     }
     parsec_type_size(oldtype, &oldsize);
     parsec_type_create_resized( tmp, 0, ld*n*oldsize, newtype );
-#if defined(PARSEC_HAVE_MPI_20)
-    {
-        char newtype_name[MPI_MAX_OBJECT_NAME], oldtype_name[MPI_MAX_OBJECT_NAME];
-        int len, mpi_is_on;
-        MPI_Initialized(&mpi_is_on);
-        if(mpi_is_on) {
-            MPI_Type_get_name(oldtype, oldtype_name, &len);
-            snprintf(newtype_name, MPI_MAX_OBJECT_NAME, "%s %s*%4u*%4u", (uplo==matrix_Upper)?"UPPER":"LOWER", oldtype_name, m, n);
-            MPI_Type_set_name(*newtype, newtype_name);
-        }
+
+    rc = parsec_type_get_name(oldtype, oldtype_name, &len);
+    if( PARSEC_SUCCESS != rc ) {
+        return rc;
     }
-#endif  /* defined(PARSEC_HAVE_MPI_20) */
+    snprintf(newtype_name, PARSEC_MAX_DATATYPE_NAME, "%s %s*%4u*%4u", (uplo==matrix_Upper)?"UPPER":"LOWER", oldtype_name, m, n);
+    rc = parsec_type_set_name(*newtype, newtype_name);
+    if( PARSEC_SUCCESS != rc ) {
+        return rc;
+    }
+
     parsec_type_free(&tmp);
     free(blocklens);
     free(indices);
@@ -177,7 +173,6 @@ int parsec_matrix_add2arena( parsec_arena_t *arena, parsec_datatype_t oldtype,
     ptrdiff_t lb = 0, extent = 0;
     int rc;
 
-#if defined(PARSEC_HAVE_MPI)
     switch( uplo ) {
     case matrix_Lower:
     case matrix_Upper:
@@ -200,12 +195,6 @@ int parsec_matrix_add2arena( parsec_arena_t *arena, parsec_datatype_t oldtype,
     if( PARSEC_SUCCESS != rc ) {
         return rc;
     }
-#else
-    int oldsize = 0;
-    (void)uplo; (void)diag; (void)m; (void)resized; (void)lb;
-    parsec_type_size( oldtype, &oldsize );
-    extent = oldsize * n * ld;
-#endif
 
     rc = parsec_arena_construct(arena, extent, alignment, newtype);
     if( PARSEC_SUCCESS != rc ) {

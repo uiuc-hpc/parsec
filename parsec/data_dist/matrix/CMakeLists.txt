@@ -18,11 +18,8 @@ set(sources
     ${CMAKE_CURRENT_LIST_DIR}/reduce_wrapper.c
     ${CMAKE_CURRENT_LIST_DIR}/apply_wrapper.c
     ${CMAKE_CURRENT_LIST_DIR}/subtile.c
+    ${CMAKE_CURRENT_LIST_DIR}/scalapack_convert.c
 )
-
-if (MPI_C_FOUND)
-  LIST(APPEND sources ${CMAKE_CURRENT_LIST_DIR}/scalapack_convert.c)
-endif(MPI_C_FOUND)
 
 if(NOT TARGET parsec-data-matrix)
   add_library(parsec-data-matrix OBJECT ${sources})

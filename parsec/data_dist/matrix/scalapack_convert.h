@@ -8,12 +8,9 @@
 #define __SCALAPACK_CONVERT_H__
 
 #include "parsec/parsec_config.h"
+#include "parsec/datatype.h"
 #include "parsec/data_distribution.h"
 #include "parsec/data_dist/matrix/matrix.h"
-
-#ifdef PARSEC_HAVE_MPI
-#include <mpi.h>
-#endif/* PARSEC_HAVE_MPI */
 
 BEGIN_C_DECLS
 
@@ -22,17 +19,15 @@ typedef struct scalapack_info_t {
     int * sca_desc;
     void * sca_mat;
     int process_grid_rows;
-#ifdef PARSEC_HAVE_MPI
-    MPI_Datatype MPI_Sca_full_block;
-    MPI_Datatype MPI_Sca_last_row;
-    MPI_Datatype MPI_Sca_last_col;
-    MPI_Datatype MPI_Sca_last_block;
+    parsec_datatype_t Sca_full_block;
+    parsec_datatype_t Sca_last_row;
+    parsec_datatype_t Sca_last_col;
+    parsec_datatype_t Sca_last_block;
 
-    MPI_Datatype MPI_PaRSEC_full_block;
-    MPI_Datatype MPI_PaRSEC_last_row;
-    MPI_Datatype MPI_PaRSEC_last_col;
-    MPI_Datatype MPI_PaRSEC_last_block;
-#endif /* PARSEC_HAVE_MPI */
+    parsec_datatype_t PaRSEC_full_block;
+    parsec_datatype_t PaRSEC_last_row;
+    parsec_datatype_t PaRSEC_last_col;
+    parsec_datatype_t PaRSEC_last_block;
 } scalapack_info_t;
 
 /* allocate buffer size to handle a matrix in scalapack format in 2D block cyclic, given a parsec matrix specification and a process grid

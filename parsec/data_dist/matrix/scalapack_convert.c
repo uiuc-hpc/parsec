@@ -7,6 +7,7 @@
 #include "parsec/parsec_config.h"
 #include "parsec/parsec_internal.h"
 #include "scalapack_convert.h"
+#include "parsec/datatype.h"
 #include "parsec/data_distribution.h"
 #include "parsec/data_dist/matrix/matrix.h"
 #include "parsec/utils/debug.h"
@@ -124,84 +125,68 @@ void * allocate_scalapack_matrix(parsec_tiled_matrix_dc_t * dc, int * sca_desc, 
 
 int tiles_to_scalapack_info_init(scalapack_info_t * info, parsec_tiled_matrix_dc_t * dc, int * sca_desc, void * sca_mat, int process_grid_rows)
 {
-#ifdef PARSEC_HAVE_MPI
     int length, size;
-#endif
 
     info->dc = dc;
     info->sca_desc = sca_desc;
     info->sca_mat = sca_mat;
     info->process_grid_rows = process_grid_rows;
     
-#ifdef PARSEC_HAVE_MPI
     /* mpi type creation*/
     /* type for full blocks */
-    MPI_Type_vector(info->dc->nb, info->dc->mb, sca_desc[8],
-                    MPI_DOUBLE, &(info->MPI_Sca_full_block));
-    MPI_Type_commit (&(info->MPI_Sca_full_block));
+    parsec_type_create_vector(info->dc->nb, info->dc->mb, sca_desc[8],
+                              parsec_datatype_double_t, &(info->Sca_full_block));
 
     /* type for last row of tiles */
     length = info->dc->mt*info->dc->mb != info->dc->m ? info->dc->m - ((info->dc->mt - 1)*info->dc->mb ) : info->dc->mb;
-    MPI_Type_vector(info->dc->nb, length, sca_desc[8],
-                    MPI_DOUBLE, &(info->MPI_Sca_last_row));
-    MPI_Type_commit (&(info->MPI_Sca_last_row));
+    parsec_type_create_vector(info->dc->nb, length, sca_desc[8],
+                              parsec_datatype_double_t, &(info->Sca_last_row));
 
 
     /* type for last column of tiles */
     length = info->dc->nt*info->dc->nb != info->dc->n ? info->dc->n - ((info->dc->nt - 1)*info->dc->nb) : info->dc->nb;
-    MPI_Type_vector(length, info->dc->mb, sca_desc[8],
-                    MPI_DOUBLE, &(info->MPI_Sca_last_col));
-    MPI_Type_commit (&(info->MPI_Sca_last_col));
+    parsec_type_create_vector(length, info->dc->mb, sca_desc[8],
+                              parsec_datatype_double_t, &(info->Sca_last_col));
 
     /* type for last tile */
     length = info->dc->mt*info->dc->mb != info->dc->m ? info->dc->m - ((info->dc->mt - 1)*info->dc->mb ) : info->dc->mb;
     size = info->dc->nt*info->dc->nb != info->dc->n ? info->dc->n - ((info->dc->nt - 1)*info->dc->nb) : info->dc->nb;
-    MPI_Type_vector(size, length, sca_desc[8], MPI_DOUBLE, &(info->MPI_Sca_last_block));
-    MPI_Type_commit (&(info->MPI_Sca_last_block));
+    parsec_type_create_vector(size, length, sca_desc[8], parsec_datatype_double_t, &(info->Sca_last_block));
 
 
     /* type for full tiles */
-    MPI_Type_contiguous(info->dc->bsiz, MPI_DOUBLE, &(info->MPI_PaRSEC_full_block));
-    MPI_Type_commit (&(info->MPI_PaRSEC_full_block));
+    parsec_type_create_contiguous(info->dc->bsiz, parsec_datatype_double_t, &(info->PaRSEC_full_block));
 
     /* type for last row of tiles */
     length = info->dc->mt*info->dc->mb != info->dc->m ? info->dc->m - ((info->dc->mt - 1)*info->dc->mb ) : info->dc->mb;
 
-    MPI_Type_vector(info->dc->nb, length, info->dc->mb,
-                    MPI_DOUBLE, &(info->MPI_PaRSEC_last_row));
-    MPI_Type_commit (&(info->MPI_PaRSEC_last_row));
+    parsec_type_create_vector(info->dc->nb, length, info->dc->mb,
+                              parsec_datatype_double_t, &(info->PaRSEC_last_row));
 
 
     /* type for last column of tiles */
     length = info->dc->nt*info->dc->nb != info->dc->n ? info->dc->n - ((info->dc->nt - 1)*info->dc->nb) : info->dc->nb;
-    MPI_Type_contiguous(length * info->dc->mb, MPI_DOUBLE, &(info->MPI_PaRSEC_last_col));
-    MPI_Type_commit (&(info->MPI_PaRSEC_last_col));
+    parsec_type_create_contiguous(length * info->dc->mb, parsec_datatype_double_t, &(info->PaRSEC_last_col));
 
     /* type for last tile */
     length = info->dc->mt*info->dc->mb != info->dc->m ? info->dc->m - ((info->dc->mt - 1)*info->dc->mb ) : info->dc->mb;
     size = info->dc->nt*info->dc->nb != info->dc->n ? info->dc->n - ((info->dc->nt - 1)*info->dc->nb) : info->dc->nb;
-    MPI_Type_vector(size, length, info->dc->mb, MPI_DOUBLE, &(info->MPI_PaRSEC_last_block));
-    MPI_Type_commit (&(info->MPI_PaRSEC_last_block));
+    parsec_type_create_vector(size, length, info->dc->mb, parsec_datatype_double_t, &(info->PaRSEC_last_block));
 
-    /* MPI_Type_vector(count, blocklength, stride, MPI_DOUBLE, &(info->MPI_Sca_last_block)); */
-#endif /* PARSEC_HAVE_MPI */
+    /* parsec_type_create_vector(count, blocklength, stride, parsec_datatype_double_t, &(info->Sca_last_block)); */
     return 0;
 }
 
 void tiles_to_scalapack_info_destroy(scalapack_info_t * info)
 {
-#ifdef PARSEC_HAVE_MPI
-    MPI_Type_free(&(info->MPI_Sca_full_block));
-    MPI_Type_free(&(info->MPI_Sca_last_row));
-    MPI_Type_free(&(info->MPI_Sca_last_col));
-    MPI_Type_free(&(info->MPI_Sca_last_block));
-    MPI_Type_free(&(info->MPI_PaRSEC_full_block));
-    MPI_Type_free(&(info->MPI_PaRSEC_last_row));
-    MPI_Type_free(&(info->MPI_PaRSEC_last_col));
-    MPI_Type_free(&(info->MPI_PaRSEC_last_block));
-#else
-    (void)info;
-#endif /* PARSEC_HAVE_MPI */
+    parsec_type_free(&(info->Sca_full_block));
+    parsec_type_free(&(info->Sca_last_row));
+    parsec_type_free(&(info->Sca_last_col));
+    parsec_type_free(&(info->Sca_last_block));
+    parsec_type_free(&(info->PaRSEC_full_block));
+    parsec_type_free(&(info->PaRSEC_last_row));
+    parsec_type_free(&(info->PaRSEC_last_col));
+    parsec_type_free(&(info->PaRSEC_last_block));
     return;
 }
 
@@ -266,14 +251,14 @@ void tile_to_block_double(scalapack_info_t * info, int row, int col)
         bdl = (double *)info->dc->super.data_of((parsec_data_collection_t *)info->dc, row, col);
         if (row + 1 == info->dc->mt) {
             if( col + 1 == info->dc->nt) {
-                MPI_Send(bdl, 1, info->MPI_PaRSEC_last_block, dest, 0, MPI_COMM_WORLD );
+                MPI_Send(bdl, 1, info->PaRSEC_last_block, dest, 0, MPI_COMM_WORLD );
             } else {
-                MPI_Send(bdl, 1, info->MPI_PaRSEC_last_row, dest, 0, MPI_COMM_WORLD );
+                MPI_Send(bdl, 1, info->PaRSEC_last_row, dest, 0, MPI_COMM_WORLD );
             }
         } else if (col + 1 == info->dc->nt) {
-            MPI_Send(bdl, 1, info->MPI_PaRSEC_last_col, dest, 0, MPI_COMM_WORLD );
+            MPI_Send(bdl, 1, info->PaRSEC_last_col, dest, 0, MPI_COMM_WORLD );
         } else {
-            MPI_Send(bdl, 1, info->MPI_PaRSEC_full_block, dest, 0, MPI_COMM_WORLD );
+            MPI_Send(bdl, 1, info->PaRSEC_full_block, dest, 0, MPI_COMM_WORLD );
         }
     } else if (dest == info->dc->super.myrank) {  /* process have to receive the block */
         GRIDrows = info->process_grid_rows;
@@ -284,14 +269,14 @@ void tile_to_block_double(scalapack_info_t * info, int row, int col)
         lapack = (double*) &(((double*)(info->sca_mat))[ dec ]);
         if (row + 1 == info->dc->mt) {
             if( col + 1 == info->dc->nt) {
-                MPI_Recv(lapack, 1, info->MPI_Sca_last_block, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                MPI_Recv(lapack, 1, info->Sca_last_block, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             } else {
-                MPI_Recv(lapack, 1, info->MPI_Sca_last_row, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                MPI_Recv(lapack, 1, info->Sca_last_row, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             }
         } else if (col + 1 == info->dc->nt) {
-            MPI_Recv(lapack, 1, info->MPI_Sca_last_row, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(lapack, 1, info->Sca_last_row, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         } else {
-            MPI_Recv(lapack, 1, info->MPI_Sca_full_block, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(lapack, 1, info->Sca_full_block, src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         }
     }
     return;
