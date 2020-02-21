@@ -5,8 +5,10 @@
  */
 
 #include "parsec/runtime.h"
+#include <stddef.h>
 #include <stdio.h>
 
+#include "parsec/datatype.h"
 #include "parsec/data_distribution.h"
 #include "parsec/arena.h"
 
@@ -31,21 +33,12 @@ parsec_taskpool_t *ep_new(parsec_data_collection_t *A, int nt, int level)
 
     tp = parsec_ep_new(nt, level, A);
 
-#if defined(PARSEC_HAVE_MPI)
-    {
-        MPI_Aint extent;
-#if defined(PARSEC_HAVE_MPI_20)
-        MPI_Aint lb = 0; 
-        MPI_Type_get_extent(MPI_BYTE, &lb, &extent);
-#else
-        MPI_Type_extent(MPI_BYTE, &extent);
-#endif  /* defined(PARSEC_HAVE_MPI_20) */
-        /* The datatype is irrelevant as the example does not do communications between nodes */
-        parsec_arena_construct(tp->arenas[PARSEC_ep_DEFAULT_ARENA],
-                               extent, PARSEC_ARENA_ALIGNMENT_SSE,
-                               MPI_BYTE);
-    }
-#endif
+    ptrdiff_t extent, lb = 0;
+    parsec_type_extent(parsec_datatype_uint8_t, &lb, &extent);
+    /* The datatype is irrelevant as the example does not do communications between nodes */
+    parsec_arena_construct(tp->arenas[PARSEC_ep_DEFAULT_ARENA],
+                           extent, PARSEC_ARENA_ALIGNMENT_SSE,
+                           parsec_datatype_uint8_t);
 
     return (parsec_taskpool_t*)tp;
 }
