@@ -129,9 +129,10 @@ int parsec_type_create_contiguous( int count,
                                   parsec_datatype_t* newtype )
 {
     int size;
-    if (oldtype == PARSEC_DATATYPE_NULL)
+    if (oldtype == PARSEC_DATATYPE_NULL) {
         *newtype = PARSEC_DATATYPE_NULL;
         return PARSEC_ERR_BAD_PARAM;
+    }
     parsec_type_size(oldtype, &size);
     parsec_internal_datatype_t *rtype = malloc(sizeof(*rtype));
     rtype->element = oldtype;
@@ -203,9 +204,10 @@ int parsec_type_create_resized(parsec_datatype_t oldtype,
                               parsec_datatype_t *newtype)
 {
     parsec_internal_datatype_t *rtype = (parsec_internal_datatype_t *)*newtype;
-    if (oldtype == PARSEC_DATATYPE_NULL)
+    if (oldtype == PARSEC_DATATYPE_NULL) {
         *newtype = PARSEC_DATATYPE_NULL;
         return PARSEC_ERR_BAD_PARAM;
+    }
     parsec_type_create_contiguous(1, oldtype, newtype);
     rtype->lb = lb;
     rtype->extent = extent;
