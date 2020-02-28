@@ -13,8 +13,10 @@ extern "C" %{
 
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
-static parsec_datatype_t block;
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif
+static parsec_datatype_t block;
 #include <stdio.h>
 
 int32_t always_zero()
@@ -116,6 +118,8 @@ parsec_taskpool_t *a2a_new(parsec_tiled_matrix_dc_t *A, parsec_tiled_matrix_dc_t
 
 #if defined(PARSEC_HAVE_MPI)
     MPI_Comm_size(MPI_COMM_WORLD, &worldsize);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_get_num_proc(&worldsize);
 #else
     worldsize = 1;
 #endif
@@ -139,10 +143,7 @@ parsec_taskpool_t *a2a_new(parsec_tiled_matrix_dc_t *A, parsec_tiled_matrix_dc_t
  */
 void a2a_destroy(parsec_taskpool_t *tp)
 {
-#if defined(PARSEC_HAVE_MPI)
-    MPI_Type_free( &block );
-#endif
-
+    parsec_type_free(&block);
     PARSEC_INTERNAL_TASKPOOL_DESTRUCT(tp);
 }
 

@@ -116,14 +116,23 @@ int main(int argc, char* argv[])
         memmove(&argv[i], &argv[i+1], (argc - 1) * sizeof(char*));
         argc -= 1;
     }
-#ifdef DISTRIBUTED
+#if defined(PARSEC_HAVE_MPI)
     {
         int provided;
         MPI_Init_thread(NULL, NULL, MPI_THREAD_SERIALIZED, &provided);
     }
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-#endif  /* DISTRIBUTED */
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_proc_num(&rank);
+    lc_get_num_proc(&size);
+#else
+    size = 1;
+    rank = 0;
+#endif
     parsec = parsec_init(2, &argc, &argv);
     assert( NULL != parsec );
 
@@ -215,6 +224,11 @@ int main(int argc, char* argv[])
     parsec_type_free(&newtype);
 
     parsec_fini( &parsec);
+#if defined(PARSEC_HAVE_MPI)
+    MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
+#endif
 
     return 0;
 }
