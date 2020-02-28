@@ -93,10 +93,8 @@ parsec_addtest(C startup "${startup_generated}")
 jdf_rules(complex_deps_generated "${CMAKE_CURRENT_SOURCE_DIR}/complex_deps.jdf")
 parsec_addtest(C complex_deps "${complex_deps_generated}")
 
-if( MPI_C_FOUND )
-  jdf_rules(multichain_generated "${CMAKE_CURRENT_SOURCE_DIR}/multichain.jdf")
-  parsec_addtest(C multichain "${multichain_generated}")
-endif( MPI_C_FOUND )
+jdf_rules(multichain_generated "${CMAKE_CURRENT_SOURCE_DIR}/multichain.jdf")
+parsec_addtest(C multichain "${multichain_generated}")
 
 parsec_addtest(C compose "compose.c")
 
