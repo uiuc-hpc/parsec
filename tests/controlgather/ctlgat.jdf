@@ -3,6 +3,9 @@ extern "C" %{
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
 #define MY_RANK(r) int r; MPI_Comm_rank(MPI_COMM_WORLD, &r)
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
+#define MY_RANK(r) int r; lc_get_proc_num(&r)
 #else
 #define MY_RANK(r) int r = 0
 #endif
