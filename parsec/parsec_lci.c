@@ -506,17 +506,19 @@ lci_put(parsec_comm_engine_t *comm_engine,
     lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
     lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
+    uint8_t *lbuf = ldata->mem + ldispl;
+    uint8_t *rbuf = rdata->mem + rdispl;
+
     /* set handshake info */
-    handshake->buffer = rdata->mem + rdispl;
-    handshake->size   = size;
+    handshake->buffer = rbuf;
+    handshake->size   = ldata->size;
     handshake->cb     = r_tag;
     memcpy(&handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
     PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                          "LCI[%d]:\tPut Req send:\t%d(%p) -> %d(%p) size %zu with tag %d", ep_rank,
-                         ep_rank, (void *)(ldata->mem + ldispl),
-                         remote,  (void *)(rdata->mem + rdispl), size, tag);
+                         ep_rank, lbuf, remote, rbuf, ldata->size, tag);
     RETRY(lc_sendm(handshake, buffer_size, remote, tag, put_am_ep));
 
     /* allocate from mempool */
@@ -535,10 +537,8 @@ lci_put(parsec_comm_engine_t *comm_engine,
     /* start send to remote with tag */
     PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                          "LCI[%d]:\tPut Send start:\t%d(%p) -> %d(%p) size %zu with tag %d", ep_rank,
-                         ep_rank, (void *)(ldata->mem + ldispl),
-                         remote,  (void *)(rdata->mem + rdispl), size, tag);
-    RETRY(lc_send(ldata->mem + ldispl, size, remote, tag, put_ep,
-                  lci_put_send_cb, handle));
+                         ep_rank, lbuf, remote, rbuf, ldata->size, tag);
+    RETRY(lc_send(lbuf, ldata->size, remote, tag, put_ep, lci_put_send_cb, handle));
     return 1;
 }
 
@@ -564,18 +564,19 @@ lci_get(parsec_comm_engine_t *comm_engine,
     lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
     lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
+    uint8_t *lbuf = ldata->mem + ldispl;
+    uint8_t *rbuf = rdata->mem + rdispl;
+
     /* set handshake info */
-    /* set handshake info */
-    handshake->buffer = rdata->mem + rdispl;
-    handshake->size   = size;
+    handshake->buffer = rbuf;
+    handshake->size   = ldata->size;
     handshake->cb     = r_tag;
     memcpy(&handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
     PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                          "LCI[%d]:\tGet Req send:\t%d(%p) <- %d(%p) size %zu with tag %d", ep_rank,
-                         ep_rank, (void *)(ldata->mem + ldispl),
-                         remote,  (void *)(rdata->mem + rdispl), size, tag);
+                         ep_rank, lbuf, remote, rbuf, ldata->size, tag);
     RETRY(lc_sendm(handshake, buffer_size, remote, tag, get_am_ep));
 
     /* allocate from mempool */
@@ -598,9 +599,8 @@ lci_get(parsec_comm_engine_t *comm_engine,
     /* start recieve from remote with tag */
     PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                          "LCI[%d]:\tGet Recv start:\t%d(%p) <- %d(%p) size %zu with tag %d", ep_rank,
-                         ep_rank, (void *)(ldata->mem + ldispl),
-                         remote,  (void *)(rdata->mem + rdispl), size, tag);
-    RETRY(lc_recv(ldata->mem + ldispl, size, remote, tag, get_ep, req));
+                         ep_rank, lbuf, remote, rbuf, ldata->size, tag);
+    RETRY(lc_recv(lbuf, ldata->size, remote, tag, get_ep, req));
     return 1;
 }
 
