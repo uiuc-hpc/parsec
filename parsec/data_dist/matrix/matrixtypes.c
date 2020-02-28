@@ -223,17 +223,17 @@ int parsec_matrix_define_datatype(parsec_datatype_t *newtype, parsec_datatype_t 
     if( PARSEC_SUCCESS != rc ) {
         return rc;
     }
+#else
+    rc = parsec_matrix_define_contiguous( oldtype, ld * n, resized, newtype );
+    if( PARSEC_SUCCESS != rc ) {
+        return rc;
+    }
+#endif
 
     rc = parsec_type_extent(*newtype, &lb, extent);
     if( PARSEC_SUCCESS != rc ) {
         return rc;
     }
-#else
-    int oldsize = 0;
-    (void)uplo; (void)diag; (void)m; (void)resized; (void)lb;
-    parsec_type_size( oldtype, &oldsize );
-    *extent = oldsize * n * ld;
-#endif
 
     return 0;
 }
