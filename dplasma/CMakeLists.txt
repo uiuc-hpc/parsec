@@ -95,6 +95,7 @@ set(DPLASMA_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}/dplasma"
                            CACHE STRING "DPLASMA Installation Prefix")
 
 if(COREBLAS_FOUND)
+  add_compile_options(${COREBLAS_CFLAGS})
   Add_Subdirectory(include)
   Add_Subdirectory(cores)
   Add_Subdirectory(lib)
