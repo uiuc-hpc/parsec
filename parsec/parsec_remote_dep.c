@@ -7,12 +7,14 @@
 #include "parsec/utils/debug.h"
 #include "parsec/debug_marks.h"
 #include "parsec/data.h"
+#include "parsec/papi_sde.h"
 #include "parsec/interfaces/superscalar/insert_function_internal.h"
 #include "parsec/parsec_remote_dep.h"
 #include "parsec/class/dequeue.h"
 
-#define PARSEC_DTD_SKIP_SAVING -1
-#define PARSEC_DTD_SAVE 1
+#include "parsec/parsec_binary_profile.h"
+
+int remote_dep_mpi_on(parsec_context_t* context);
 
 int parsec_comm_gets_max  = DEP_NB_CONCURENT * MAX_PARAM_COUNT;
 int parsec_comm_gets      = 0;
@@ -462,7 +464,7 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
             if( NULL == dtd_task ) {
                 return_defer = 1;
 
-                if( storage_info != PARSEC_DTD_SKIP_SAVING) {
+                if( storage_info != 1) {
                     char* packed_buffer;
                     /* Copy the eager data to some temp storage */
                     packed_buffer = malloc(origin->msg.length);
@@ -617,7 +619,7 @@ remote_dep_mpi_save_activate_cb(parsec_comm_engine_t *ce, parsec_ce_tag_t tag,
         /* Retrieve the data arenas and update the msg.incoming_mask to reflect
          * the data we should be receiving from the predecessor.
          */
-        rc = remote_dep_get_datatypes(es, deps, PARSEC_DTD_SAVE, &position);
+        rc = remote_dep_get_datatypes(es, deps, 0, &position);
 
         if( -1 == rc ) {
             /* the corresponding tp doesn't exist, yet. Put it in unexpected */
@@ -768,7 +770,7 @@ remote_dep_dequeue_init(parsec_context_t* context)
         /* We're all by ourselves. In case we need to use MPI to handle data copies
          * between different formats let's setup local MPI support.
          */
-        remote_dep_ce_init(context);
+        remote_dep_mpi_on(context);
 
         goto up_and_running;
     }
@@ -913,10 +915,25 @@ remote_dep_dequeue_on(parsec_context_t* context)
     if( 0 >= parsec_communication_engine_up ) return -1;
     if( context->nb_nodes == 1 ) return 1;
 
+    PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "comm engine signalled ON on process %d/%d",
+                         context->my_rank, context->nb_nodes);
+
     /* At this point I am supposed to own the mutex */
     parsec_communication_engine_up = 2;
     pthread_cond_signal(&mpi_thread_condition);
     pthread_mutex_unlock(&mpi_thread_mutex);
+
+    /* The waking up of the communication thread happen asynchronously, once the thread
+     * receives the signal. At that point it acquires the mpi_thread_mutex and set the
+     * global variable parsec_communication_engine_up to 3.
+     */
+
+    /**
+     * We need to wait for the communication thread to perform the mpi_setup
+     * as it will fill-up my_rank on the context.
+     */
+    while( 3 != parsec_communication_engine_up ) sched_yield();
+
     (void)context;
     return 1;
 }
@@ -944,6 +961,7 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
     int whatsup;
 
     remote_dep_bind_thread(context);
+    PARSEC_PAPI_SDE_THREAD_INIT();
 
     remote_dep_ce_init(context);
 
@@ -957,18 +975,24 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
     do {
         /* Now let's block */
         pthread_cond_wait(&mpi_thread_condition, &mpi_thread_mutex);
+        PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "comm engine ON on process %d/%d",
+                             context->my_rank, context->nb_nodes);
+
         /* The MPI thread is owning the lock */
         assert( parsec_communication_engine_up == 2 );
+        remote_dep_mpi_on(context);
         /* acknoledge the activation */
         parsec_communication_engine_up = 3;
-        /* The MPI thread is owning the lock */
-        remote_dep_mpi_on(context);
         whatsup = remote_dep_dequeue_nothread_progress(&parsec_comm_es, -1 /* loop till explicitly asked to return */);
         parsec_communication_engine_up = 1;
+        PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "comm engine OFF on process %d/%d",
+                              context->my_rank, context->nb_nodes);
+        parsec_communication_engine_up = 1;  /* went to sleep */
     } while(-1 != whatsup);
 
     /* Release all resources */
     remote_dep_ce_fini(context);
+    PARSEC_PAPI_SDE_THREAD_FINI();
 
     return (void*)context;
 }
@@ -990,6 +1014,7 @@ static int remote_dep_nothread_memcpy(parsec_execution_stream_t* es,
 
 int remote_dep_mpi_on(parsec_context_t* context)
 {
+    remote_dep_ce_init(context);
 #ifdef PARSEC_PROF_TRACE
     /* put a start marker on each line */
     TAKE_TIME(MPIctl_prof, MPI_Activate_sk, 0);
@@ -1142,7 +1167,7 @@ remote_dep_mpi_new_taskpool(parsec_execution_stream_t* es,
             char* buffer = (char*)deps->taskpool;  /* get back the buffer from the "temporary" storage */
             int rc, position = 0;
             deps->taskpool = NULL;
-            rc = remote_dep_get_datatypes(es, deps, PARSEC_DTD_SKIP_SAVING, &position); assert( -1 != rc );
+            rc = remote_dep_get_datatypes(es, deps, 1, &position); assert( -1 != rc );
             assert(deps->taskpool != NULL);
             PARSEC_DEBUG_VERBOSE(10, parsec_debug_output, "MPI:\tFROM\t%d\tActivate NEWOBJ\t% -8s\twith datakey %lx\tparams %lx",
                     deps->from, remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN),
@@ -1184,7 +1209,7 @@ remote_dep_mpi_release_delayed_deps(parsec_execution_stream_t* es,
     char* buffer = (char*)deps->taskpool;  /* get back the buffer from the "temporary" storage */
     deps->taskpool = NULL;
 
-    rc = remote_dep_get_datatypes(es, deps, PARSEC_DTD_SKIP_SAVING, &position);
+    rc = remote_dep_get_datatypes(es, deps, 1, &position);
 
     assert(rc != -2);
     (void)rc;
