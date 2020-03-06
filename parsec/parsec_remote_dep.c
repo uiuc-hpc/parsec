@@ -957,11 +957,14 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
     do {
         /* Now let's block */
         pthread_cond_wait(&mpi_thread_condition, &mpi_thread_mutex);
+        /* The MPI thread is owning the lock */
+        assert( parsec_communication_engine_up == 2 );
         /* acknoledge the activation */
         parsec_communication_engine_up = 3;
         /* The MPI thread is owning the lock */
         remote_dep_mpi_on(context);
         whatsup = remote_dep_dequeue_nothread_progress(&parsec_comm_es, -1 /* loop till explicitly asked to return */);
+        parsec_communication_engine_up = 1;
     } while(-1 != whatsup);
 
     /* Release all resources */

@@ -916,6 +916,9 @@ install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/data_internal.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/arena.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/include/parsec/execution_stream.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_remote_dep.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_comm_engine.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/bindthread.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_internal.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/vpmap.h
   DESTINATION ${PARSEC_INSTALL_INCLUDEDIR}/parsec)

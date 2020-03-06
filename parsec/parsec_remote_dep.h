@@ -3,12 +3,15 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  */
-#ifndef __USE_REMOTE_DEP_H__
-#define __USE_REMOTE_DEP_H__
+#ifndef __USE_PARSEC_REMOTE_DEP_H__
+#define __USE_PARSEC_REMOTE_DEP_H__
 
 /** @addtogroup parsec_internal_communication
  *  @{
  */
+
+
+#define PARSEC_REMOTE_DEP_USE_THREADS
 
 #include "parsec/bindthread.h"
 #include "parsec/class/dequeue.h"
@@ -19,11 +22,6 @@
 #include "parsec/scheduling.h"
 
 typedef unsigned long remote_dep_datakey_t;
-
-#define PARSEC_DTD_SKIP_SAVING -1
-
-char **dep_activate_buff;
-
 
 #define PARSEC_ACTION_DEPS_MASK                  0x00FFFFFF
 #define PARSEC_ACTION_RELEASE_LOCAL_DEPS         0x01000000
@@ -115,8 +113,10 @@ struct parsec_remote_deps_s {
  * - positive: the meaning is defined by the communication engine.
  */
 extern int parsec_communication_engine_up;
+extern int parsec_comm_output_stream;
+extern int parsec_comm_verbose;
 
-#if defined(DISTRIBUTED)
+#ifdef DISTRIBUTED
 
 typedef struct {
     parsec_lifo_t freelist;
@@ -125,7 +125,7 @@ typedef struct {
     uint32_t     elem_size;
 } parsec_remote_dep_context_t;
 
-extern parsec_remote_dep_context_t parsec_remote_dep_context;
+parsec_remote_dep_context_t parsec_remote_dep_context;
 
 void remote_deps_allocation_init(int np, int max_deps);
 void remote_deps_allocation_fini(void);
@@ -170,11 +170,8 @@ void parsec_remote_dep_memcpy(parsec_execution_stream_t* es,
 int
 remote_dep_dequeue_delayed_dep_release(parsec_remote_deps_t *deps);
 
-/* This function creates a fake eu for comm thread for profiling DTD runs */
-void
-remote_dep_mpi_initialize_execution_stream(parsec_context_t *context);
 
-#ifdef PARSEC_DIST_COLLECTIVES
+#if defined(PARSEC_DIST_COLLECTIVES)
 /* Propagate an activation order from the current node down the original tree */
 int parsec_remote_dep_propagate(parsec_execution_stream_t* es,
                                const parsec_task_t* task,
@@ -189,7 +186,6 @@ int parsec_remote_dep_propagate(parsec_execution_stream_t* es,
 #define parsec_remote_dep_progress(ctx)        0
 #define parsec_remote_dep_activate(ctx, o, r) -1
 #define parsec_remote_dep_new_taskpool(ctx)    0
-#define remote_dep_mpi_initialize_execution_stream(ctx) 0
 #endif /* DISTRIBUTED */
 
 /** @} */
@@ -260,10 +256,8 @@ int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp);
 
 int remote_dep_dequeue_init(parsec_context_t* context);
 int remote_dep_dequeue_fini(parsec_context_t* context);
-#ifdef PARSEC_REMOTE_DEP_USE_THREADS
 int remote_dep_dequeue_on(parsec_context_t* context);
 int remote_dep_dequeue_off(parsec_context_t* context);
-/*static int remote_dep_dequeue_progress(parsec_execution_stream_t* es);*/
 #   define remote_dep_init(ctx) remote_dep_dequeue_init(ctx)
 #   define remote_dep_fini(ctx) remote_dep_dequeue_fini(ctx)
 #   define remote_dep_on(ctx)   remote_dep_dequeue_on(ctx)
@@ -272,20 +266,7 @@ int remote_dep_dequeue_off(parsec_context_t* context);
 #   define remote_dep_send(es, rank, deps) remote_dep_dequeue_send(es, rank, deps)
 #   define remote_dep_progress(es, cycles) remote_dep_dequeue_nothread_progress(es, cycles)
 
-#else
-int remote_dep_mpi_on(parsec_context_t* context);
-#   define remote_dep_init(ctx) remote_dep_dequeue_init(ctx)
-#   define remote_dep_fini(ctx) remote_dep_dequeue_fini(ctx)
-#   define remote_dep_on(ctx)   remote_dep_mpi_on(ctx)
-#   define remote_dep_off(ctx)  0
-#   define remote_dep_new_taskpool(tp) remote_dep_dequeue_new_taskpool(tp)
-#   define remote_dep_send(es, rank, deps) remote_dep_dequeue_send(es, rank, deps)
-#   define remote_dep_progress(es, cycles) remote_dep_dequeue_nothread_progress(es, cycles)
-#endif
 int remote_dep_dequeue_nothread_progress(parsec_execution_stream_t* es, int cycles);
-
-
-
 
 int remote_dep_bind_thread(parsec_context_t* context);
 int remote_dep_complete_and_cleanup(parsec_remote_deps_t** deps,
@@ -313,4 +294,12 @@ remote_dep_dec_flying_messages(parsec_taskpool_t *handle)
 
 int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx );
 
-#endif /* __USE_REMOTE_DEP_H__ */
+parsec_remote_deps_t* remote_deps_allocate( parsec_lifo_t* lifo );
+
+void remote_deps_allocation_init(int np, int max_output_deps);
+
+/* This function creates a fake eu for comm thread for profiling DTD runs */
+void
+remote_dep_mpi_initialize_execution_stream(parsec_context_t *context);
+
+#endif /* __USE_PARSEC_REMOTE_DEP_H__ */

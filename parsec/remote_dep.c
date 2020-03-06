@@ -25,8 +25,8 @@
  * -  3: communication thread is up but sleeping
  */
 int parsec_communication_engine_up = -1;
-static int parsec_comm_output_stream = 0;
-static int parsec_comm_verbose = 0;
+int parsec_comm_output_stream = 0;
+int parsec_comm_verbose = 0;
 
 #ifdef DISTRIBUTED
 
@@ -133,7 +133,7 @@ remote_dep_complete_and_cleanup(parsec_remote_deps_t** deps,
     return 0;
 }
 
-inline parsec_remote_deps_t* remote_deps_allocate( parsec_lifo_t* lifo )
+parsec_remote_deps_t* remote_deps_allocate( parsec_lifo_t* lifo )
 {
     parsec_remote_deps_t* remote_deps = (parsec_remote_deps_t*)parsec_lifo_pop(lifo);
     uint32_t i, rank_bit_size;
@@ -551,8 +551,8 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
     return 0;
 }
 
-parsec_remote_dep_context_t parsec_remote_dep_context;
-static int parsec_remote_dep_inited = 0;
+//parsec_remote_dep_context_t parsec_remote_dep_context;
+int parsec_remote_dep_inited = 0;
 
 /* THIS FUNCTION MUST NOT BE CALLED WHILE REMOTE DEP IS ON.
  * NOT THREAD SAFE (AND SHOULD NOT BE) */
