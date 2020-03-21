@@ -419,7 +419,7 @@ lci_mem_register(void *mem, parsec_mem_type_t mem_type,
                  size_t *lreg_size)
 {
     /* LCI only supports contiguous types */
-    assert(mem_type == PARSEC_MEM_TYPE_CONTIGUOUS);
+    assert(mem_type == PARSEC_MEM_TYPE_CONTIGUOUS && "only supports contiguous memory");
 
     PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                          "LCI[%d]:\tregister memory %p size %zu", ep_rank, mem, mem_size);
@@ -451,6 +451,7 @@ lci_mem_unregister(parsec_ce_mem_reg_handle_t *lreg)
                          ep_rank, (void *)handle->mem, handle->size);
     //LCI_unregister(handle->mem);
     parsec_thread_mempool_free(handle->mempool_owner, handle);
+    *lreg = NULL;
     return 1;
 }
 
@@ -514,7 +515,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
 
     /* set handshake info */
     handshake->buffer = rbuf;
-    handshake->size   = ldata->size;
+    handshake->size   = rdata->size;
     handshake->cb     = r_tag;
     memcpy(&handshake->cb_data, r_cb_data, r_cb_data_size);
 
@@ -572,7 +573,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
 
     /* set handshake info */
     handshake->buffer = rbuf;
-    handshake->size   = ldata->size;
+    handshake->size   = rdata->size;
     handshake->cb     = r_tag;
     memcpy(&handshake->cb_data, r_cb_data, r_cb_data_size);
 
