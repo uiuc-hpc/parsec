@@ -36,6 +36,8 @@
 
 /* ------- LCI implementation below ------- */
 
+typedef unsigned char byte_t;
+
 //#define RETRY(lci_call) do { } while (LC_OK != (lci_call))
 #define RETRY(lci_call)                                                       \
   do {                                                                        \
@@ -51,7 +53,7 @@
 typedef struct lci_mem_reg_handle_s {
     parsec_list_item_t      super;
     parsec_thread_mempool_t *mempool_owner;
-    uint8_t                 *mem;
+    byte_t                  *mem;
     size_t                  size;
     size_t                  count;
     parsec_datatype_t       datatype;
@@ -111,7 +113,7 @@ typedef struct lci_handshake_s {
     unsigned char   *buffer;
     size_t          size;
     parsec_ce_tag_t cb;
-    uint8_t         cb_data[];
+    byte_t          cb_data[];
 } lci_handshake_t;
 
 static atomic_int current_tag = 0;
@@ -146,7 +148,7 @@ static lc_pool *lci_req_pool  = NULL;
 
 /* memory pool for dynamically-allocated messages */
 #define MAX_POOL_DYN_MSG (MAX_POOL_REQS / 2)
-static uint8_t *lci_dynmsg_array = NULL;
+static byte_t  *lci_dynmsg_array = NULL;
 static lc_pool *lci_dynmsg_pool  = NULL;
 
 static inline void * dyn_alloc(size_t size, void **ctx)
@@ -274,7 +276,7 @@ lci_init(parsec_context_t *context)
     /* up to MAX_POOL_DYN_MSG messages of lc_max_medium(0) bytes each */
     const size_t max_msg_size = lc_max_medium(0);
     posix_memalign((void **)&lci_dynmsg_array, 64,
-                   sizeof(uint8_t[MAX_POOL_DYN_MSG][max_msg_size]));
+                   sizeof(byte_t[MAX_POOL_DYN_MSG][max_msg_size]));
     lc_pool_create(&lci_dynmsg_pool);
     for (size_t i = 0; i < MAX_POOL_DYN_MSG; i++) {
         lc_pool_put(lci_dynmsg_pool, lci_dynmsg_array + i * max_msg_size);
@@ -498,7 +500,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
 {
     size_t buffer_size = sizeof(lci_handshake_t) + r_cb_data_size;
     assert(buffer_size <= lc_max_medium(0) && "active message data too long");
-    uint8_t buffer[buffer_size];
+    byte_t buffer[buffer_size];
     lci_handshake_t *handshake = (lci_handshake_t *)&buffer;
 
     /* get next tag */
@@ -507,8 +509,8 @@ lci_put(parsec_comm_engine_t *comm_engine,
     lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
     lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
-    uint8_t *lbuf = ldata->mem + ldispl;
-    uint8_t *rbuf = rdata->mem + rdispl;
+    byte_t *lbuf = ldata->mem + ldispl;
+    byte_t *rbuf = rdata->mem + rdispl;
 
     /* set handshake info */
     handshake->buffer = rbuf;
@@ -556,7 +558,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
 {
     size_t buffer_size = sizeof(lci_handshake_t) + r_cb_data_size;
     assert(buffer_size <= lc_max_medium(0) && "active message data too long");
-    uint8_t buffer[buffer_size];
+    byte_t buffer[buffer_size];
     lci_handshake_t *handshake = (lci_handshake_t *)&buffer;
 
     /* get next tag */
@@ -565,8 +567,8 @@ lci_get(parsec_comm_engine_t *comm_engine,
     lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
     lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
-    uint8_t *lbuf = ldata->mem + ldispl;
-    uint8_t *rbuf = rdata->mem + rdispl;
+    byte_t *lbuf = ldata->mem + ldispl;
+    byte_t *rbuf = rdata->mem + rdispl;
 
     /* set handshake info */
     handshake->buffer = rbuf;
@@ -738,7 +740,7 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "LCI[%d]:\t called %p", ep_rank, (void *)handle->cb.onesided_am);
 
         /* return memory from AM */
-        void *buffer = (uint8_t *)handle->args.data - offsetof(lci_handshake_t, cb_data);
+        void *buffer = (byte_t *)handle->args.data - offsetof(lci_handshake_t, cb_data);
         lc_pool_put(lci_dynmsg_pool, buffer);
 
         /* return handle and request to pools */
@@ -844,7 +846,7 @@ lci_progress(parsec_comm_engine_t *comm_engine)
                                NULL);
 
         /* return memory from AM */
-        void *buffer = (uint8_t *)handle->args.data - offsetof(lci_handshake_t, cb_data);
+        void *buffer = (byte_t *)handle->args.data - offsetof(lci_handshake_t, cb_data);
         lc_pool_put(lci_dynmsg_pool, buffer);
 
         /* return handle to mempool */
@@ -901,8 +903,8 @@ lci_pack(parsec_comm_engine_t *comm_engine,
     int remaining = outsize - *position;
     if (incount > remaining)
         incount = remaining;
-    uint8_t *in = inbuf;
-    uint8_t *out = (uint8_t *)outbuf + (ptrdiff_t)*position;
+    byte_t *in = inbuf;
+    byte_t *out = (byte_t *)outbuf + (ptrdiff_t)*position;
     memcpy(out, in, incount);
     *position += incount;
     return 1;
@@ -920,8 +922,8 @@ lci_unpack(parsec_comm_engine_t *comm_engine,
     int remaining = insize - *position;
     if (outcount > remaining)
         outcount = remaining;
-    uint8_t *in = (uint8_t *)inbuf + (ptrdiff_t)*position;
-    uint8_t *out = outbuf;
+    byte_t *in = (byte_t *)inbuf + (ptrdiff_t)*position;
+    byte_t *out = outbuf;
     memcpy(out, in, outcount);
     *position += outcount;
     return 1;
