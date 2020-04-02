@@ -7,6 +7,8 @@
 #include <assert.h>
 #include "parsec/parsec_mpi_funnelled.h"
 
+parsec_comm_engine_t parsec_ce;
+
 /* This function will be called by the runtime */
 parsec_comm_engine_t *
 parsec_comm_engine_init(parsec_context_t *parsec_context)

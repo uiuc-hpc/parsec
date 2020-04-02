@@ -516,26 +516,23 @@ mpi_no_thread_tag_register(parsec_ce_tag_t tag,
                            void *cb_data,
                            size_t msg_length)
 {
+    mpi_funnelled_callback_t *cb;
+
     /* All internal tags has been registered */
     if(nb_internal_tag == count_internal_tag) {
         if(tag < MPI_FUNNELLED_MIN_TAG || tag >= MPI_FUNNELLED_MAX_TAG) {
-            printf("Tag is out of range, it has to be between %d - %d\n", MPI_FUNNELLED_MIN_TAG, MPI_FUNNELLED_MAX_TAG);
-            return 0;
+            parsec_warning("Tag is out of range, it has to be between %d - %d\n", MPI_FUNNELLED_MIN_TAG, MPI_FUNNELLED_MAX_TAG);
+            return PARSEC_ERR_VALUE_OUT_OF_BOUNDS;
         }
-        assert(tag < MPI_FUNNELLED_MAX_TAG);
-        assert(tag >= MPI_FUNNELLED_MIN_TAG);
+        assert( (tag >= MPI_FUNNELLED_MIN_TAG) && (tag < MPI_FUNNELLED_MAX_TAG) );
     }
 
-    parsec_key_t key = 0 | tag ;
-    if(NULL != parsec_hash_table_nolock_find(tag_hash_table, key)) {
-        printf("Tag: %ld is already registered\n", tag);
-        return 0;
+    if(NULL != parsec_hash_table_nolock_find(tag_hash_table, (parsec_key_t)tag)) {
+        parsec_warning("Tag: %d is already registered\n", (int)tag);
+        return PARSEC_EXISTS;
     }
-
-    mpi_funnelled_callback_t *cb;
 
     size_of_total_reqs += EACH_STATIC_REQ_RANGE;
-    int i;
 
     array_of_indices = realloc(array_of_indices, size_of_total_reqs * sizeof(int));
     array_of_statuses = realloc(array_of_statuses, size_of_total_reqs * sizeof(MPI_Status));
@@ -570,7 +567,7 @@ mpi_no_thread_tag_register(parsec_ce_tag_t tag,
     tag_struct->start_idx  = mpi_funnelled_static_req_idx;
     tag_struct->msg_length = msg_length;
 
-    for(i = 0; i < EACH_STATIC_REQ_RANGE; i++) {
+    for(int i = 0; i < EACH_STATIC_REQ_RANGE; i++) {
         buf[i] = buf[0] + i * msg_length * sizeof(char);
 
         /* Even though the address of array_of_requests changes after every
@@ -593,23 +590,22 @@ mpi_no_thread_tag_register(parsec_ce_tag_t tag,
     }
 
     /* insert in ht for bookkeeping */
-    tag_struct->ht_item.key = key;
+    tag_struct->ht_item.key = (parsec_key_t)tag;
     parsec_hash_table_nolock_insert(tag_hash_table, &tag_struct->ht_item );
 
-    assert(mpi_funnelled_static_req_idx + MAX_DYNAMIC_REQ_RANGE == size_of_total_reqs);
+    assert((mpi_funnelled_static_req_idx + MAX_DYNAMIC_REQ_RANGE) == size_of_total_reqs);
 
     mpi_funnelled_last_active_req += EACH_STATIC_REQ_RANGE;
 
-    return 1;
+    return PARSEC_SUCCESS;
 }
 
 int
 mpi_no_thread_tag_unregister(parsec_ce_tag_t tag)
 {
-    parsec_key_t key = 0 | tag ;
-    mpi_funnelled_tag_t *tag_struct = parsec_hash_table_nolock_find(tag_hash_table, key);
+    mpi_funnelled_tag_t *tag_struct = parsec_hash_table_nolock_find(tag_hash_table, (parsec_key_t)tag);
     if(NULL == tag_struct) {
-        printf("Tag %ld is not registered\n", tag);
+        parsec_inform("Tag %ld is not registered\n", (int)tag);
         return 0;
     }
 
@@ -626,7 +622,7 @@ mpi_no_thread_tag_unregister(parsec_ce_tag_t tag)
         MPI_Request_free(&array_of_requests[i]);
     }
 
-    parsec_hash_table_remove(tag_hash_table, key);
+    parsec_hash_table_remove(tag_hash_table, (parsec_key_t)tag);
 
     free(tag_struct->buf[0]);
     free(tag_struct->buf);

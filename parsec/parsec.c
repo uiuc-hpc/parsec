@@ -31,7 +31,6 @@
 #include "parsec/class/list.h"
 #include "parsec/scheduling.h"
 #include "parsec/class/barrier.h"
-//#include "parsec/remote_dep.h"
 #include "parsec/parsec_remote_dep.h"
 #include "parsec/datarepo.h"
 #include "parsec/bindthread.h"

@@ -137,7 +137,7 @@ struct parsec_comm_engine_s {
 };
 
 /* global comm_engine */
-parsec_comm_engine_t parsec_ce;
+PARSEC_DECLSPEC extern parsec_comm_engine_t parsec_ce;
 
 parsec_comm_engine_t * parsec_comm_engine_init(parsec_context_t *parsec_context);
 int parsec_comm_engine_fini(parsec_comm_engine_t *comm_engine);
