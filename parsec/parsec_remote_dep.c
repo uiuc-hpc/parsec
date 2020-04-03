@@ -276,6 +276,7 @@ remote_dep_mpi_initialize_execution_stream(parsec_context_t *context)
 int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp)
 {
     if(!mpi_initialized) return 0;
+    remote_dep_inc_flying_messages(tp);
     dep_cmd_item_t* item = (dep_cmd_item_t*)calloc(1, sizeof(dep_cmd_item_t));
     PARSEC_OBJ_CONSTRUCT(item, parsec_list_item_t);
     item->action = DEP_NEW_TASKPOOL;
@@ -963,8 +964,6 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
     remote_dep_bind_thread(context);
     PARSEC_PAPI_SDE_THREAD_INIT();
 
-    remote_dep_ce_init(context);
-
     /* Now synchronize with the main thread */
     pthread_mutex_lock(&mpi_thread_mutex);
     pthread_cond_signal(&mpi_thread_condition);
@@ -977,14 +976,12 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
         pthread_cond_wait(&mpi_thread_condition, &mpi_thread_mutex);
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "comm engine ON on process %d/%d",
                              context->my_rank, context->nb_nodes);
-
         /* The MPI thread is owning the lock */
         assert( parsec_communication_engine_up == 2 );
         remote_dep_mpi_on(context);
         /* acknoledge the activation */
         parsec_communication_engine_up = 3;
         whatsup = remote_dep_dequeue_nothread_progress(&parsec_comm_es, -1 /* loop till explicitly asked to return */);
-        parsec_communication_engine_up = 1;
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "comm engine OFF on process %d/%d",
                               context->my_rank, context->nb_nodes);
         parsec_communication_engine_up = 1;  /* went to sleep */

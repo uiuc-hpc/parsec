@@ -551,7 +551,7 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
     return 0;
 }
 
-//parsec_remote_dep_context_t parsec_remote_dep_context;
+parsec_remote_dep_context_t parsec_remote_dep_context;
 int parsec_remote_dep_inited = 0;
 
 /* THIS FUNCTION MUST NOT BE CALLED WHILE REMOTE DEP IS ON.

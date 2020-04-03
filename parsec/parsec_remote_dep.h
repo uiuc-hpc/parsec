@@ -125,7 +125,7 @@ typedef struct {
     uint32_t     elem_size;
 } parsec_remote_dep_context_t;
 
-parsec_remote_dep_context_t parsec_remote_dep_context;
+extern parsec_remote_dep_context_t parsec_remote_dep_context;
 
 void remote_deps_allocation_init(int np, int max_deps);
 void remote_deps_allocation_fini(void);
