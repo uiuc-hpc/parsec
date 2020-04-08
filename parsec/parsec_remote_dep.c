@@ -850,6 +850,11 @@ remote_dep_dequeue_fini(parsec_context_t* context)
 static int
 remote_dep_ce_init(parsec_context_t* context)
 {
+    /* Did anything changed that would require a build of the management structures? */
+    if(context->comm_ctx != NULL && (void *)&parsec_ce == context->comm_ctx) {
+        return 0;
+    }
+
     PARSEC_OBJ_CONSTRUCT(&dep_activates_fifo, parsec_list_t);
     PARSEC_OBJ_CONSTRUCT(&dep_activates_noobj_fifo, parsec_list_t);
     PARSEC_OBJ_CONSTRUCT(&dep_put_fifo, parsec_list_t);
@@ -858,7 +863,7 @@ remote_dep_ce_init(parsec_context_t* context)
     parsec_mpi_same_pos_items = (dep_cmd_item_t**)calloc(parsec_mpi_same_pos_items_size,
                                                         sizeof(dep_cmd_item_t*));
 
-    parsec_comm_engine_init(context);
+    context->comm_ctx = (void *) parsec_comm_engine_init(context);
 
     /* Register Persistant requests */
     parsec_ce.tag_register(REMOTE_DEP_ACTIVATE_TAG, remote_dep_mpi_save_activate_cb, context,
@@ -963,6 +968,7 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
 
     remote_dep_bind_thread(context);
     PARSEC_PAPI_SDE_THREAD_INIT();
+
 
     /* Now synchronize with the main thread */
     pthread_mutex_lock(&mpi_thread_mutex);
@@ -1169,7 +1175,6 @@ remote_dep_mpi_new_taskpool(parsec_execution_stream_t* es,
             PARSEC_DEBUG_VERBOSE(10, parsec_debug_output, "MPI:\tFROM\t%d\tActivate NEWOBJ\t% -8s\twith datakey %lx\tparams %lx",
                     deps->from, remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN),
                     deps->msg.deps, deps->msg.output_mask);
-            item = parsec_list_nolock_remove(&dep_activates_noobj_fifo, item);
 
             /* In case of DTD execution, receiving rank might not have discovered
              * the task responsible for this message. So we have to put this message
@@ -1431,13 +1436,19 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
     }
 #endif  /* PARSEC_DIST_COLLECTIVES */
 
-    /* We need to convert from a dep_datatype_index mask into a dep_index mask */
-    for(int i = 0; NULL != task.task_class->out[i]; i++ ) {
-        target = task.task_class->out[i];
-        if( !(complete_mask & target->flow_datatype_mask) ) continue;
-        for(int j = 0; NULL != target->dep_out[j]; j++ )
-            if(complete_mask & (1U << target->dep_out[j]->dep_datatype_index))
-                action_mask |= (1U << target->dep_out[j]->dep_index);
+    if(PARSEC_TASKPOOL_TYPE_PTG == origin->taskpool->taskpool_type) {
+        /* We need to convert from a dep_datatype_index mask into a dep_index mask */
+        for(int i = 0; NULL != task.task_class->out[i]; i++ ) {
+            target = task.task_class->out[i];
+            if( !(complete_mask & target->flow_datatype_mask) ) continue;
+            for(int j = 0; NULL != target->dep_out[j]; j++ )
+                if(complete_mask & (1U << target->dep_out[j]->dep_datatype_index))
+                    action_mask |= (1U << target->dep_out[j]->dep_index);
+        }
+    } else if(PARSEC_TASKPOOL_TYPE_DTD == origin->taskpool->taskpool_type) {
+        action_mask = complete_mask;
+    } else {
+        assert(0);
     }
     PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "MPI:\tTranslate mask from 0x%lx to 0x%x (remote_dep_release_incoming)",
             complete_mask, action_mask);

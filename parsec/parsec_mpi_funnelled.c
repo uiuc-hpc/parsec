@@ -337,7 +337,7 @@ mpi_funnelled_internal_put_am_callback(parsec_comm_engine_t *ce,
             msg_size - sizeof(mpi_funnelled_handshake_info_t) );
 
     /* We sent the pointer to the call back function for PUT over notification.
-     * For a TRUE one sided this would eb accomplished by an active message at
+     * For a TRUE one sided this would be accomplished by an active message at
      * the tag of the integer value of the functionpointer we trigger as callback.
      */
     cb->cb_type.onesided_mimic_am.fct = (parsec_ce_am_callback_t) handshake_info->cb_fn;
@@ -474,7 +474,6 @@ mpi_funnelled_init(parsec_context_t *context)
                              PARSEC_OBJ_CLASS(mpi_funnelled_dynamic_req_t), sizeof(mpi_funnelled_dynamic_req_t),
                              offsetof(mpi_funnelled_dynamic_req_t, mempool_owner),
                              1);
-
 
     return &parsec_ce;
 }
