@@ -20,16 +20,6 @@
 
 #if defined(PARSEC_PROF_TRACE)
 int parsec_map_operator_profiling_array[2] = {-1};
-#define TAKE_TIME(context, key, eid, refdesc, refid) do {              \
-        parsec_profile_data_collection_info_t info;                    \
-        info.desc = (parsec_data_collection_t*)refdesc;                \
-        info.id = refid;                                               \
-        PARSEC_PROFILING_TRACE(context->es_profile,                    \
-                               __tp->super.profiling_array[(key)],      \
-                               eid, __tp->super.taskpool_id, (void*)&info); \
-    } while(0);
-#else
-#define TAKE_TIME(context, key, id, refdesc, refid)
 #endif
 
 typedef struct parsec_map_operator_taskpool {
@@ -57,7 +47,7 @@ static inline int minexpr_of_row_fct(const parsec_taskpool_t *tp, const parsec_a
 }
 static const parsec_expr_t minexpr_of_row = {
     .op = PARSEC_EXPR_OP_INLINE,
-    .u_expr.v_func = { .type = 0,
+    .u_expr.v_func = { .type = PARSEC_RETURN_TYPE_INT32,
                        .func = { .inline_func_int32 = minexpr_of_row_fct }
     }
 };
@@ -71,7 +61,7 @@ static inline int maxexpr_of_row_fct(const parsec_taskpool_t *tp, const parsec_a
 }
 static const parsec_expr_t maxexpr_of_row = {
     .op = PARSEC_EXPR_OP_INLINE,
-    .u_expr.v_func = { .type = 0,
+    .u_expr.v_func = { .type = PARSEC_RETURN_TYPE_INT32,
                        .func = { .inline_func_int32 = maxexpr_of_row_fct }
     }
 };
@@ -90,7 +80,7 @@ static inline int minexpr_of_column_fct(const parsec_taskpool_t *tp, const parse
 
 static const parsec_expr_t minexpr_of_column = {
     .op = PARSEC_EXPR_OP_INLINE,
-    .u_expr.v_func = { .type = 0,
+    .u_expr.v_func = { .type = PARSEC_RETURN_TYPE_INT32,
                        .func = { .inline_func_int32 = minexpr_of_column_fct }
     }
 };
@@ -105,7 +95,7 @@ static inline int maxexpr_of_column_fct(const parsec_taskpool_t *tp, const parse
 }
 static const parsec_expr_t maxexpr_of_column = {
     .op = PARSEC_EXPR_OP_INLINE,
-    .u_expr.v_func = { .type = 0,
+    .u_expr.v_func = { .type = PARSEC_RETURN_TYPE_INT32,
                        .func = { .inline_func_int32 = maxexpr_of_column_fct }
     }
 };
@@ -341,9 +331,9 @@ static int hook_of(parsec_execution_stream_t *es,
     }
 
 #if !defined(PARSEC_PROF_DRY_BODY)
-    TAKE_TIME(es, 2*this_task->task_class->task_class_id,
-              parsec_hash_table_generic_64bits_key_hash( map_operator_make_key(this_task->taskpool, this_task->locals), NULL ), __tp->src,
-              ((parsec_data_collection_t*)(__tp->src))->data_key((parsec_data_collection_t*)__tp->src, m, n) );
+    PARSEC_TASK_PROF_TRACE(es->es_profile,
+                           this_task->taskpool->profiling_array[2 * this_task->task_class->task_class_id],
+                           (parsec_task_t *) this_task);
     rc = __tp->op( es, src_data, dest_data, __tp->op_data, m, n );
 #endif
     (void)es; (void)rc;
@@ -358,9 +348,9 @@ static int complete_hook(parsec_execution_stream_t *es,
     int n = this_task->locals[1].value;
     (void)k; (void)n; (void)__tp;
 
-    TAKE_TIME(es, 2*this_task->task_class->task_class_id+1,
-              parsec_hash_table_generic_64bits_key_hash( map_operator_make_key(this_task->taskpool, this_task->locals), NULL ),
-              NULL, 0);
+    PARSEC_TASK_PROF_TRACE(es->es_profile,
+                           this_task->taskpool->profiling_array[2 * this_task->task_class->task_class_id+1],
+                           (parsec_task_t *) this_task);
 
 #if defined(PARSEC_PROF_GRAPHER)
     parsec_prof_grapher_task(this_task, es->th_id, es->virtual_process->vp_id, k+n);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2019 The University of Tennessee and The University
+ * Copyright (c) 2009-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  */
@@ -258,7 +258,7 @@ static parsec_execution_stream_t parsec_comm_es = {
  * copy to make sure the communicator does not dissapear before the communication
  * engine starts up.
  */
-int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx )
+static int remote_dep_set_ctx(parsec_context_t* context, intptr_t opaque_comm_ctx )
 {
     MPI_Comm comm;
     int rc;
@@ -269,8 +269,9 @@ int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx )
         return PARSEC_ERROR;
     }
     /* Are we trying to set a congruent communicator a second time? */
-    if( NULL != context->comm_ctx ) {
-        MPI_Comm_compare(*(MPI_Comm*)&context->comm_ctx, (MPI_Comm)opaque_comm_ctx, &rc);
+    assert(-1 != opaque_comm_ctx /* -1 reserved for non-initialized */);
+    if( -1 != context->comm_ctx ) {
+        MPI_Comm_compare((MPI_Comm)context->comm_ctx, (MPI_Comm)opaque_comm_ctx, &rc);
         if( (MPI_IDENT == rc) || (MPI_CONGRUENT == rc) ) {
             PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "Set the same or a congruent communicator. Nothing to do");
             return PARSEC_SUCCESS;
@@ -278,7 +279,7 @@ int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx )
         MPI_Comm_free((MPI_Comm*)&context->comm_ctx);
     }
     rc = MPI_Comm_dup((MPI_Comm)opaque_comm_ctx, &comm);
-    context->comm_ctx = (void*)((uintptr_t)comm);  /* safe conversion to void* */
+    context->comm_ctx = (intptr_t)comm;
     return (MPI_SUCCESS == rc) ? PARSEC_SUCCESS : PARSEC_ERROR;
 }
 
@@ -317,10 +318,11 @@ static int remote_dep_dequeue_init(parsec_context_t* context)
                       "\t* to guarantee correctness of the PaRSEC runtime.\n",
                 thread_level_support == MPI_THREAD_SINGLE ? "MPI_THREAD_SINGLE" : "MPI_THREAD_FUNNELED" );
     }
-    if( NULL == context->comm_ctx ) {
+    if( -1 == context->comm_ctx ) {
         MPI_Comm comm;
         MPI_Comm_dup(MPI_COMM_WORLD, &comm);
-        context->comm_ctx = (void*)((uintptr_t)comm);  /* safe conversion to void* */
+        context->comm_ctx = (intptr_t)comm;
+        assert(-1 != context->comm_ctx /* -1 reserved for non-initialized */);
     }
     MPI_Comm_size( (MPI_Comm)context->comm_ctx, (int*)&(context->nb_nodes));
 
@@ -593,8 +595,8 @@ void parsec_remote_dep_memcpy(parsec_execution_stream_t* es,
     if( es->virtual_process->parsec_context->flags & PARSEC_CONTEXT_FLAG_COMM_MT ) {
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream,
                              "COPY [in content] LOCAL DATA from %p to %p count %d",
-                             PARSEC_DATA_COPY_GET_PTR(src) + data->displ,
-                             PARSEC_DATA_COPY_GET_PTR(dst) + 0,
+                             (char*)PARSEC_DATA_COPY_GET_PTR(src) + data->displ,
+                             (char*)PARSEC_DATA_COPY_GET_PTR(dst) + 0,
                              data->count);
         MPI_Sendrecv((char*)PARSEC_DATA_COPY_GET_PTR(src) + data->displ,
                      data->count, data->layout, 0, es->th_id,
@@ -606,8 +608,8 @@ void parsec_remote_dep_memcpy(parsec_execution_stream_t* es,
 
     PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream,
                          "create MEMCPY request from %p to %p count %d",
-                         PARSEC_DATA_COPY_GET_PTR(src) + data->displ,
-                         PARSEC_DATA_COPY_GET_PTR(dst) + 0,
+                         (char*)PARSEC_DATA_COPY_GET_PTR(src) + data->displ,
+                         (char*)PARSEC_DATA_COPY_GET_PTR(dst) + 0,
                          data->count);
     dep_cmd_item_t* item = (dep_cmd_item_t*)calloc(1, sizeof(dep_cmd_item_t));
     PARSEC_OBJ_CONSTRUCT(item, parsec_list_item_t);
@@ -922,10 +924,11 @@ static int remote_dep_dequeue_nothread_init(parsec_context_t* context)
 {
     parsec_dequeue_construct(&dep_cmd_queue);
     parsec_list_construct(&dep_cmd_fifo);
-    if(NULL == context->comm_ctx) {
+    if(-1 == context->comm_ctx) {
         MPI_Comm comm;
         MPI_Comm_dup(MPI_COMM_WORLD, &comm);
-        context->comm_ctx = (void*)((uintptr_t)comm);  /* safe conversion to void* */
+        context->comm_ctx = (intptr_t)comm;
+        assert(-1 != context->comm_ctx /* -1 reserved for non-initialized */);
     }
     return remote_dep_mpi_setup(context);
 }
@@ -1022,10 +1025,10 @@ remote_dep_dequeue_nothread_progress(parsec_execution_stream_t* es,
         }
         goto check_pending_queues;
     }
-    position = (DEP_ACTIVATE == item->action) ? item->cmd.activate.peer : (context->nb_nodes + item->action);
     assert(DEP_CTL != item->action);
     executed_tasks++;  /* count all the tasks executed during this call */
   handle_now:
+    position = (DEP_ACTIVATE == item->action) ? item->cmd.activate.peer : (context->nb_nodes + item->action);
     switch(item->action) {
     case DEP_CTL:
         ret = item->cmd.ctl.enable;
@@ -1236,11 +1239,9 @@ reread:
     if( __tag > (MAX_MPI_TAG-k) ) {
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "rank %d tag rollover: min %d < %d (+%d) < max %d", parsec_debug_rank,
                 MIN_MPI_TAG, __tag, k, MAX_MPI_TAG);
-        __next_tag = MIN_MPI_TAG;
+        __tag = MIN_MPI_TAG;
     }
-    else {
-        __next_tag = __tag+k;
-    }
+    __next_tag = __tag+k;
 
     if( parsec_comm_es.virtual_process->parsec_context->flags & PARSEC_CONTEXT_FLAG_COMM_MT ) {
         if(!next_tag_cas(&__VAL_NEXT_TAG, __tag, __next_tag)) {
@@ -1317,9 +1318,9 @@ static int remote_dep_mpi_fini(parsec_context_t* context)
     MPI_Comm_free(&dep_self); /* dep_self becomes MPI_COMM_NULL */
 
     /* Release the context communicators if any */
-    if( NULL != context->comm_ctx) {
+    if( -1 != context->comm_ctx) {
         MPI_Comm_free((MPI_Comm*)&context->comm_ctx);
-        context->comm_ctx = NULL; /* We use NULL for the opaque comm_ctx, rather than the MPI specific MPI_COMM_NULL */
+        context->comm_ctx = -1; /* We use -1 for the opaque comm_ctx, rather than the MPI specific MPI_COMM_NULL */
     }
 
     PARSEC_OBJ_DESTRUCT(&dep_activates_fifo);
@@ -1345,7 +1346,7 @@ static int remote_dep_mpi_setup(parsec_context_t* context)
         }
 
     /* Did anything changed that would require a build of the management structures? */
-    assert(NULL != context->comm_ctx);
+    assert(-1 != context->comm_ctx);
     if(dep_comm == (MPI_Comm)context->comm_ctx) {
         return 0;
     }
@@ -1356,7 +1357,7 @@ static int remote_dep_mpi_setup(parsec_context_t* context)
         /* Cleanup prior setup */
         remote_dep_mpi_cleanup(context);
     }
-    assert(MPI_COMM_NULL != context->comm_ctx);
+    assert(-1 != context->comm_ctx);
     dep_comm = (MPI_Comm) context->comm_ctx;
 
 #if defined(PARSEC_HAVE_MPI_OVERTAKE)
@@ -1618,8 +1619,8 @@ static int remote_dep_nothread_memcpy(parsec_execution_stream_t* es,
     dep_cmd_t* cmd = &item->cmd;
     PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream,
                          "COPY LOCAL DATA from %p to %p count %d",
-                         PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.source     ) + cmd->memcpy.displ_s,
-                         PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.destination) + cmd->memcpy.displ_r,
+                         (char*)PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.source     ) + cmd->memcpy.displ_s,
+                         (char*)PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.destination) + cmd->memcpy.displ_r,
                          cmd->memcpy.count);
 
     int rc = MPI_Sendrecv((char*)PARSEC_DATA_COPY_GET_PTR(cmd->memcpy.source     ) + cmd->memcpy.displ_s,
