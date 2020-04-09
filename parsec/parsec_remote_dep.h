@@ -21,6 +21,9 @@
 #include "parsec/parsec_comm_engine.h"
 #include "parsec/scheduling.h"
 
+typedef struct dep_cmd_item_s dep_cmd_item_t;
+typedef union dep_cmd_u dep_cmd_t;
+
 typedef unsigned long remote_dep_datakey_t;
 
 #define PARSEC_ACTION_DEPS_MASK                  0x00FFFFFF
@@ -31,6 +34,13 @@ typedef unsigned long remote_dep_datakey_t;
 #define PARSEC_ACTION_SEND_REMOTE_DEPS           0x20000000
 #define PARSEC_ACTION_RECV_INIT_REMOTE_DEPS      0x40000000
 #define PARSEC_ACTION_RELEASE_REMOTE_DEPS        (PARSEC_ACTION_SEND_INIT_REMOTE_DEPS | PARSEC_ACTION_SEND_REMOTE_DEPS)
+
+enum {
+    REMOTE_DEP_ACTIVATE_TAG = 2,
+    REMOTE_DEP_GET_DATA_TAG,
+    REMOTE_DEP_PUT_END_TAG,
+    REMOTE_DEP_MAX_CTRL_TAG
+} parsec_remote_dep_tag_t;
 
 typedef struct remote_dep_wire_activate_s
 {
@@ -115,6 +125,8 @@ struct parsec_remote_deps_s {
 extern int parsec_communication_engine_up;
 extern int parsec_comm_output_stream;
 extern int parsec_comm_verbose;
+extern parsec_execution_stream_t parsec_comm_es;
+extern int parsec_param_comm_thread_multiple;
 
 #ifdef DISTRIBUTED
 
@@ -164,7 +176,10 @@ void parsec_remote_dep_memcpy(parsec_execution_stream_t* es,
                              parsec_data_copy_t *src,
                              parsec_dep_data_description_t* data);
 
-/* This function adds a command in the commnad queue to activate
+/* Perform a memcpy with datatypes by doing a local sendrecv */
+int remote_dep_nothread_memcpy(parsec_execution_stream_t* es,
+                                      dep_cmd_item_t *item);
+/* This function adds a command in the command queue to activate
  * release_deps of dep we had to delay in DTD runs.
  */
 int
@@ -190,9 +205,6 @@ int parsec_remote_dep_propagate(parsec_execution_stream_t* es,
 
 /** @} */
 
-typedef struct dep_cmd_item_s dep_cmd_item_t;
-typedef union dep_cmd_u dep_cmd_t;
-
 #define DEP_NB_CONCURENT 3
 
 extern int parsec_comm_gets_max;
@@ -210,6 +222,7 @@ typedef enum dep_cmd_action_t {
     DEP_MEMCPY,
     DEP_RELEASE,
     DEP_DTD_DELAYED_RELEASE,
+    DEP_PUT_DATA,
     DEP_GET_DATA,
     DEP_CTL,
     DEP_LAST  /* always the last element. it shoud not be used */
@@ -249,13 +262,17 @@ struct dep_cmd_item_s {
     dep_cmd_t         cmd;
 };
 
+#define dep_cmd_prio (offsetof(dep_cmd_item_t, priority))
+#define dep_mpi_pos_list (offsetof(dep_cmd_item_t, priority) - offsetof(dep_cmd_item_t, pos_list))
+#define rdep_prio (offsetof(parsec_remote_deps_t, max_priority))
 
+/**
+ * These functions will be inherited from the current remote_dep_mpi.c
+ * and for the time being will remain in there.
+ */
 void* remote_dep_dequeue_main(parsec_context_t* context);
-int remote_dep_dequeue_send(parsec_execution_stream_t* es, int rank, parsec_remote_deps_t* deps);
 int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp);
 
-int remote_dep_dequeue_init(parsec_context_t* context);
-int remote_dep_dequeue_fini(parsec_context_t* context);
 int remote_dep_dequeue_on(parsec_context_t* context);
 int remote_dep_dequeue_off(parsec_context_t* context);
 #   define remote_dep_init(ctx) remote_dep_dequeue_init(ctx)
@@ -301,5 +318,55 @@ void remote_deps_allocation_init(int np, int max_output_deps);
 /* This function creates a fake eu for comm thread for profiling DTD runs */
 void
 remote_dep_mpi_initialize_execution_stream(parsec_context_t *context);
+
+void remote_dep_mpi_get_end(parsec_execution_stream_t* es,
+                            int idx,
+                            parsec_remote_deps_t* deps);
+
+#ifdef PARSEC_PROF_TRACE
+void remote_dep_mpi_profiling_init(void);
+void remote_dep_mpi_profiling_fini(void);
+
+#define TAKE_TIME_WITH_INFO(PROF, KEY, I, src, dst, rdw)                \
+    if( parsec_profile_enabled ) {                                      \
+        parsec_profile_remote_dep_mpi_info_t __info;                    \
+        parsec_taskpool_t *__tp = parsec_taskpool_lookup( (rdw).taskpool_id ); \
+        const parsec_task_class_t *__tc = __tp->task_classes_array[(rdw).task_class_id ]; \
+        __info.rank_src = (src);                                        \
+        __info.rank_dst = (dst);                                        \
+        __info.tpid = __tp->taskpool_id;                                \
+        /** Recompute the base profiling key of that function */        \
+        __info.did = __tp->profiling_array != NULL ?                    \
+             BASE_KEY(__tp->profiling_array[2*__tc->task_class_id]) :   \
+             -__tc->task_class_id;                                      \
+        __info.tid = __tc->key_functions->key_hash(                     \
+             __tc->make_key(__tp, (rdw).locals), NULL);                 \
+        PARSEC_PROFILING_TRACE((PROF), (KEY), (I),                      \
+                               PROFILE_OBJECT_ID_NULL, &__info);        \
+    }
+
+#define TAKE_TIME(PROF, KEY, I) PARSEC_PROFILING_TRACE((PROF), (KEY), (I), PROFILE_OBJECT_ID_NULL, NULL)
+
+#else
+#define TAKE_TIME_WITH_INFO(PROF, KEY, I, src, dst, rdw) do {} while(0)
+#define TAKE_TIME(PROF, KEY, I) do {} while(0)
+#define remote_dep_mpi_profiling_init() do {} while(0)
+#define remote_dep_mpi_profiling_fini() do {} while(0)
+#endif  /* PARSEC_PROF_TRACE */
+
+char*
+remote_dep_cmd_to_string(remote_dep_wire_activate_t* origin,
+                         char* str,
+                         size_t len);
+
+extern int parsec_comm_gets_max;
+extern int parsec_comm_gets;
+extern int parsec_comm_puts_max;
+extern int parsec_comm_puts;
+
+#define MIN_MPI_TAG (REMOTE_DEP_MAX_CTRL_TAG+1)
+#if defined(PARSEC_HAVE_MPI_OVERTAKE)
+extern int parsec_param_enable_mpi_overtake;
+#endif
 
 #endif /* __USE_PARSEC_REMOTE_DEP_H__ */

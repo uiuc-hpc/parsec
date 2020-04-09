@@ -35,7 +35,7 @@ int comm_yield = 1;
 /* comm_yield_duration (ns) */
 int comm_yield_ns = 5000;
 /* comm_thread_multiple: see values in the corresponding mca_register */
-static int parsec_param_comm_thread_multiple = -1;
+int parsec_param_comm_thread_multiple = -1;
 
 int remote_dep_bind_thread(parsec_context_t* context);
 

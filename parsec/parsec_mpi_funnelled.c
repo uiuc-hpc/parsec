@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "parsec/parsec_mpi_funnelled.h"
+#include "parsec/parsec_remote_dep.h"
 #include "parsec/class/parsec_hash_table.h"
 #include "parsec/class/dequeue.h"
 #include "parsec/class/list.h"
@@ -52,24 +53,50 @@ PARSEC_DECLSPEC PARSEC_OBJ_CLASS_DECLARATION(mpi_funnelled_mem_reg_handle_t);
 PARSEC_OBJ_CLASS_INSTANCE(mpi_funnelled_mem_reg_handle_t, parsec_list_item_t,
                    NULL, NULL);
 
-/* Circular TAG assignment */
+/* Pointers are converted to long to be used as keys to fetch data in the get
+ * rdv protocol. Make sure we can carry pointers correctly.
+ */
 #ifdef PARSEC_HAVE_LIMITS_H
 #include <limits.h>
 #endif
 #if ULONG_MAX < UINTPTR_MAX
 #error "unsigned long is not large enough to hold a pointer!"
 #endif
-/* note: tags are necessary, because multiple activate requests are not
- * fifo, relative to one another, during the waitsome loop */
-static int MAX_MPI_TAG;
-#define MIN_MPI_TAG (MPI_FUNNELLED_MAX_TAG+1)
-static int __VAL_NEXT_TAG = MIN_MPI_TAG;
-static inline int next_tag() {
-    int __tag = __VAL_NEXT_TAG;
-    if( __tag > (MAX_MPI_TAG) ) {
-        __VAL_NEXT_TAG = __tag = MIN_MPI_TAG;
-    } else
-        __VAL_NEXT_TAG++;
+
+/* note: tags are necessary to order communication between pairs. They are used to
+ * correctly handle data transfers, as each data provider will provide a tag which
+ * combined with the source ensure message matching consistency. As MPI requires the
+ * max tag to be positive, initializing it to a negative value allows us to check
+ * if the layer has been initialized or not.
+ */
+static int MAX_MPI_TAG = -1, mca_tag_ub = -1;
+static volatile int __VAL_NEXT_TAG = MIN_MPI_TAG;
+#if INT_MAX == INT32_MAX
+#define next_tag_cas(t, o, n) parsec_atomic_cas_int32(t, o, n)
+#elif INT_MAX == INT64_MAX
+#define next_tag_cas(t, o, n) parsec_atomic_cas_int64(t, o, n)
+#else
+#error "next_tag_cas written to support sizeof(int) of 4 or 8"
+#endif
+static inline int next_tag(int k) {
+    int __tag, __next_tag;
+reread:
+    __tag = __VAL_NEXT_TAG;
+    if( __tag > (MAX_MPI_TAG-k) ) {
+        PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "rank %d tag rollover: min %d < %d (+%d) < max %d", parsec_debug_rank,
+                MIN_MPI_TAG, __tag, k, MAX_MPI_TAG);
+        __tag = MIN_MPI_TAG;
+    }
+    __next_tag = __tag+k;
+
+    if( parsec_comm_es.virtual_process->parsec_context->flags & PARSEC_CONTEXT_FLAG_COMM_MT ) {
+        if(!next_tag_cas(&__VAL_NEXT_TAG, __tag, __next_tag)) {
+            goto reread;
+        }
+    }
+    else {
+        __VAL_NEXT_TAG = __next_tag;
+    }
     return __tag;
 }
 
@@ -145,7 +172,14 @@ typedef struct mpi_funnelled_callback_s {
     } cb_type;
 } mpi_funnelled_callback_t;
 
-static MPI_Comm comm;
+/* The internal communicator used by the communication engine to host its requests and
+ * other operations. It is a copy of the context->comm_ctx (which is a duplicate of
+ * whatever the user provides).
+ */
+static MPI_Comm dep_comm = MPI_COMM_NULL;
+/* The internal communicator for all intra-node communications */
+static MPI_Comm dep_self = MPI_COMM_NULL;
+
 static mpi_funnelled_callback_t *array_of_callbacks;
 static MPI_Request           *array_of_requests;
 static int                   *array_of_indices;
@@ -238,7 +272,7 @@ mpi_funnelled_internal_get_am_callback(parsec_comm_engine_t *ce,
         request = &array_of_requests[mpi_funnelled_last_active_req];
         cb = &array_of_callbacks[mpi_funnelled_last_active_req];
         MPI_Isend(remote_memory_handle->mem, remote_memory_handle->count, remote_memory_handle->datatype,
-                  src, handshake_info->tag, comm,
+                  src, handshake_info->tag, dep_comm,
                   request);
     } else {
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
@@ -325,7 +359,7 @@ mpi_funnelled_internal_put_am_callback(parsec_comm_engine_t *ce,
     }
 
     MPI_Irecv(remote_memory_handle->mem, remote_memory_handle->count, remote_memory_handle->datatype,
-              src, handshake_info->tag, comm, request);
+              src, handshake_info->tag, dep_comm, request);
 
     /* we(the remote side) requested the source to forward us callback data that will be passed
      * to the callback function to notify upper level that the data has reached. We are copying
@@ -362,18 +396,21 @@ mpi_funnelled_internal_put_am_callback(parsec_comm_engine_t *ce,
     return 1;
 }
 
-parsec_comm_engine_t *
-mpi_funnelled_init(parsec_context_t *context)
+/**
+ * The following function take care of all the steps necessary to initialize the
+ * invariable part of the communication engine such as the const dependencies
+ * to MPI (max tag and other global info), or local objects.
+ */
+static int mpi_funneled_init_once(parsec_context_t* context)
 {
-    int i, mpi_tag_ub_exists, *ub;
+    int mpi_tag_ub_exists, *ub;
 
-    /* Initialize the communicator we will be using for communication */
-    if( NULL != context && NULL != context->comm_ctx ) {
-        MPI_Comm_dup(*(MPI_Comm*)context->comm_ctx, &comm);
-    }
-    else {
-        MPI_Comm_dup(MPI_COMM_WORLD, &comm);
-    }
+    assert(-1 == MAX_MPI_TAG);
+
+    assert(MPI_COMM_NULL == dep_self);
+    MPI_Comm_dup(MPI_COMM_SELF, &dep_self);
+    assert(MPI_COMM_NULL == dep_comm);
+
     /*
      * Based on MPI 1.1 the MPI_TAG_UB should only be defined
      * on MPI_COMM_WORLD.
@@ -383,50 +420,71 @@ mpi_funnelled_init(parsec_context_t *context)
 #else
     MPI_Attr_get(MPI_COMM_WORLD, MPI_TAG_UB, &ub, &mpi_tag_ub_exists);
 #endif  /* defined(PARSEC_HAVE_MPI_20) */
+
+    parsec_mca_param_reg_int_name("mpi", "tag_ub",
+                                  "The upper bound of the TAG used by the MPI communication engine. Bounded by the MPI_TAG_UB attribute on the MPI implementation MPI_COMM_WORLD. (-1 for MPI default)",
+                                  false, false, -1, &mca_tag_ub);
+
     if( !mpi_tag_ub_exists ) {
-        MAX_MPI_TAG = INT_MAX;
-        parsec_warning("Your MPI implementation does not define MPI_TAG_UB and thus violates the standard (MPI-2.2, page 29, line 30); Lets assume any integer value is a valid MPI Tag.\n");
+        MAX_MPI_TAG = (-1 == mca_tag_ub) ? INT_MAX : mca_tag_ub;
+        parsec_warning("Your MPI implementation does not define MPI_TAG_UB and thus violates the standard (MPI-2.2, page 29, line 30). The max tag is therefore set using the MCA mpi_tag_ub (current value %d).\n", MAX_MPI_TAG);
     } else {
-        MAX_MPI_TAG = *ub;
+        MAX_MPI_TAG = ((-1 == mca_tag_ub) || (mca_tag_ub > *ub)) ? *ub : mca_tag_ub;
+    }
         if( MAX_MPI_TAG < INT_MAX ) {
-            parsec_debug_verbose(3, parsec_debug_output, "MPI:\tYour MPI implementation defines the maximal TAG value to %d (0x%08x), which might be too small should you have more than %d simultaneous remote dependencies",
-                   MAX_MPI_TAG, (unsigned int)MAX_MPI_TAG, MAX_MPI_TAG / MAX_PARAM_COUNT);
+        parsec_debug_verbose(3, parsec_comm_output_stream,
+                             "MPI:\tYour MPI implementation defines the maximal TAG value to %d (0x%08x),"
+                             " which might be too small should you have more than %d pending remote dependencies",
+                             MAX_MPI_TAG, (unsigned int)MAX_MPI_TAG, MAX_MPI_TAG / MAX_DEP_OUT_COUNT);
+    }
+
+    remote_dep_mpi_profiling_init();
+    (void)context;
+    return 0;
+}
+
+parsec_comm_engine_t *
+mpi_funnelled_init(parsec_context_t *context)
+{
+    int i, rc;
+
+    if( -1 == MAX_MPI_TAG )
+        if( 0 != (rc = mpi_funneled_init_once(context)) ) {
+            parsec_debug_verbose(3, parsec_comm_output_stream, "MPI: Failed to correctly retrieve the max TAG."
+                                 " PaRSEC cannot continue using MPI\n");
+            return NULL;
         }
-    }
 
-    if(NULL != context) {
-        MPI_Comm_size(comm, &(context->nb_nodes));
-        MPI_Comm_rank(comm, &(context->my_rank));
+    /* Did anything changed that would require a build of the management structures? */
+    assert(NULL != context->comm_ctx);
+    if(dep_comm == (MPI_Comm)context->comm_ctx) {
+        return 0;
     }
+    PARSEC_DEBUG_VERBOSE(10, parsec_comm_output_stream, "rank %d ENABLE MPI communication engine",
+                         parsec_debug_rank);
 
-    /* Make all the fn pointers point to this compnent's function */
-    parsec_ce.tag_register        = mpi_no_thread_tag_register;
-    parsec_ce.tag_unregister      = mpi_no_thread_tag_unregister;
-    parsec_ce.mem_register        = mpi_no_thread_mem_register;
-    parsec_ce.mem_unregister      = mpi_no_thread_mem_unregister;
-    parsec_ce.get_mem_handle_size = mpi_no_thread_get_mem_reg_handle_size;
-    parsec_ce.mem_retrieve        = mpi_no_thread_mem_retrieve;
-    parsec_ce.put                 = mpi_no_thread_put;
-    parsec_ce.get                 = mpi_no_thread_get;
-    parsec_ce.progress            = mpi_no_thread_progress;
-    parsec_ce.enable              = mpi_no_thread_enable;
-    parsec_ce.disable             = mpi_no_thread_disable;
-    parsec_ce.pack                = mpi_no_thread_pack;
-    parsec_ce.unpack              = mpi_no_thread_unpack;
-    parsec_ce.sync                = mpi_no_thread_sync;
-    parsec_ce.can_serve           = mpi_no_thread_can_push_more;
-    parsec_ce.send_active_message = mpi_no_thread_send_active_message;
-    parsec_ce.parsec_context = context;
-    parsec_ce.capabilites.sided = 2;
-    parsec_ce.capabilites.supports_noncontiguous_datatype = 1;
+    assert(MPI_COMM_NULL != context->comm_ctx);
+    dep_comm = (MPI_Comm) context->comm_ctx;
+
+#if defined(PARSEC_HAVE_MPI_OVERTAKE)
+    if( parsec_param_enable_mpi_overtake ) {
+        MPI_Info no_order;
+        MPI_Info_create(&no_order);
+        MPI_Info_set(no_order, "mpi_assert_allow_overtaking", "true");
+        MPI_Comm_set_info(dep_comm, no_order);
+        MPI_Info_free(&no_order);
+    }
+#endif
+
+    MPI_Comm_size(dep_comm, &(context->nb_nodes));
+    MPI_Comm_rank(dep_comm, &(context->my_rank));
 
     /* init hash table for registered tags */
-    int nb;
     tag_hash_table = PARSEC_OBJ_NEW(parsec_hash_table_t);
-    for(nb = 1; nb < 16 && (1 << nb) < tag_hash_table_size; nb++) /* nothing */;
+    for(i = 1; i < 16 && (1 << i) < tag_hash_table_size; i++) /* do nothing */;
     parsec_hash_table_init(tag_hash_table,
                            offsetof(mpi_funnelled_tag_t, ht_item),
-                           nb,
+                           i,
                            tag_key_fns,
                            tag_hash_table);
 
@@ -462,7 +520,6 @@ mpi_funnelled_init(parsec_context_t *context)
 
     PARSEC_OBJ_CONSTRUCT(&mpi_funnelled_dynamic_req_fifo, parsec_list_t);
 
-
     mpi_funnelled_mem_reg_handle_mempool = (parsec_mempool_t*) malloc (sizeof(parsec_mempool_t));
     parsec_mempool_construct(mpi_funnelled_mem_reg_handle_mempool,
                              PARSEC_OBJ_CLASS(mpi_funnelled_mem_reg_handle_t), sizeof(mpi_funnelled_mem_reg_handle_t),
@@ -475,12 +532,40 @@ mpi_funnelled_init(parsec_context_t *context)
                              offsetof(mpi_funnelled_dynamic_req_t, mempool_owner),
                              1);
 
+    /* Make all the fn pointers point to this compnent's function */
+    parsec_ce.tag_register        = mpi_no_thread_tag_register;
+    parsec_ce.tag_unregister      = mpi_no_thread_tag_unregister;
+    parsec_ce.mem_register        = mpi_no_thread_mem_register;
+    parsec_ce.mem_unregister      = mpi_no_thread_mem_unregister;
+    parsec_ce.get_mem_handle_size = mpi_no_thread_get_mem_reg_handle_size;
+    parsec_ce.mem_retrieve        = mpi_no_thread_mem_retrieve;
+    parsec_ce.put                 = mpi_no_thread_put;
+    parsec_ce.get                 = mpi_no_thread_get;
+    parsec_ce.progress            = mpi_no_thread_progress;
+    parsec_ce.enable              = mpi_no_thread_enable;
+    parsec_ce.disable             = mpi_no_thread_disable;
+    parsec_ce.pack                = mpi_no_thread_pack;
+    parsec_ce.unpack              = mpi_no_thread_unpack;
+    parsec_ce.sync                = mpi_no_thread_sync;
+    parsec_ce.can_serve           = mpi_no_thread_can_push_more;
+    parsec_ce.send_active_message = mpi_no_thread_send_active_message;
+    parsec_ce.parsec_context = context;
+    parsec_ce.capabilites.sided = 2;
+    parsec_ce.capabilites.supports_noncontiguous_datatype = 1;
+
     return &parsec_ce;
 }
 
+/**
+ * The communication engine is now completely disabled. All internal resources
+ * are released, and no future communications are possible.
+ * Anything initialized in init_once must be disposed off here
+ */
 int
 mpi_funnelled_fini(parsec_comm_engine_t *ce)
 {
+    assert( -1 != MAX_MPI_TAG );
+
     /* TODO: GO through all registered tags and unregister them */
     ce->tag_unregister(MPI_FUNNELLED_GET_TAG_INTERNAL);
     ce->tag_unregister(MPI_FUNNELLED_PUT_TAG_INTERNAL);
@@ -500,6 +585,17 @@ mpi_funnelled_fini(parsec_comm_engine_t *ce)
 
     parsec_mempool_destruct(mpi_funnelled_dynamic_req_mempool);
     free(mpi_funnelled_dynamic_req_mempool);
+
+    /* Remove the static handles */
+    MPI_Comm_free(&dep_self); /* dep_self becomes MPI_COMM_NULL */
+
+    /* Release the context communicators if any */
+    if( NULL != ce->parsec_context->comm_ctx) {
+        MPI_Comm_free((MPI_Comm*)&ce->parsec_context->comm_ctx);
+        ce->parsec_context->comm_ctx = NULL; /* We use NULL for the opaque comm_ctx, rather than the MPI specific MPI_COMM_NULL */
+    }
+
+    MAX_MPI_TAG = -1;  /* mark the layer as uninitialized */
 
     return 1;
 }
@@ -574,7 +670,7 @@ mpi_no_thread_tag_register(parsec_ce_tag_t tag,
          * still work as the memory is copied after initialization.
          */
         MPI_Recv_init(buf[i], msg_length, MPI_BYTE,
-                      MPI_ANY_SOURCE, tag, comm,
+                      MPI_ANY_SOURCE, tag, dep_comm,
                       &array_of_requests[mpi_funnelled_static_req_idx]);
 
         cb = &array_of_callbacks[mpi_funnelled_static_req_idx];
@@ -619,6 +715,7 @@ mpi_no_thread_tag_unregister(parsec_ce_tag_t tag)
         MPI_Cancel(&array_of_requests[i]);
         MPI_Test(&array_of_requests[i], &flag, &status);
         MPI_Request_free(&array_of_requests[i]);
+        assert( MPI_REQUEST_NULL == array_of_requests[i] );
     }
 
     parsec_hash_table_remove(tag_hash_table, (parsec_key_t)tag);
@@ -707,7 +804,7 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
     mpi_funnelled_callback_t *cb;
     MPI_Request *request;
 
-    int tag = next_tag();
+    int tag = next_tag(1);
     assert(tag >= MIN_MPI_TAG);
 
     mpi_funnelled_mem_reg_handle_t *source_memory_handle = (mpi_funnelled_mem_reg_handle_t *) lreg;
@@ -757,7 +854,7 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
         request = &array_of_requests[mpi_funnelled_last_active_req];
         cb = &array_of_callbacks[mpi_funnelled_last_active_req];
         MPI_Isend((char *)source_memory_handle->mem + ldispl, source_memory_handle->count,
-                  source_memory_handle->datatype, remote, tag, comm,
+                  source_memory_handle->datatype, remote, tag, dep_comm,
                   request);
     } else {
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
@@ -809,7 +906,7 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
     mpi_funnelled_callback_t *cb;
     MPI_Request *request;
 
-    int tag = next_tag();
+    int tag = next_tag(1);
 
     mpi_funnelled_mem_reg_handle_t *source_memory_handle = (mpi_funnelled_mem_reg_handle_t *) lreg;
     mpi_funnelled_mem_reg_handle_t *remote_memory_handle = (mpi_funnelled_mem_reg_handle_t *) rreg;
@@ -862,7 +959,7 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
     }
 
     MPI_Irecv((char*)source_memory_handle->mem + ldispl, source_memory_handle->count, source_memory_handle->datatype,
-              remote, tag, comm,
+              remote, tag, dep_comm,
               request);
 
     cb->cb_type.onesided.fct = l_cb;
@@ -904,7 +1001,7 @@ mpi_no_thread_send_active_message(parsec_comm_engine_t *ce,
     assert(tag_struct->msg_length >= size);
     (void) tag_struct;
 
-    MPI_Send(addr, size, MPI_BYTE, remote, tag, comm);
+    MPI_Send(addr, size, MPI_BYTE, remote, tag, dep_comm);
 
     return 1;
 }
@@ -991,7 +1088,7 @@ mpi_no_thread_push_posted_req(parsec_comm_engine_t *ce)
     if(item->post_isend) {
         mpi_funnelled_mem_reg_handle_t *ldata = (mpi_funnelled_mem_reg_handle_t *) item->cb.cb_type.onesided.lreg;
         MPI_Isend((char *)ldata->mem + item->cb.cb_type.onesided.ldispl, ldata->count,
-                  ldata->datatype, item->cb.cb_type.onesided.remote, item->cb.cb_type.onesided.size, comm,
+                  ldata->datatype, item->cb.cb_type.onesided.remote, item->cb.cb_type.onesided.size, dep_comm,
                   &array_of_requests[mpi_funnelled_last_active_req]);
     }
 
@@ -1077,7 +1174,7 @@ mpi_no_thread_pack(parsec_comm_engine_t *ce,
                    int *positionA)
 {
     (void) ce;
-    return MPI_Pack(inbuf, incount, MPI_BYTE, outbuf, outsize, positionA, comm);
+    return MPI_Pack(inbuf, incount, MPI_BYTE, outbuf, outsize, positionA, dep_comm);
 
 }
 
@@ -1087,7 +1184,7 @@ mpi_no_thread_unpack(parsec_comm_engine_t *ce,
                      void *outbuf, int outcount)
 {
     (void) ce;
-    return MPI_Unpack(inbuf, insize, position, outbuf, outcount, MPI_BYTE, comm);
+    return MPI_Unpack(inbuf, insize, position, outbuf, outcount, MPI_BYTE, dep_comm);
 }
 
 /* Mechanism to post global synchronization from upper layer */
@@ -1095,7 +1192,7 @@ int
 mpi_no_thread_sync(parsec_comm_engine_t *ce)
 {
     (void) ce;
-    MPI_Barrier(comm);
+    MPI_Barrier(dep_comm);
     return 0;
 }
 
