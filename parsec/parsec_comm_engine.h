@@ -110,9 +110,23 @@ typedef int (*parsec_ce_unpack_fn_t)(parsec_comm_engine_t *ce,
 typedef int (*parsec_ce_sync_fn_t)(parsec_comm_engine_t *comm_engine);
 typedef int (*parsec_ce_can_serve_fn_t)(parsec_comm_engine_t *comm_engine);
 
+/**
+ * This function realize a data reshaping, by conceptually packing the dst
+ * into src.
+ */
+typedef int (*parsec_ce_reshape_fn_t)(parsec_comm_engine_t* ce,
+                                      parsec_execution_stream_t* es,
+                                      parsec_data_copy_t *dst,
+                                      parsec_data_copy_t *src,
+                                      parsec_datatype_t layout,
+                                      int64_t displ_src,
+                                      int64_t displ_dst,
+                                      uint64_t count);
+
 struct parsec_comm_engine_capabilites_s {
-    int sided; /* Valid are 1 and 2 */
-    int supports_noncontiguous_datatype;
+    unsigned int sided : 2; /* Valid values are 1 and 2 */
+    unsigned int supports_noncontiguous_datatype : 1;
+    unsigned int multithreaded : 1;
 };
 
 struct parsec_comm_engine_s {
@@ -131,6 +145,7 @@ struct parsec_comm_engine_s {
     parsec_ce_disable_fn_t        disable;
     parsec_ce_pack_fn_t           pack;
     parsec_ce_unpack_fn_t         unpack;
+    parsec_ce_reshape_fn_t        reshape;
     parsec_ce_sync_fn_t           sync;
     parsec_ce_can_serve_fn_t      can_serve;
     parsec_ce_send_active_message_fn_t send_active_message;

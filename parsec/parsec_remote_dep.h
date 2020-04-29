@@ -49,15 +49,15 @@ typedef struct remote_dep_wire_activate_s
     uint32_t             taskpool_id;
     uint32_t             task_class_id;
     uint32_t             length;
-    parsec_assignment_t         locals[MAX_LOCAL_COUNT];
+    parsec_assignment_t  locals[MAX_LOCAL_COUNT];
 } remote_dep_wire_activate_t;
 
 typedef struct remote_dep_wire_get_s
 {
-    remote_dep_datakey_t source_deps;
-    remote_dep_datakey_t remote_callback_data;
-    remote_dep_datakey_t output_mask;
-    uintptr_t callback_fn;
+    remote_dep_datakey_t       source_deps;
+    remote_dep_datakey_t       remote_callback_data;
+    remote_dep_datakey_t       output_mask;
+    uintptr_t                  callback_fn;
     parsec_ce_mem_reg_handle_t remote_memory_handle;
 } remote_dep_wire_get_t;
 
@@ -74,8 +74,8 @@ struct parsec_dep_data_description_s {
     struct parsec_arena_s     *arena;
     struct parsec_data_copy_s *data;
     parsec_datatype_t          layout;
-    uint64_t                  count;
-    int64_t                   displ;
+    uint64_t                   count;
+    int64_t                    displ;
 };
 
 struct remote_dep_output_param_s {
@@ -244,13 +244,13 @@ union dep_cmd_u {
         parsec_taskpool_t    *tp;
     } new_taskpool;
     struct {
-        parsec_taskpool_t    *taskpool;
-        parsec_data_copy_t   *source;
-        parsec_data_copy_t   *destination;
-        parsec_datatype_t     datatype;
-        int64_t               displ_s;
-        int64_t               displ_r;
-        int                   count;
+        parsec_taskpool_t             *taskpool;
+        parsec_data_copy_t            *source;
+        parsec_data_copy_t            *destination;
+        parsec_datatype_t              layout;
+        int64_t                        displ_src;
+        int64_t                        displ_dst;
+        uint64_t                       count;
     } memcpy;
 };
 
@@ -309,7 +309,7 @@ remote_dep_dec_flying_messages(parsec_taskpool_t *handle)
     (void)parsec_taskpool_update_runtime_nbtask(handle, -1);
 }
 
-int remote_dep_set_ctx(parsec_context_t* context, void* opaque_comm_ctx );
+int remote_dep_set_ctx(parsec_context_t* context, intptr_t opaque_comm_ctx );
 
 parsec_remote_deps_t* remote_deps_allocate( parsec_lifo_t* lifo );
 
