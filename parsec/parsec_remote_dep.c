@@ -1301,7 +1301,7 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
                             from, es->virtual_process->parsec_context->my_rank, (*task));
 
         /* Send AM */
-        parsec_ce.send_active_message(&parsec_ce, REMOTE_DEP_GET_DATA_TAG, from, buf, buf_size);
+        parsec_ce.send_am(&parsec_ce, REMOTE_DEP_GET_DATA_TAG, from, buf, buf_size);
         TAKE_TIME(MPIctl_prof, MPI_Data_ctl_ek, get++);
 
         TAKE_TIME_WITH_INFO(MPIrcv_prof, MPI_Data_pldr_sk, k, from,
@@ -1593,7 +1593,7 @@ remote_dep_nothread_send(parsec_execution_stream_t* es,
     *head_item = item;
     assert(NULL != ring);
 
-    parsec_ce.send_active_message(&parsec_ce, REMOTE_DEP_ACTIVATE_TAG, peer, packed_buffer, position);
+    parsec_ce.send_am(&parsec_ce, REMOTE_DEP_ACTIVATE_TAG, peer, packed_buffer, position);
 
     TAKE_TIME(MPIctl_prof, MPI_Activate_ek, act++);
     DEBUG_MARK_CTL_MSG_ACTIVATE_SENT(peer, (void*)&deps->msg, &deps->msg);

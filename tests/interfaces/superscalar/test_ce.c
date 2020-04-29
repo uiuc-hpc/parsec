@@ -307,7 +307,7 @@ notify_about_put(parsec_comm_engine_t *ce,
             rank_1_memory_handle,
             ce->get_mem_handle_size() );
 
-    ce->send_active_message(ce, NOTIFY_ABOUT_MEM_HANDLE_FROM_1_TAG, 0, PUT_forward_mem_handle_message, PUT_forward_mem_handle_message_size);
+    ce->send_am(ce, NOTIFY_ABOUT_MEM_HANDLE_FROM_1_TAG, 0, PUT_forward_mem_handle_message, PUT_forward_mem_handle_message_size);
 
     free(PUT_forward_mem_handle_message);
 
@@ -485,8 +485,8 @@ int main(int argc, char **argv)
         printf("[%d] Sending same active message twice to 1, message: [%d,%d,%d]\n",
                 my_rank, intbuffer[0], intbuffer[1], intbuffer[2]);
 
-        ce->send_active_message(ce, ACTIVE_MESSAGE_FROM_0_TAG, 1, intbuffer, 3*sizeof(int));
-        ce->send_active_message(ce, ACTIVE_MESSAGE_FROM_0_TAG, 1, intbuffer, 3*sizeof(int));
+        ce->send_am(ce, ACTIVE_MESSAGE_FROM_0_TAG, 1, intbuffer, 3*sizeof(int));
+        ce->send_am(ce, ACTIVE_MESSAGE_FROM_0_TAG, 1, intbuffer, 3*sizeof(int));
 
         free(intbuffer);
     }
@@ -509,8 +509,8 @@ int main(int argc, char **argv)
         printf("[%d] Sending same active message twice to 0, message: [%f,%f]\n",
                 my_rank, floatbuffer[0], floatbuffer[1]);
 
-        ce->send_active_message(ce, ACTIVE_MESSAGE_FROM_1_TAG, 0, floatbuffer, 2*sizeof(float));
-        ce->send_active_message(ce, ACTIVE_MESSAGE_FROM_1_TAG, 0, floatbuffer, 2*sizeof(float));
+        ce->send_am(ce, ACTIVE_MESSAGE_FROM_1_TAG, 0, floatbuffer, 2*sizeof(float));
+        ce->send_am(ce, ACTIVE_MESSAGE_FROM_1_TAG, 0, floatbuffer, 2*sizeof(float));
 
         free(floatbuffer);
     }
@@ -578,7 +578,7 @@ int main(int argc, char **argv)
                     rank_0_memory_handle_size );
 
             /* 0 lets 1 know that it has some data for 1 to get */
-            ce->send_active_message(ce, NOTIFY_ABOUT_GET_FROM_0_TAG, 1, GET_activation_message, GET_activation_message_size);
+            ce->send_am(ce, NOTIFY_ABOUT_GET_FROM_0_TAG, 1, GET_activation_message, GET_activation_message_size);
 
             free(GET_activation_message);
 
@@ -650,7 +650,7 @@ int main(int argc, char **argv)
                     rank_0_memory_handle_size );
 
             /* 0 lets 1 know that it has the data for 1 */
-            ce->send_active_message(ce, NOTIFY_ABOUT_PUT_FROM_0_TAG, 1, PUT_activation_message, PUT_activation_message_size);
+            ce->send_am(ce, NOTIFY_ABOUT_PUT_FROM_0_TAG, 1, PUT_activation_message, PUT_activation_message_size);
 
             free(PUT_activation_message);
 

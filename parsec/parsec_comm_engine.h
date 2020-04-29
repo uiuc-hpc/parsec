@@ -130,25 +130,25 @@ struct parsec_comm_engine_capabilites_s {
 };
 
 struct parsec_comm_engine_s {
-    parsec_comm_engine_capabilites_t capabilites;
-    parsec_context_t             *parsec_context;
-    parsec_ce_tag_register_fn_t   tag_register;
-    parsec_ce_tag_unregister_fn_t tag_unregister;
-    parsec_ce_mem_register_fn_t   mem_register;
-    parsec_ce_mem_unregister_fn_t mem_unregister;
+    parsec_context_t                      *parsec_context;
+    parsec_comm_engine_capabilites_t       capabilites;
+    parsec_ce_tag_register_fn_t            tag_register;
+    parsec_ce_tag_unregister_fn_t          tag_unregister;
+    parsec_ce_mem_register_fn_t            mem_register;
+    parsec_ce_mem_unregister_fn_t          mem_unregister;
     parsec_ce_get_mem_reg_handle_size_fn_t get_mem_handle_size;
-    parsec_ce_mem_retrieve_fn_t   mem_retrieve;
-    parsec_ce_put_fn_t            put;
-    parsec_ce_get_fn_t            get;
-    parsec_ce_progress_fn_t       progress;
-    parsec_ce_enable_fn_t         enable;
-    parsec_ce_disable_fn_t        disable;
-    parsec_ce_pack_fn_t           pack;
-    parsec_ce_unpack_fn_t         unpack;
-    parsec_ce_reshape_fn_t        reshape;
-    parsec_ce_sync_fn_t           sync;
-    parsec_ce_can_serve_fn_t      can_serve;
-    parsec_ce_send_active_message_fn_t send_active_message;
+    parsec_ce_mem_retrieve_fn_t            mem_retrieve;
+    parsec_ce_put_fn_t                     put;
+    parsec_ce_get_fn_t                     get;
+    parsec_ce_progress_fn_t                progress;
+    parsec_ce_enable_fn_t                  enable;
+    parsec_ce_disable_fn_t                 disable;
+    parsec_ce_pack_fn_t                    pack;
+    parsec_ce_unpack_fn_t                  unpack;
+    parsec_ce_reshape_fn_t                 reshape;
+    parsec_ce_sync_fn_t                    sync;
+    parsec_ce_can_serve_fn_t               can_serve;
+    parsec_ce_send_active_message_fn_t     send_am;
 };
 
 /* global comm_engine */

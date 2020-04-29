@@ -262,11 +262,8 @@ mpi_funnelled_internal_get_am_callback(parsec_comm_engine_t *ce,
 
     assert(mpi_funnelled_last_active_req >= mpi_funnelled_static_req_idx);
 
-    int post_in_static_array = 1;
+    int post_in_static_array = mpi_funnelled_last_active_req < size_of_total_reqs;
     mpi_funnelled_dynamic_req_t *item;
-    if(!(mpi_funnelled_last_active_req < size_of_total_reqs)) {
-        post_in_static_array = 0;
-    }
 
     if(post_in_static_array) {
         request = &array_of_requests[mpi_funnelled_last_active_req];
@@ -545,7 +542,7 @@ mpi_funnelled_init(parsec_context_t *context)
     parsec_ce.sync                = mpi_no_thread_sync;
     parsec_ce.reshape             = parsec_mpi_sendrecv;
     parsec_ce.can_serve           = mpi_no_thread_can_push_more;
-    parsec_ce.send_active_message = mpi_no_thread_send_active_message;
+    parsec_ce.send_am             = mpi_no_thread_send_active_message;
 
     parsec_ce.parsec_context      = context;
     parsec_ce.capabilites.sided   = 2;
@@ -859,8 +856,7 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
 
     /* Send AM to src to post Isend on this tag */
     /* this is blocking, so using data on stack is not a problem */
-    ce->send_active_message(ce, MPI_FUNNELLED_PUT_TAG_INTERNAL, remote,
-                            buf, buf_size);
+    ce->send_am(ce, MPI_FUNNELLED_PUT_TAG_INTERNAL, remote, buf, buf_size);
 
     free(buf);
 
@@ -959,8 +955,7 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
 
     /* Send AM to src to post Isend on this tag */
     /* this is blocking, so using data on stack is not a problem */
-    ce->send_active_message(ce, MPI_FUNNELLED_GET_TAG_INTERNAL, remote,
-                            buf, buf_size);
+    ce->send_am(ce, MPI_FUNNELLED_GET_TAG_INTERNAL, remote, buf, buf_size);
 
     free(buf);
 
