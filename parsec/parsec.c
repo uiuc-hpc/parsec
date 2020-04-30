@@ -182,7 +182,7 @@ static void* __parsec_thread_init( __parsec_temporary_thread_initialization_t* s
 {
     parsec_execution_stream_t* es;
     int pi;
-    
+
     /* don't use PARSEC_THREAD_IS_MASTER, it is too early and we cannot yet allocate the es struct */
     if( (0 != startup->virtual_process->vp_id) || (0 != startup->th_id) || parsec_runtime_bind_main_thread ) {
         /* Bind to the specified CORE */
@@ -771,8 +771,6 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     }
 
     __parsec_thread_init( &startup[0] );
-
-    remote_dep_mpi_initialize_execution_stream(context);
 
     /* Wait until all threads are done binding themselves */
     parsec_barrier_wait( &(context->barrier) );

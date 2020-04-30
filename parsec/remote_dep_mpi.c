@@ -451,8 +451,29 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
 
     /* This is the main loop. Wait until being woken up by the main thread, do
      * the MPI stuff until we get the OFF or FINI commands. Then react the them.
+     * However, the first time do the delayed initialization that could not have
+     * been done before due to the lack of other component initialization.
      */
-    do {
+
+    /* Let's wait until we are awaken */
+    pthread_cond_wait(&mpi_thread_condition, &mpi_thread_mutex);
+    PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine ON on process %d/%d",
+                         context->my_rank, context->nb_nodes);
+    /* The MPI thread is owning the lock */
+    assert( parsec_communication_engine_up == 2 );
+
+    /* Lazy or delayed initializations */
+    remote_dep_mpi_initialize_execution_stream(context);
+
+    remote_dep_mpi_on(context);
+    /* acknoledge the activation */
+    parsec_communication_engine_up = 3;
+    whatsup = remote_dep_dequeue_nothread_progress(&parsec_comm_es, -1 /* loop till explicitly asked to return */);
+    PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine OFF on process %d/%d",
+                         context->my_rank, context->nb_nodes);
+    parsec_communication_engine_up = 1;  /* went to sleep */
+
+    while( -1 != whatsup ) {
         /* Let's wait until we are awaken */
         pthread_cond_wait(&mpi_thread_condition, &mpi_thread_mutex);
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine ON on process %d/%d",
@@ -466,7 +487,7 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine OFF on process %d/%d",
                              context->my_rank, context->nb_nodes);
         parsec_communication_engine_up = 1;  /* went to sleep */
-    } while(-1 != whatsup);
+    }
 
     /* Release all resources */
     remote_dep_mpi_fini(context);
@@ -1028,29 +1049,22 @@ enum {
 } parsec_remote_dep_tag_t;
 
 #ifdef PARSEC_PROF_TRACE
-static parsec_thread_profiling_t* MPIctl_prof;
-static parsec_thread_profiling_t* MPIsnd_prof;
-static parsec_thread_profiling_t* MPIrcv_prof;
-static int MPI_Activate_sk, MPI_Activate_ek;
+parsec_thread_profiling_t* MPIctl_prof;
+parsec_thread_profiling_t* MPIsnd_prof;
+parsec_thread_profiling_t* MPIrcv_prof;
+int MPI_Activate_sk, MPI_Activate_ek;
 static int64_t get = 0;
-static int MPI_Data_ctl_sk, MPI_Data_ctl_ek;
-static int MPI_Data_plds_sk, MPI_Data_plds_ek;
-static int MPI_Data_pldr_sk, MPI_Data_pldr_ek;
-static int activate_cb_trace_sk, activate_cb_trace_ek;
-static int put_cb_trace_sk, put_cb_trace_ek;
+int MPI_Data_ctl_sk, MPI_Data_ctl_ek;
+int MPI_Data_plds_sk, MPI_Data_plds_ek;
+int MPI_Data_pldr_sk, MPI_Data_pldr_ek;
+int activate_cb_trace_sk, activate_cb_trace_ek;
+int put_cb_trace_sk, put_cb_trace_ek;
 
 /**
  * The structure describe the MPI events saves into the profiling stream. The following
  * string represent it's description so that an external package can decrypt the
  * binary format of the stream.
  */
-typedef struct {
-    int rank_src;  // 0
-    int rank_dst;  // 4
-    uint64_t tid;  // 8
-    uint32_t tpid;  // 16
-    uint32_t did;   // 20
-} parsec_profile_remote_dep_mpi_info_t; // 24 bytes
 
 char parsec_profile_remote_dep_mpi_info_to_string[] = "src{int32_t};dst{int32_t};tid{int64_t};tpid{int32_t};did{int32_t}";
 

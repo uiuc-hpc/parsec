@@ -15,8 +15,6 @@
 
 #include "parsec/parsec_binary_profile.h"
 
-int remote_dep_mpi_on(parsec_context_t* context);
-
 int parsec_comm_gets_max  = DEP_NB_CONCURENT * MAX_PARAM_COUNT;
 int parsec_comm_gets      = 0;
 int parsec_comm_puts_max  = DEP_NB_CONCURENT * MAX_PARAM_COUNT;
@@ -157,6 +155,75 @@ static int remote_dep_nothread_send(parsec_execution_stream_t* es,
 static int remote_dep_ce_init(parsec_context_t* context);
 static int remote_dep_ce_fini(parsec_context_t* context);
 
+#ifdef PARSEC_PROF_TRACE
+parsec_thread_profiling_t* MPIctl_prof;
+parsec_thread_profiling_t* MPIsnd_prof;
+parsec_thread_profiling_t* MPIrcv_prof;
+int MPI_Activate_sk, MPI_Activate_ek;
+int MPI_Data_ctl_sk, MPI_Data_ctl_ek;
+int MPI_Data_plds_sk, MPI_Data_plds_ek;
+int MPI_Data_pldr_sk, MPI_Data_pldr_ek;
+int activate_cb_trace_sk, activate_cb_trace_ek;
+int put_cb_trace_sk, put_cb_trace_ek;
+
+/**
+ * The structure describe the MPI events saves into the profiling stream. The following
+ * string represent it's description so that an external package can decrypt the
+ * binary format of the stream.
+ */
+
+char parsec_profile_remote_dep_mpi_info_to_string[] = "src{int32_t};dst{int32_t};tid{int64_t};tpid{int32_t};did{int32_t}";
+
+static void remote_dep_mpi_profiling_init(void)
+{
+    parsec_profiling_add_dictionary_keyword( "MPI_ACTIVATE", "fill:#FF0000",
+                                            sizeof(parsec_profile_remote_dep_mpi_info_t),
+                                            parsec_profile_remote_dep_mpi_info_to_string,
+                                            &MPI_Activate_sk, &MPI_Activate_ek);
+    parsec_profiling_add_dictionary_keyword( "MPI_DATA_CTL", "fill:#000077",
+                                            sizeof(parsec_profile_remote_dep_mpi_info_t),
+                                            parsec_profile_remote_dep_mpi_info_to_string,
+                                            &MPI_Data_ctl_sk, &MPI_Data_ctl_ek);
+    parsec_profiling_add_dictionary_keyword( "MPI_DATA_PLD_SND", "fill:#B08080",
+                                            sizeof(parsec_profile_remote_dep_mpi_info_t),
+                                            parsec_profile_remote_dep_mpi_info_to_string,
+                                            &MPI_Data_plds_sk, &MPI_Data_plds_ek);
+    parsec_profiling_add_dictionary_keyword( "MPI_DATA_PLD_RCV", "fill:#80B080",
+                                            sizeof(parsec_profile_remote_dep_mpi_info_t),
+                                            parsec_profile_remote_dep_mpi_info_to_string,
+                                            &MPI_Data_pldr_sk, &MPI_Data_pldr_ek);
+
+    parsec_profiling_add_dictionary_keyword( "ACTIVATE_CB", "fill:#FF0000",
+                                            sizeof(parsec_profile_remote_dep_mpi_info_t),
+                                            parsec_profile_remote_dep_mpi_info_to_string,
+                                            &activate_cb_trace_sk, &activate_cb_trace_ek);
+    parsec_profiling_add_dictionary_keyword( "PUT_CB", "fill:#FF0000",
+                                            sizeof(parsec_profile_remote_dep_mpi_info_t),
+                                            parsec_profile_remote_dep_mpi_info_to_string,
+                                            &put_cb_trace_sk, &put_cb_trace_ek);
+
+    MPIctl_prof = parsec_profiling_thread_init( 2*1024*1024, "MPI ctl");
+    MPIsnd_prof = parsec_profiling_thread_init( 2*1024*1024, "MPI isend");
+    MPIrcv_prof = parsec_profiling_thread_init( 2*1024*1024, "MPI irecv");
+    parsec_comm_es.es_profile = MPIctl_prof;
+}
+
+static void remote_dep_mpi_profiling_fini(void)
+{
+    /* Nothing to do, the thread_profiling structures will be automatically
+     * released when the master profiling system is shut down.
+     */
+    MPIsnd_prof = NULL;
+    MPIrcv_prof = NULL;
+    MPIctl_prof = NULL;
+}
+#else
+
+#define remote_dep_mpi_profiling_init() do {} while(0)
+#define remote_dep_mpi_profiling_fini() do {} while(0)
+
+#endif  /* PARSEC_PROF_TRACE */
+
 /**
  * Store the user provided communicator in the PaRSEC context. We need to make a
  * copy to make sure the communicator does not dissapear before the communication
@@ -214,7 +281,6 @@ void
 remote_dep_mpi_initialize_execution_stream(parsec_context_t *context)
 {
     memcpy(&parsec_comm_es, context->virtual_processes[0]->execution_streams[0], sizeof(parsec_execution_stream_t));
-    remote_dep_mpi_profiling_init();
 }
 
 int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp)
@@ -741,10 +807,10 @@ remote_dep_dequeue_init(parsec_context_t* context)
     /* From now on the communication capabilities are enabled */
     parsec_communication_engine_up = 1;
     if(context->nb_nodes == 1) {
-        /* We're all by ourselves. In case we need to use MPI to handle data copies
-         * between different formats let's setup local MPI support.
+        /* We're all by ourselves. In case we need to use comm engin to handle data copies
+         * between different formats let's setup it up.
          */
-        remote_dep_mpi_on(context);
+        remote_dep_ce_init(context);
 
         goto up_and_running;
     }
@@ -823,6 +889,16 @@ remote_dep_dequeue_fini(parsec_context_t* context)
 static int
 remote_dep_ce_init(parsec_context_t* context)
 {
+    int rc;
+    /* Do this first to give a chance to the communication engine to define
+     * who this process is by setting the corresponding info in the
+     * parsec_context.
+     */
+    if( NULL == parsec_comm_engine_init(context) ) {
+        parsec_warning("Communication engine failed to start. Additional information might be available in the corresponding error message");
+        return PARSEC_ERR_NOT_FOUND;
+    }
+
     PARSEC_OBJ_CONSTRUCT(&dep_activates_fifo, parsec_list_t);
     PARSEC_OBJ_CONSTRUCT(&dep_activates_noobj_fifo, parsec_list_t);
     PARSEC_OBJ_CONSTRUCT(&dep_put_fifo, parsec_list_t);
@@ -831,14 +907,22 @@ remote_dep_ce_init(parsec_context_t* context)
     parsec_mpi_same_pos_items = (dep_cmd_item_t**)calloc(parsec_mpi_same_pos_items_size,
                                                         sizeof(dep_cmd_item_t*));
 
-    parsec_comm_engine_init(context);
-
     /* Register Persistant requests */
-    parsec_ce.tag_register(REMOTE_DEP_ACTIVATE_TAG, remote_dep_mpi_save_activate_cb, context,
-                           DEP_EAGER_BUFFER_SIZE * sizeof(char));
-
-    parsec_ce.tag_register(REMOTE_DEP_GET_DATA_TAG, remote_dep_mpi_save_put_cb, context,
-                           4096);
+    rc = parsec_ce.tag_register(REMOTE_DEP_ACTIVATE_TAG, remote_dep_mpi_save_activate_cb, context,
+                                DEP_EAGER_BUFFER_SIZE * sizeof(char));
+    if( PARSEC_SUCCESS != rc ) {
+        parsec_warning("[CE] Failed to register communication tag REMOTE_DEP_ACTIVATE_TAG (error %d)\n", rc);
+        parsec_comm_engine_fini(&parsec_ce);
+        return rc;
+    }
+    rc = parsec_ce.tag_register(REMOTE_DEP_GET_DATA_TAG, remote_dep_mpi_save_put_cb, context,
+                                4096);
+    if( PARSEC_SUCCESS != rc ) {
+        parsec_warning("[CE] Failed to register communication tag REMOTE_DEP_GET_DATA_TAG (error %d)\n", rc);
+        parsec_ce.tag_unregister(REMOTE_DEP_ACTIVATE_TAG);
+        parsec_comm_engine_fini(&parsec_ce);
+        return rc;
+    }
 
     parsec_remote_dep_cb_data_mempool = (parsec_mempool_t*) malloc (sizeof(parsec_mempool_t));
     parsec_mempool_construct(parsec_remote_dep_cb_data_mempool,
@@ -863,14 +947,15 @@ remote_dep_ce_fini(parsec_context_t* context)
     parsec_mempool_destruct(parsec_remote_dep_cb_data_mempool);
     free(parsec_remote_dep_cb_data_mempool);
 
-    parsec_comm_engine_fini(&parsec_ce);
-
     free(parsec_mpi_same_pos_items); parsec_mpi_same_pos_items = NULL;
     parsec_mpi_same_pos_items_size = 0;
 
     PARSEC_OBJ_DESTRUCT(&dep_activates_fifo);
     PARSEC_OBJ_DESTRUCT(&dep_activates_noobj_fifo);
     PARSEC_OBJ_DESTRUCT(&dep_put_fifo);
+
+    parsec_comm_engine_fini(&parsec_ce);
+
     (void)context;
     return 0;
 }
@@ -937,6 +1022,22 @@ remote_dep_dequeue_off(parsec_context_t* context)
     return 0;
 }
 
+static int remote_dep_mpi_on(parsec_context_t* context)
+{
+#ifdef PARSEC_PROF_TRACE
+    /* put a start marker for each type of event */
+    TAKE_TIME(MPIctl_prof, MPI_Activate_sk, 0);
+    TAKE_TIME(MPIsnd_prof, MPI_Activate_sk, 0);
+    TAKE_TIME(MPIrcv_prof, MPI_Activate_sk, 0);
+    parsec_ce.sync(&parsec_ce);   /* TODO GB: do we still need this here ? */
+    TAKE_TIME(MPIctl_prof, MPI_Activate_ek, 0);
+    TAKE_TIME(MPIsnd_prof, MPI_Activate_ek, 0);
+    TAKE_TIME(MPIrcv_prof, MPI_Activate_ek, 0);
+#endif
+    (void)context;
+    return 0;
+}
+
 void* remote_dep_dequeue_main(parsec_context_t* context)
 {
     int whatsup;
@@ -944,14 +1045,37 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
     remote_dep_bind_thread(context);
     PARSEC_PAPI_SDE_THREAD_INIT();
 
+    remote_dep_ce_init(context);
+
     /* Now synchronize with the main thread */
     pthread_mutex_lock(&mpi_thread_mutex);
     pthread_cond_signal(&mpi_thread_condition);
 
     /* This is the main loop. Wait until being woken up by the main thread, do
      * the MPI stuff until we get the OFF or FINI commands. Then react the them.
+     * However, the first time do the delayed initialization that could not have
+     * been done before due to the lack of other component initialization.
      */
-    do {
+
+    /* Let's wait until we are awaken */
+    pthread_cond_wait(&mpi_thread_condition, &mpi_thread_mutex);
+    PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine ON on process %d/%d",
+                         context->my_rank, context->nb_nodes);
+    /* The MPI thread is owning the lock */
+    assert( parsec_communication_engine_up == 2 );
+
+    /* Lazy or delayed initializations */
+    remote_dep_mpi_initialize_execution_stream(context);
+
+    remote_dep_mpi_on(context);
+    /* acknoledge the activation */
+    parsec_communication_engine_up = 3;
+    whatsup = remote_dep_dequeue_nothread_progress(&parsec_comm_es, -1 /* loop till explicitly asked to return */);
+    PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine OFF on process %d/%d",
+                         context->my_rank, context->nb_nodes);
+    parsec_communication_engine_up = 1;  /* went to sleep */
+
+    while( -1 != whatsup ) {
         /* Let's wait until we are awaken */
         pthread_cond_wait(&mpi_thread_condition, &mpi_thread_mutex);
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine ON on process %d/%d",
@@ -965,7 +1089,7 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine OFF on process %d/%d",
                              context->my_rank, context->nb_nodes);
         parsec_communication_engine_up = 1;  /* went to sleep */
-    } while(-1 != whatsup);
+    }
 
     /* Release all resources */
     remote_dep_ce_fini(context);
@@ -989,24 +1113,6 @@ remote_dep_nothread_memcpy(parsec_execution_stream_t* es,
     remote_dep_dec_flying_messages(item->cmd.memcpy.taskpool);
     (void)es;
     return (MPI_SUCCESS == rc ? 0 : -1);
-}
-
-int remote_dep_mpi_on(parsec_context_t* context)
-{
-    remote_dep_ce_init(context);
-#ifdef PARSEC_PROF_TRACE
-    /* put a start marker on each line */
-    TAKE_TIME(MPIctl_prof, MPI_Activate_sk, 0);
-    TAKE_TIME(MPIsnd_prof, MPI_Activate_sk, 0);
-    TAKE_TIME(MPIrcv_prof, MPI_Activate_sk, 0);
-    parsec_ce.sync(&parsec_ce);
-    TAKE_TIME(MPIctl_prof, MPI_Activate_ek, 0);
-    TAKE_TIME(MPIsnd_prof, MPI_Activate_ek, 0);
-    TAKE_TIME(MPIrcv_prof, MPI_Activate_ek, 0);
-#endif
-
-    (void)context;
-    return 0;
 }
 
 static int
@@ -1211,7 +1317,10 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
     int len;
     remote_dep_cmd_to_string(task, tmp, MAX_TASK_STRLEN);
 #endif
-
+#ifdef PARSEC_PROF_TRACE
+    int32_t save_get = 0;
+    int32_t event_id = parsec_atomic_fetch_inc_int32(&save_get);
+#endif  /* PARSEC_PROF_TRACE */
     for(k = count = 0; deps->incoming_mask >> k; k++)
         if( ((1U<<k) & deps->incoming_mask) ) count++;
 
@@ -1297,12 +1406,12 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
                 receiver_memory_handle,
                 receiver_memory_handle_size );
 
-        TAKE_TIME_WITH_INFO(MPIctl_prof, MPI_Data_ctl_sk, get,
+        TAKE_TIME_WITH_INFO(MPIctl_prof, MPI_Data_ctl_sk, event_id,
                             from, es->virtual_process->parsec_context->my_rank, (*task));
 
         /* Send AM */
         parsec_ce.send_am(&parsec_ce, REMOTE_DEP_GET_DATA_TAG, from, buf, buf_size);
-        TAKE_TIME(MPIctl_prof, MPI_Data_ctl_ek, get++);
+        TAKE_TIME(MPIctl_prof, MPI_Data_ctl_ek, event_id);
 
         TAKE_TIME_WITH_INFO(MPIrcv_prof, MPI_Data_pldr_sk, k, from,
                             es->virtual_process->parsec_context->my_rank, deps->msg);
@@ -1565,11 +1674,15 @@ remote_dep_nothread_send(parsec_execution_stream_t* es,
     parsec_list_item_t* ring = NULL;
     char packed_buffer[DEP_EAGER_BUFFER_SIZE];
     int peer, position = 0;
+#ifdef PARSEC_PROF_TRACE
+    static int save_act = 0;
+    int event_id = parsec_atomic_fetch_inc_int32(&save_act);
+#endif  /* PARSEC_PROF_TRACE */
 
     peer = item->cmd.activate.peer;  /* this doesn't change */
     deps = (parsec_remote_deps_t*)item->cmd.activate.task.source_deps;
 
-    TAKE_TIME_WITH_INFO(MPIctl_prof, MPI_Activate_sk, act,
+    TAKE_TIME_WITH_INFO(MPIctl_prof, MPI_Activate_sk, event_id,
                         es->virtual_process->parsec_context->my_rank, peer, deps->msg);
 
   pack_more:
@@ -1595,7 +1708,7 @@ remote_dep_nothread_send(parsec_execution_stream_t* es,
 
     parsec_ce.send_am(&parsec_ce, REMOTE_DEP_ACTIVATE_TAG, peer, packed_buffer, position);
 
-    TAKE_TIME(MPIctl_prof, MPI_Activate_ek, act++);
+    TAKE_TIME(MPIctl_prof, MPI_Activate_ek, event_id);
     DEBUG_MARK_CTL_MSG_ACTIVATE_SENT(peer, (void*)&deps->msg, &deps->msg);
 
     do {

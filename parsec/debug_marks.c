@@ -86,8 +86,8 @@ void debug_mark_ctl_msg_get_sent(int to, const void *b, const struct remote_dep_
                             "\t      Using buffer %p for emission\n"
                             "\t      deps requested = 0x%X\n"
                             "\t      which requested = 0x%08x\n"
-                            "\t      tag for the reception of data = %d\n",
-                            to, b, m->deps, (uint32_t)m->output_mask, m->tag);
+                            "\t      remote_callback_data = 0x%X\n",
+                            to, b, m->source_deps, (uint32_t)m->output_mask, m->remote_callback_data);
 }
 
 void debug_mark_ctl_msg_get_recv(int from, const void *b, const struct remote_dep_wire_get_s *m)
@@ -96,8 +96,8 @@ void debug_mark_ctl_msg_get_recv(int from, const void *b, const struct remote_de
                             "\t      Using buffer %p for reception\n"
                             "\t      deps requested = 0x%X\n"
                             "\t      which requested = 0x%08x\n"
-                            "\t      tag for the reception of data = %d\n",
-                            from, b, m->deps, (uint32_t)m->output_mask, m->tag);
+                            "\t      remote_callback_data = 0x%X\n",
+                            from, b, m->source_deps, (uint32_t)m->output_mask, m->remote_callback_data);
 }
 
 void debug_mark_dta_msg_start_send(int to, const void *b, int tag)

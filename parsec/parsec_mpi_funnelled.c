@@ -459,7 +459,6 @@ static int mpi_funneled_init_once(parsec_context_t* context)
                              MAX_MPI_TAG, (unsigned int)MAX_MPI_TAG, MAX_MPI_TAG / MAX_DEP_OUT_COUNT);
     }
 
-    remote_dep_mpi_profiling_init();
     (void)context;
     return 0;
 }

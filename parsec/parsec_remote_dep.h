@@ -42,8 +42,7 @@ enum {
     REMOTE_DEP_MAX_CTRL_TAG
 } parsec_remote_dep_tag_t;
 
-typedef struct remote_dep_wire_activate_s
-{
+typedef struct remote_dep_wire_activate_s {
     remote_dep_datakey_t deps;         /**< a pointer to the dep structure on the source */
     remote_dep_datakey_t output_mask;  /**< the mask of the output dependencies satisfied by this activation message */
     uint32_t             taskpool_id;
@@ -52,8 +51,7 @@ typedef struct remote_dep_wire_activate_s
     parsec_assignment_t  locals[MAX_LOCAL_COUNT];
 } remote_dep_wire_activate_t;
 
-typedef struct remote_dep_wire_get_s
-{
+typedef struct remote_dep_wire_get_s {
     remote_dep_datakey_t       source_deps;
     remote_dep_datakey_t       remote_callback_data;
     remote_dep_datakey_t       output_mask;
@@ -315,17 +313,28 @@ parsec_remote_deps_t* remote_deps_allocate( parsec_lifo_t* lifo );
 
 void remote_deps_allocation_init(int np, int max_output_deps);
 
-/* This function creates a fake eu for comm thread for profiling DTD runs */
-void
-remote_dep_mpi_initialize_execution_stream(parsec_context_t *context);
-
 void remote_dep_mpi_get_end(parsec_execution_stream_t* es,
                             int idx,
                             parsec_remote_deps_t* deps);
 
+typedef struct {
+    int rank_src;  // 0
+    int rank_dst;  // 4
+    uint64_t tid;  // 8
+    uint32_t tpid;  // 16
+    uint32_t did;   // 20
+} parsec_profile_remote_dep_mpi_info_t; // 24 bytes
+
 #ifdef PARSEC_PROF_TRACE
-void remote_dep_mpi_profiling_init(void);
-void remote_dep_mpi_profiling_fini(void);
+extern parsec_thread_profiling_t* MPIctl_prof;
+extern parsec_thread_profiling_t* MPIsnd_prof;
+extern parsec_thread_profiling_t* MPIrcv_prof;
+extern int MPI_Activate_sk, MPI_Activate_ek;
+extern int MPI_Data_ctl_sk, MPI_Data_ctl_ek;
+extern int MPI_Data_plds_sk, MPI_Data_plds_ek;
+extern int MPI_Data_pldr_sk, MPI_Data_pldr_ek;
+extern int activate_cb_trace_sk, activate_cb_trace_ek;
+extern int put_cb_trace_sk, put_cb_trace_ek;
 
 #define TAKE_TIME_WITH_INFO(PROF, KEY, I, src, dst, rdw)                \
     if( parsec_profile_enabled ) {                                      \
@@ -350,8 +359,6 @@ void remote_dep_mpi_profiling_fini(void);
 #else
 #define TAKE_TIME_WITH_INFO(PROF, KEY, I, src, dst, rdw) do {} while(0)
 #define TAKE_TIME(PROF, KEY, I) do {} while(0)
-#define remote_dep_mpi_profiling_init() do {} while(0)
-#define remote_dep_mpi_profiling_fini() do {} while(0)
 #endif  /* PARSEC_PROF_TRACE */
 
 char*
