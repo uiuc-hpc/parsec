@@ -26,7 +26,7 @@ BEGIN_C_DECLS
 
 /**
  * To see examples please look at testing_zpotrf_dtd.c, testing_zgeqrf_dtd.c,
- * testing_zgetrf_incpiv_dtd.c files in the directory "root_of_PaRSEC/dplasma/testing/".
+ * testing_zgetrf_incpiv_dtd.c files in the directory "root_of_DPLASMA/tests/testing/".
  * Very simple example of inserting just one task can be found in
  * "root_of_PaRSEC/example/interfaces/superscalar/"
  **/
@@ -54,7 +54,7 @@ BEGIN_C_DECLS
  *                  runtime will place the task in the rank where the data, this flag was provided with,
  *                  resides.
  *  DONT_TRACK:     This flag indicates to the runtime to not track any dependency associated with the
- *                  data this flag was provided with.
+ *                  data this flag was provided to.
  *
  *  Lower 16 bits:  Index (arbitrary value) for different REGIONS to express more specific dependency.
  *                  Regions indices are user provided and must be mutually exclusive for the tile.
