@@ -22,6 +22,8 @@
 
 #define PARSEC_REMOTE_DEP_USE_THREADS
 
+#define PARSEC_DTD_SKIP_SAVING -1
+
 static int remote_dep_mpi_setup(parsec_context_t* context);
 static int remote_dep_mpi_cleanup(parsec_context_t* context);
 static int remote_dep_mpi_fini(parsec_context_t* context);

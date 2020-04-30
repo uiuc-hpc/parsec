@@ -15,6 +15,8 @@
 
 #include "parsec/parsec_binary_profile.h"
 
+#define PARSEC_DTD_SKIP_SAVING -1
+
 int parsec_comm_gets_max  = DEP_NB_CONCURENT * MAX_PARAM_COUNT;
 int parsec_comm_gets      = 0;
 int parsec_comm_puts_max  = DEP_NB_CONCURENT * MAX_PARAM_COUNT;
@@ -487,15 +489,26 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
             if( NULL == dtd_task ) {
                 return_defer = 1;
 
-                if( storage_id != 1 ) {  /* PARSEC_DTD_SKIP_SAVING? */
+                /* AM buffers are reused by the comm engine once the activation
+                 * has been conveyed to upper layer. In case of DTD we might receive msg to
+                 * activate a task that the local node (the recipient of the activation)
+                 * have not discovered yet. In that case we need to store the buffer,
+                 * but note, we only need to store it the first time we are receiving this
+                 * activation. PARSEC_DTD_SKIP_SAVING indicates whether this is the first
+                 * time or not. Since, this function is called from other places (when
+                 * we later try to activate a task for which we have already received
+                 * an activation for) we do not need to store the buffer and we send
+                 * PARSEC_DTD_SKIP_SAVING as an indicaton of that.
+                 */
+                if( storage_id != PARSEC_DTD_SKIP_SAVING) {
                     char* packed_buffer;
                     /* Copy the eager data to some temp storage */
                     packed_buffer = malloc(origin->msg.length);
                     memcpy(packed_buffer, origin->eager_msg + *position, origin->msg.length);
                     *position += origin->msg.length;  /* move to the next order */
                     origin->taskpool = (parsec_taskpool_t*)packed_buffer;  /* temporary storage */
-                    parsec_dtd_track_remote_dep( dtd_tp, key, origin );
                 }
+                parsec_dtd_track_remote_dep( dtd_tp, key, origin );
             }
 
             parsec_hash_table_unlock_bucket(dtd_tp->task_hash_table, (parsec_key_t)key);
@@ -1252,21 +1265,22 @@ remote_dep_mpi_new_taskpool(parsec_execution_stream_t* es,
             char* buffer = (char*)deps->taskpool;  /* get back the buffer from the "temporary" storage */
             int rc, position = 0;
             deps->taskpool = NULL;
-            rc = remote_dep_get_datatypes(es, deps, 1 /*PARSEC_DTD_SKIP_SAVING*/, &position); assert( -1 != rc );
+            rc = remote_dep_get_datatypes(es, deps, PARSEC_DTD_SKIP_SAVING, &position); assert( -1 != rc );
             assert(deps->taskpool != NULL);
             PARSEC_DEBUG_VERBOSE(10, parsec_comm_output_stream, "MPI:\tFROM\t%d\tActivate NEWOBJ\t% -8s\twith datakey %lx\tparams %lx",
                     deps->from, remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN),
                     deps->msg.deps, deps->msg.output_mask);
+
+            item = parsec_list_nolock_remove(&dep_activates_noobj_fifo, item);
 
             /* In case of DTD execution, receiving rank might not have discovered
              * the task responsible for this message. So we have to put this message
              * in a hash table so that we can activate it, when this rank discovers it.
              */
             if( -2 == rc ) { /* DTD problems, defer activating this remote dep */
+                deps->taskpool = (parsec_taskpool_t*) buffer;
                 continue;
             }
-
-            item = parsec_list_nolock_remove(&dep_activates_noobj_fifo, item);
 
             remote_dep_mpi_recv_activate(es, deps, buffer, deps->msg.length, &position);
             free(buffer);
