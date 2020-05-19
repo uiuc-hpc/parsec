@@ -7,6 +7,7 @@
 /* C standard library */
 #include <assert.h>
 #include <inttypes.h>
+#include <stdalign.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -20,7 +21,6 @@
 /* External libraries */
 #include <lc.h>
 #include <lc/dequeue.h>
-#include <lc/pool.h>
 
 /* PaRSEC */
 #include "parsec/runtime.h"
@@ -62,7 +62,7 @@ PARSEC_DECLSPEC OBJ_CLASS_DECLARATION(lci_mem_reg_handle_t);
 OBJ_CLASS_INSTANCE(lci_mem_reg_handle_t, parsec_list_item_t, NULL, NULL);
 
 /* memory pool for memory handles */
-static parsec_mempool_t *lci_mem_reg_handle_mempool = NULL;
+static parsec_mempool_t lci_mem_reg_handle_mempool;
 
 /* LCI callback hash table type */
 typedef struct lci_cb_handle_s {
@@ -100,13 +100,39 @@ OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
 static parsec_mempool_t *lci_cb_handle_mempool = NULL;
 
 /* hash table for AM callbacks */
-static parsec_hash_table_t *am_cb_hash_table          = NULL;
+static parsec_hash_table_t *am_cb_hash_table = NULL;
 
 static parsec_key_fn_t key_fns = {
     .key_equal = parsec_hash_table_generic_64bits_key_equal,
     .key_print = parsec_hash_table_generic_64bits_key_print,
     .key_hash  = parsec_hash_table_generic_64bits_key_hash
 };
+
+/* LCI request handle (for pool) */
+typedef struct lci_req_handle_s {
+    parsec_list_item_t      super;
+    parsec_thread_mempool_t *mempool_owner;
+    lc_req                  req;
+} lci_req_handle_t;
+OBJ_CLASS_INSTANCE(lci_req_handle_t, parsec_list_item_t, NULL, NULL);
+
+/* memory pool for requests */
+static parsec_mempool_t *lci_req_mempool = NULL;
+
+/* LCI dynamic message (for pool) */
+typedef struct lci_dynmsg_s {
+    parsec_list_item_t      super;
+    parsec_thread_mempool_t *mempool_owner;
+    alignas(64) byte_t      data[]; /* ensure cache-line alignment */
+} lci_dynmsg_t;
+OBJ_CLASS_INSTANCE(lci_dynmsg_t, parsec_list_item_t, NULL, NULL);
+
+/* memory pool for dynamic messages */
+static parsec_mempool_t *lci_dynmsg_mempool = NULL;
+
+/* queue for completed send callbacks */
+static parsec_dequeue_t *lci_put_send_queue = NULL;
+static parsec_dequeue_t *lci_get_send_queue = NULL;
 
 /* LCI one-sided activate message handshake type */
 typedef struct lci_handshake_s {
@@ -137,25 +163,17 @@ static lc_ep get_ep;
 static int ep_rank = 0;
 static int ep_size = 0;
 
-/* queue for completed send callbacks */
-static struct dequeue put_send_queue;
-static struct dequeue get_send_queue;
-
-/* pool of LCI requests */
-#define MAX_POOL_REQS 2048
-static lc_req  *lci_req_array = NULL;
-static lc_pool *lci_req_pool  = NULL;
-
-/* memory pool for dynamically-allocated messages */
-#define MAX_POOL_DYN_MSG (MAX_POOL_REQS / 2)
-static byte_t  *lci_dynmsg_array = NULL;
-static lc_pool *lci_dynmsg_pool  = NULL;
-
 static inline void * dyn_alloc(size_t size, void **ctx)
 {
     assert(size <= lc_max_medium(0) && "dynamic message data too long");
-    /* if size > 0, get from memory pool; otherwise just return NULL */
-    return size > 0 ? lc_pool_get(lci_dynmsg_pool) : NULL;
+    /* if size is 0, return NULL; else allocate from mempool */
+    if (size == 0) {
+        return NULL;
+    }
+
+    lci_dynmsg_t *dynmsg = parsec_thread_mempool_allocate(
+                                           lci_dynmsg_mempool->thread_mempools);
+    return &dynmsg->data;
 }
 
 #if 0
@@ -250,8 +268,7 @@ lci_init(parsec_context_t *context)
     parsec_ce.capabilites.supports_noncontiguous_datatype = 0;
 
     /* create a mempool for memory registration */
-    lci_mem_reg_handle_mempool = malloc(sizeof(parsec_mempool_t));
-    parsec_mempool_construct(lci_mem_reg_handle_mempool,
+    parsec_mempool_construct(&lci_mem_reg_handle_mempool,
                              OBJ_CLASS(lci_mem_reg_handle_t),
                              sizeof(lci_mem_reg_handle_t),
                              offsetof(lci_mem_reg_handle_t, mempool_owner),
@@ -265,22 +282,26 @@ lci_init(parsec_context_t *context)
                              offsetof(lci_cb_handle_t, mempool_owner),
                              1);
 
-    /* create LCI request pool */
-    posix_memalign((void **)&lci_req_array, 64, sizeof(lc_req[MAX_POOL_REQS]));
-    lc_pool_create(&lci_req_pool);
-    for (size_t i = 0; i < MAX_POOL_REQS; i++) {
-        lc_pool_put(lci_req_pool, &lci_req_array[i]);
-    }
+    /* create a mempool for requests */
+    lci_req_mempool = malloc(sizeof(parsec_mempool_t));
+    parsec_mempool_construct(lci_req_mempool,
+                             OBJ_CLASS(lci_req_handle_t),
+                             sizeof(lci_req_handle_t),
+                             offsetof(lci_req_handle_t, mempool_owner),
+                             1);
 
-    /* create dynamic message mem pool */
-    /* up to MAX_POOL_DYN_MSG messages of lc_max_medium(0) bytes each */
-    const size_t max_msg_size = lc_max_medium(0);
-    posix_memalign((void **)&lci_dynmsg_array, 64,
-                   sizeof(byte_t[MAX_POOL_DYN_MSG][max_msg_size]));
-    lc_pool_create(&lci_dynmsg_pool);
-    for (size_t i = 0; i < MAX_POOL_DYN_MSG; i++) {
-        lc_pool_put(lci_dynmsg_pool, lci_dynmsg_array + i * max_msg_size);
-    }
+    /* create a mempool for dynamic messages */
+    lci_dynmsg_mempool = malloc(sizeof(parsec_mempool_t));
+    parsec_mempool_construct(lci_dynmsg_mempool,
+                             OBJ_CLASS(lci_dynmsg_t),
+                             /* ensure enough space for any medium message */
+                             sizeof(lci_dynmsg_t) + lc_max_medium(0),
+                             offsetof(lci_dynmsg_t, mempool_owner),
+                             1);
+
+    /* create send callback queues */
+    lci_put_send_queue = OBJ_NEW(parsec_dequeue_t);
+    lci_get_send_queue = OBJ_NEW(parsec_dequeue_t);
 
     /* allocated hash tables for callbacks */
     am_cb_hash_table = OBJ_NEW(parsec_hash_table_t);
@@ -314,10 +335,6 @@ lci_init(parsec_context_t *context)
     lc_ep_dup(&opt, *default_ep, &put_ep);
     lc_ep_dup(&opt, *default_ep, &get_ep);
 
-    /* init send callback queues */
-    dq_init(&put_send_queue);
-    dq_init(&get_send_queue);
-
     /* start progress thread */
     PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "LCI[%d]:\tstarting progress thread", ep_rank);
     atomic_store_explicit(&progress_thread_stop, false, memory_order_release);
@@ -345,26 +362,25 @@ lci_fini(parsec_comm_engine_t *comm_engine)
 #endif
     pthread_join(progress_thread_id, &progress_retval);
 
+    OBJ_RELEASE(lci_get_send_queue);
+    OBJ_RELEASE(lci_put_send_queue);
+
     parsec_hash_table_fini(am_cb_hash_table);
     OBJ_RELEASE(am_cb_hash_table);
 
-    lc_pool_destroy(lci_req_pool);
-    free(lci_req_array);
-    lci_req_pool  = NULL;
-    lci_req_array = NULL;
+    parsec_mempool_destruct(lci_dynmsg_mempool);
+    free(lci_dynmsg_mempool);
+    lci_dynmsg_mempool = NULL;
 
-    lc_pool_destroy(lci_dynmsg_pool);
-    free(lci_dynmsg_array);
-    lci_dynmsg_pool  = NULL;
-    lci_dynmsg_array = NULL;
+    parsec_mempool_destruct(lci_req_mempool);
+    free(lci_req_mempool);
+    lci_req_mempool = NULL;
 
     parsec_mempool_destruct(lci_cb_handle_mempool);
     free(lci_cb_handle_mempool);
     lci_cb_handle_mempool = NULL;
 
-    parsec_mempool_destruct(lci_mem_reg_handle_mempool);
-    free(lci_mem_reg_handle_mempool);
-    lci_mem_reg_handle_mempool = NULL;
+    parsec_mempool_destruct(&lci_mem_reg_handle_mempool);
 
     return 1;
 }
@@ -426,7 +442,7 @@ lci_mem_register(void *mem, parsec_mem_type_t mem_type,
 
     /* allocate from mempool */
     lci_mem_reg_handle_t *handle = parsec_thread_mempool_allocate(
-                                 lci_mem_reg_handle_mempool->thread_mempools);
+                                 lci_mem_reg_handle_mempool.thread_mempools);
     /* set mem handle info */
     handle->mem      = mem;
     handle->size     = mem_size;
@@ -479,13 +495,13 @@ lci_mem_retrieve(parsec_ce_mem_reg_handle_t lreg,
 /* just push onto put queue */
 static inline void lci_put_send_cb(void *ctx)
 {
-    dq_push_top(&put_send_queue, ctx);
+    parsec_dequeue_push_back(lci_put_send_queue, ctx);
 }
 
 /* just push onto get queue */
 static inline void lci_get_send_cb(void *ctx)
 {
-    dq_push_top(&get_send_queue, ctx);
+    parsec_dequeue_push_back(lci_get_send_queue, ctx);
 }
 
 int
@@ -597,7 +613,9 @@ lci_get(parsec_comm_engine_t *comm_engine,
     handle->args.remote      = remote;
 
     /* get request from pool and set context to callback handle */
-    lc_req *req = lc_pool_get(lci_req_pool);
+    lci_req_handle_t *req_handle = parsec_thread_mempool_allocate(
+                                             lci_req_mempool->thread_mempools);
+    lc_req *req = &req_handle->req;
     req->ctx = handle;
 
     /* start recieve from remote with tag */
@@ -652,10 +670,12 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                              "LCI[%d]:\tAbort %d recv:\t%d -> %d",
                              ep_rank, req->meta, req->rank, ep_rank);
+        int exit_code = req->meta;
+        lc_cq_reqfree(abort_ep, req);
         /* wait for all processes to ack the abort */
         lc_barrier(collective_ep);
         /* exit without cleaning up */
-        _Exit(req->meta);
+        _Exit(exit_code);
     }
 
     /* handle active messages */
@@ -676,8 +696,11 @@ lci_progress(parsec_comm_engine_t *comm_engine)
                            ep_rank, key);
         }
         /* return memory to pool (only allocated if size > 0) */
-        if (req->size > 0)
-            lc_pool_put(lci_dynmsg_pool, req->buffer);
+        if (req->size > 0) {
+            lci_dynmsg_t *dynmsg = (lci_dynmsg_t *)
+                    ((byte_t *)req->buffer - offsetof(lci_dynmsg_t, data));
+            parsec_thread_mempool_free(dynmsg->mempool_owner, dynmsg);
+        }
         lc_cq_reqfree(am_ep, req);
         ret++;
     }
@@ -703,7 +726,9 @@ lci_progress(parsec_comm_engine_t *comm_engine)
                              handle->args.tag, handle->args.data);
 
         /* get request from pool and set context to callback handle */
-        lc_req *recv_req = lc_pool_get(lci_req_pool);
+        lci_req_handle_t *req_handle = parsec_thread_mempool_allocate(
+                                             lci_req_mempool->thread_mempools);
+        lc_req *recv_req = &req_handle->req;
         recv_req->ctx = handle;
 
         /* start receive for the put */
@@ -741,19 +766,27 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "LCI[%d]:\t called %p", ep_rank, (void *)handle->cb.onesided_am);
 
         /* return memory from AM */
-        void *buffer = (byte_t *)handle->args.data - offsetof(lci_handshake_t, cb_data);
-        lc_pool_put(lci_dynmsg_pool, buffer);
+        /* handle->args.data points to the cb_data field of the handshake info
+         * which is the data field of the dynmsg object */
+        lci_dynmsg_t *dynmsg = (lci_dynmsg_t *)
+                (handle->args.data - offsetof(lci_handshake_t, cb_data)
+                                   - offsetof(lci_dynmsg_t, data));
+        parsec_thread_mempool_free(dynmsg->mempool_owner, dynmsg);
 
         /* return handle and request to pools */
         parsec_thread_mempool_free(handle->mempool_owner, handle);
-        lc_cq_reqfree(get_am_ep, req); // returns packet to pool, not req
-        lc_pool_put(lci_req_pool, req);
+        lc_cq_reqfree(put_ep, req); // returns packet to pool, not req
+        lci_req_handle_t *req_handle = (lci_req_handle_t *)
+                ((byte_t *)req - offsetof(lci_req_handle_t, req));
+        parsec_thread_mempool_free(req_handle->mempool_owner, req_handle);
         ret++;
     }
 
     /* put send - at origin */
-    for (lci_cb_handle_t *handle = dq_pop_bot(&put_send_queue); handle != NULL;
-                          handle = dq_pop_bot(&put_send_queue)) {
+    for (parsec_list_item_t *item = parsec_dequeue_try_pop_front(lci_put_send_queue);
+                             item != NULL;
+                             item = parsec_dequeue_try_pop_front(lci_put_send_queue)) {
+        lci_cb_handle_t *handle = (lci_cb_handle_t *)item;
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                              "LCI[%d]:\tPut Send end:\t%d(%p) -> %d(%p) size %zu", ep_rank,
                              ep_rank,
@@ -822,14 +855,18 @@ lci_progress(parsec_comm_engine_t *comm_engine)
 
         /* return handle and request to pools */
         parsec_thread_mempool_free(handle->mempool_owner, handle);
-        lc_cq_reqfree(get_am_ep, req); // returns packet to pool, not req
-        lc_pool_put(lci_req_pool, req);
+        lc_cq_reqfree(get_ep, req); // returns packet to pool, not req
+        lci_req_handle_t *req_handle = (lci_req_handle_t *)
+                ((byte_t *)req - offsetof(lci_req_handle_t, req));
+        parsec_thread_mempool_free(req_handle->mempool_owner, req_handle);
         ret++;
     }
 
     /* get send - at target */
-    for (lci_cb_handle_t *handle = dq_pop_bot(&get_send_queue); handle != NULL;
-                          handle = dq_pop_bot(&get_send_queue)) {
+    for (parsec_list_item_t *item = parsec_dequeue_try_pop_front(lci_get_send_queue);
+                             item != NULL;
+                             item = parsec_dequeue_try_pop_front(lci_get_send_queue)) {
+        lci_cb_handle_t *handle = (lci_cb_handle_t *)item;
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
                              "LCI[%d]:\tGet Send end:\t%d <- %d(%p) size %zu with tag %d",
                              ep_rank, handle->args.remote, ep_rank,
@@ -847,8 +884,12 @@ lci_progress(parsec_comm_engine_t *comm_engine)
                                NULL);
 
         /* return memory from AM */
-        void *buffer = (byte_t *)handle->args.data - offsetof(lci_handshake_t, cb_data);
-        lc_pool_put(lci_dynmsg_pool, buffer);
+        /* handle->args.data points to the cb_data field of the handshake info
+         * which is the data field of the dynmsg object */
+        lci_dynmsg_t *dynmsg = (lci_dynmsg_t *)
+                (handle->args.data - offsetof(lci_handshake_t, cb_data)
+                                   - offsetof(lci_dynmsg_t, data));
+        parsec_thread_mempool_free(dynmsg->mempool_owner, dynmsg);
 
         /* return handle to mempool */
         parsec_thread_mempool_free(handle->mempool_owner, handle);
