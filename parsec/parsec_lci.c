@@ -84,11 +84,11 @@ typedef struct lci_cb_handle_s {
             };
             struct /* onesided AM callback arguments */ {
                 parsec_ce_tag_t      tag;  /* AM tag  */
-                void                 *msg; /* message */
+                byte_t               *msg; /* message */
             };
         };
         parsec_comm_engine_t *comm_engine; /* comm engine   */
-        void                 *data;        /* callback data */
+        byte_t               *data;        /* callback data */
         size_t               size;         /* message size  */
         int                  remote;       /* remote peer   */
     } args;
@@ -136,7 +136,7 @@ static parsec_dequeue_t *lci_get_send_queue = NULL;
 
 /* LCI one-sided activate message handshake type */
 typedef struct lci_handshake_s {
-    unsigned char   *buffer;
+    byte_t          *buffer;
     size_t          size;
     parsec_ce_tag_t cb;
     byte_t          cb_data[];
@@ -526,14 +526,14 @@ lci_put(parsec_comm_engine_t *comm_engine,
     lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
     lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
-    byte_t *lbuf = ldata->mem + ldispl;
-    byte_t *rbuf = rdata->mem + rdispl;
+    void *lbuf = ldata->mem + ldispl;
+    void *rbuf = rdata->mem + rdispl;
 
     /* set handshake info */
     handshake->buffer = rbuf;
     handshake->size   = rdata->size;
     handshake->cb     = r_tag;
-    memcpy(&handshake->cb_data, r_cb_data, r_cb_data_size);
+    memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
     parsec_debug_verbose(20, parsec_debug_output,
@@ -584,14 +584,14 @@ lci_get(parsec_comm_engine_t *comm_engine,
     lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
     lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
-    byte_t *lbuf = ldata->mem + ldispl;
-    byte_t *rbuf = rdata->mem + rdispl;
+    void *lbuf = ldata->mem + ldispl;
+    void *rbuf = rdata->mem + rdispl;
 
     /* set handshake info */
     handshake->buffer = rbuf;
     handshake->size   = rdata->size;
     handshake->cb     = r_tag;
-    memcpy(&handshake->cb_data, r_cb_data, r_cb_data_size);
+    memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
     parsec_debug_verbose(20, parsec_debug_output,
@@ -715,7 +715,8 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         handle->args.tag         = req->meta;
         handle->args.msg         = handshake->buffer;
         handle->args.comm_engine = comm_engine;
-        handle->args.data        = &handshake->cb_data;
+        /* array to pointer decay for handshake->cb_data */
+        handle->args.data        = handshake->cb_data;
         handle->args.size        = handshake->size;
         handle->args.remote      = req->rank;
 
@@ -816,7 +817,8 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         handle->args.tag         = req->meta;
         handle->args.msg         = handshake->buffer;
         handle->args.comm_engine = comm_engine;
-        handle->args.data        = &handshake->cb_data;
+        /* array to pointer decay for handshake->cb_data */
+        handle->args.data        = handshake->cb_data;
         handle->args.size        = handshake->size;
         handle->args.remote      = req->rank;
 
