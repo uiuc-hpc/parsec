@@ -38,12 +38,18 @@
 
 typedef unsigned char byte_t;
 
+#define lci_ce_debug_verbose(FMT, ...)                                        \
+  do {                                                                        \
+    parsec_debug_verbose(20, parsec_debug_output,                             \
+                         "LCI[%d]:\t" FMT,                                    \
+                         ep_rank, ##__VA_ARGS__);                             \
+  } while (0)
+
 //#define RETRY(lci_call) do { } while (LC_OK != (lci_call))
 #define RETRY(lci_call)                                                       \
   do {                                                                        \
     while (LC_OK != (lci_call)) {                                             \
-      parsec_debug_verbose(20, parsec_debug_output,                           \
-                           "LCI[%d]:\tRetrying prior call...", ep_rank);      \
+      lci_ce_debug_verbose("retrying " #lci_call " ...");                     \
     }                                                                         \
   } while (0)
 
@@ -186,7 +192,7 @@ static pthread_t progress_thread_id;
 
 void * lci_progress_thread(void *arg)
 {
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tprogress thread start", ep_rank);
+    lci_ce_debug_verbose("progress thread start");
 
     /* bind thread */
     parsec_context_t *context = arg;
@@ -227,7 +233,7 @@ void * lci_progress_thread(void *arg)
         pthread_mutex_unlock(&progress_mutex);
     }
 #endif
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tprogress thread stop", ep_rank);
+    lci_ce_debug_verbose("progress thread stop");
     return NULL;
 }
 
@@ -243,7 +249,7 @@ lci_init(parsec_context_t *context)
         context->my_rank  = ep_rank;
     }
 
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tinit", ep_rank);
+    lci_ce_debug_verbose("init");
 
     /* Make all the fn pointers point to this component's functions */
     parsec_ce.tag_register        = lci_tag_register;
@@ -336,7 +342,7 @@ lci_init(parsec_context_t *context)
     lc_ep_dup(&opt, *default_ep, &get_ep);
 
     /* start progress thread */
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tstarting progress thread", ep_rank);
+    lci_ce_debug_verbose("starting progress thread");
     atomic_store_explicit(&progress_thread_stop, false, memory_order_release);
     pthread_create(&progress_thread_id, NULL, lci_progress_thread, context);
 
@@ -347,12 +353,12 @@ lci_init(parsec_context_t *context)
 int
 lci_fini(parsec_comm_engine_t *comm_engine)
 {
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tfini", ep_rank);
+    lci_ce_debug_verbose("fini");
     lci_sync(comm_engine);
     void *progress_retval = NULL;
 
     /* stop progress thread */
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tstopping progress thread", ep_rank);
+    lci_ce_debug_verbose("stopping progress thread");
     atomic_store_explicit(&progress_thread_stop, true, memory_order_release);
 #if 0
     pthread_mutex_lock(&progress_mutex);
@@ -399,9 +405,8 @@ int lci_tag_register(parsec_ce_tag_t tag,
     handle->args.data   = cb_data;
     handle->ht_item.key = key;
 
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tregister Active Message %"PRIu64" data %p size %zu",
-                         ep_rank, tag, cb_data, msg_length);
+    lci_ce_debug_verbose("register Active Message %"PRIu64" data %p size %zu",
+                         tag, cb_data, msg_length);
     if (NULL != parsec_hash_table_nolock_find(am_cb_hash_table, key)) {
         parsec_warning("LCI[%d]:\tActive Message %"PRIu64" already registered",
                        ep_rank, tag);
@@ -414,8 +419,7 @@ int lci_tag_register(parsec_ce_tag_t tag,
 
 int lci_tag_unregister(parsec_ce_tag_t tag)
 {
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tunregister Active Message %"PRIu64, ep_rank, tag);
+    lci_ce_debug_verbose("unregister Active Message %"PRIu64, tag);
     parsec_key_t key = tag;
     lci_cb_handle_t *handle = parsec_hash_table_remove(am_cb_hash_table, key);
     if (NULL == handle) {
@@ -437,8 +441,7 @@ lci_mem_register(void *mem, parsec_mem_type_t mem_type,
     /* LCI only supports contiguous types */
     assert(mem_type == PARSEC_MEM_TYPE_CONTIGUOUS && "only supports contiguous memory");
 
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tregister memory %p size %zu", ep_rank, mem, mem_size);
+    lci_ce_debug_verbose("register memory %p size %zu", mem, mem_size);
 
     /* allocate from mempool */
     lci_mem_reg_handle_t *handle = parsec_thread_mempool_allocate(
@@ -462,9 +465,8 @@ int
 lci_mem_unregister(parsec_ce_mem_reg_handle_t *lreg)
 {
     lci_mem_reg_handle_t *handle = (lci_mem_reg_handle_t *) *lreg;
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tunregister memory %p size %zu",
-                         ep_rank, (void *)handle->mem, handle->size);
+    lci_ce_debug_verbose("unregister memory %p size %zu",
+                         (void *)handle->mem, handle->size);
     //LCI_unregister(handle->mem);
     parsec_thread_mempool_free(handle->mempool_owner, handle);
     *lreg = NULL;
@@ -486,9 +488,8 @@ lci_mem_retrieve(parsec_ce_mem_reg_handle_t lreg,
     *mem      = handle->mem;
     *count    = handle->count;
     *datatype = handle->datatype;
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tretrieve memory %p size %zu",
-                         ep_rank, (void *)handle->mem, handle->size);
+    lci_ce_debug_verbose("retrieve memory %p size %zu",
+                         (void *)handle->mem, handle->size);
     return 1;
 }
 
@@ -536,8 +537,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
     memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tPut Req send:\t%d(%p) -> %d(%p) size %zu with tag %d", ep_rank,
+    lci_ce_debug_verbose("Put Req send:\t%d(%p) -> %d(%p) size %zu with tag %d",
                          ep_rank, lbuf, remote, rbuf, ldata->size, tag);
     RETRY(lc_sendm(handshake, buffer_size, remote, tag, put_am_ep));
 
@@ -555,8 +555,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
     handle->args.remote      = remote;
 
     /* start send to remote with tag */
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tPut Send start:\t%d(%p) -> %d(%p) size %zu with tag %d", ep_rank,
+    lci_ce_debug_verbose("Put Send start:\t%d(%p) -> %d(%p) size %zu with tag %d",
                          ep_rank, lbuf, remote, rbuf, ldata->size, tag);
     RETRY(lc_send(lbuf, ldata->size, remote, tag, put_ep, lci_put_send_cb, handle));
     return 1;
@@ -594,8 +593,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
     memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tGet Req send:\t%d(%p) <- %d(%p) size %zu with tag %d", ep_rank,
+    lci_ce_debug_verbose("Get Req send:\t%d(%p) <- %d(%p) size %zu with tag %d",
                          ep_rank, lbuf, remote, rbuf, ldata->size, tag);
     RETRY(lc_sendm(handshake, buffer_size, remote, tag, get_am_ep));
 
@@ -619,8 +617,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
     req->ctx = handle;
 
     /* start recieve from remote with tag */
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tGet Recv start:\t%d(%p) <- %d(%p) size %zu with tag %d", ep_rank,
+    lci_ce_debug_verbose("Get Recv start:\t%d(%p) <- %d(%p) size %zu with tag %d",
                          ep_rank, lbuf, remote, rbuf, ldata->size, tag);
     RETRY(lc_recv(lbuf, ldata->size, remote, tag, get_ep, req));
     return 1;
@@ -633,9 +630,8 @@ lci_send_active_message(parsec_comm_engine_t *comm_engine,
                         void *addr, size_t size)
 {
     assert(size <= lc_max_medium(0) && "active message data too long");
-    parsec_debug_verbose(20, parsec_debug_output,
-                         "LCI[%d]:\tActive Message %"PRIu64" send:\t%d -> %d with message %p size %zu",
-                         ep_rank, tag, ep_rank, remote, addr, size);
+    lci_ce_debug_verbose("Active Message %"PRIu64" send:\t%d -> %d with message %p size %zu",
+                         tag, ep_rank, remote, addr, size);
     RETRY(lc_sendm(addr, size, remote, tag, am_ep));
     return 1;
 }
@@ -643,13 +639,11 @@ lci_send_active_message(parsec_comm_engine_t *comm_engine,
 _Noreturn void
 lci_abort(int exit_code)
 {
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tAbort %d", ep_rank, exit_code);
+    lci_ce_debug_verbose("Abort %d", exit_code);
     for (int i = 0; i < ep_size; i++) {
         if (i != ep_rank) {
             /* send abort message to all other processes */
-            parsec_debug_verbose(20, parsec_debug_output,
-                                 "LCI[%d]:\tAbort %d send:\t%d -> %d",
-                                 ep_rank, exit_code, ep_rank, i);
+            lci_ce_debug_verbose("Abort %d send:\t%d -> %d", exit_code, ep_rank, i);
             RETRY(lc_sends(NULL, 0, i, exit_code, abort_ep));
         }
     }
@@ -667,9 +661,8 @@ lci_progress(parsec_comm_engine_t *comm_engine)
 
     /* handle abort */
     if (LC_OK == lc_cq_pop(abort_ep, &req)) {
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tAbort %d recv:\t%d -> %d",
-                             ep_rank, req->meta, req->rank, ep_rank);
+        lci_ce_debug_verbose("Abort %d recv:\t%d -> %d",
+                             req->meta, req->rank, ep_rank);
         int exit_code = req->meta;
         lc_cq_reqfree(abort_ep, req);
         /* wait for all processes to ack the abort */
@@ -683,9 +676,8 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         parsec_key_t key = req->meta;
         /* find callback handle, based on active message tag */
         lci_cb_handle_t *handle = parsec_hash_table_nolock_find(am_cb_hash_table, key);
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tActive Message %"PRIu64" recv:\t%d -> %d with message %p size %zu",
-                             ep_rank, key, req->rank, ep_rank, req->buffer, req->size);
+        lci_ce_debug_verbose("Active Message %"PRIu64" recv:\t%d -> %d with message %p size %zu",
+                             key, req->rank, ep_rank, req->buffer, req->size);
         /* if callback found, call it; else warn */
         if (NULL != handle) {
             handle->cb.am(comm_engine, handle->args.tag,
@@ -720,9 +712,8 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         handle->args.size        = handshake->size;
         handle->args.remote      = req->rank;
 
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tPut Req recv:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
-                             ep_rank, handle->args.remote, ep_rank,
+        lci_ce_debug_verbose("Put Req recv:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
+                             handle->args.remote, ep_rank,
                              (void *)handle->args.msg, handle->args.size,
                              handle->args.tag, (void *)handle->args.data);
 
@@ -735,9 +726,8 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         /* start receive for the put */
         RETRY(lc_recv(handshake->buffer, handshake->size, req->rank, req->meta,
                       put_ep, recv_req));
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tPut Recv start:\t%d -> %d(%p) size %zu with tag %d",
-                             ep_rank, handle->args.remote, ep_rank,
+        lci_ce_debug_verbose("Put Recv start:\t%d -> %d(%p) size %zu with tag %d",
+                             handle->args.remote, ep_rank,
                              (void *)handle->args.msg, handle->args.size,
                              handle->args.tag);
 
@@ -749,12 +739,11 @@ lci_progress(parsec_comm_engine_t *comm_engine)
     while (LC_OK == lc_cq_pop(put_ep, &req)) {
         /* get callback handle from request context */
         lci_cb_handle_t *handle = req->ctx;
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tPut Recv end:\t%d -> %d(%p) size %zu with tag %d",
-                             ep_rank, handle->args.remote, ep_rank,
+        lci_ce_debug_verbose("Put Recv end:\t%d -> %d(%p) size %zu with tag %d",
+                             handle->args.remote, ep_rank,
                              (void *)handle->args.msg, handle->args.size,
                              handle->args.tag);
-        parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\t calling %p", ep_rank, (void *)handle->cb.onesided_am);
+        lci_ce_debug_verbose("calling %p", (void *)handle->cb.onesided_am);
 #if 0
         handle->cb.onesided_am(handle->args.comm_engine,
                                handle->args.tag,  handle->args.msg,
@@ -766,7 +755,7 @@ lci_progress(parsec_comm_engine_t *comm_engine)
                                handle->args.tag,  handle->args.data,
                                handle->args.size, handle->args.remote,
                                NULL);
-        parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\t called %p", ep_rank, (void *)handle->cb.onesided_am);
+        lci_ce_debug_verbose("called %p", (void *)handle->cb.onesided_am);
 
         /* return memory from AM */
         /* handle->args.data points to the cb_data field of the handshake info
@@ -790,8 +779,7 @@ lci_progress(parsec_comm_engine_t *comm_engine)
                              item != NULL;
                              item = parsec_dequeue_try_pop_front(lci_put_send_queue)) {
         lci_cb_handle_t *handle = (lci_cb_handle_t *)item;
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tPut Send end:\t%d(%p) -> %d(%p) size %zu", ep_rank,
+        lci_ce_debug_verbose("Put Send end:\t%d(%p) -> %d(%p) size %zu",
                              ep_rank,
                              (void *)(((lci_mem_reg_handle_t *)handle->args.lreg)->mem + handle->args.ldispl),
                              handle->args.remote,
@@ -822,18 +810,16 @@ lci_progress(parsec_comm_engine_t *comm_engine)
         handle->args.size        = handshake->size;
         handle->args.remote      = req->rank;
 
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tGet Req recv:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
-                             ep_rank, handle->args.remote, ep_rank,
+        lci_ce_debug_verbose("Get Req recv:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
+                             handle->args.remote, ep_rank,
                              (void *)handle->args.msg, handle->args.size,
                              handle->args.tag, (void *)handle->args.data);
 
         /* start send for the get */
         RETRY(lc_send(handshake->buffer, handshake->size, req->rank, req->meta,
                       get_ep, lci_get_send_cb, handle));
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tGet Send start:\t%d <- %d(%p) size %zu with tag %d",
-                             ep_rank, handle->args.remote, ep_rank,
+        lci_ce_debug_verbose("Get Send start:\t%d <- %d(%p) size %zu with tag %d",
+                             handle->args.remote, ep_rank,
                              (void *)handle->args.msg, handle->args.size,
                              handle->args.tag);
 
@@ -845,8 +831,7 @@ lci_progress(parsec_comm_engine_t *comm_engine)
     while (LC_OK == lc_cq_pop(get_ep, &req)) {
         /* get callback handle from request context */
         lci_cb_handle_t *handle = req->ctx;
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tGet Recv end:\t%d(%p) <- %d(%p) size %zu with tag %d", ep_rank,
+        lci_ce_debug_verbose("Get Recv end:\t%d(%p) <- %d(%p) size %zu with tag %d",
                              ep_rank,
                              (void *)(((lci_mem_reg_handle_t *)handle->args.lreg)->mem + handle->args.ldispl),
                              handle->args.remote,
@@ -872,9 +857,8 @@ lci_progress(parsec_comm_engine_t *comm_engine)
                              item != NULL;
                              item = parsec_dequeue_try_pop_front(lci_get_send_queue)) {
         lci_cb_handle_t *handle = (lci_cb_handle_t *)item;
-        parsec_debug_verbose(20, parsec_debug_output,
-                             "LCI[%d]:\tGet Send end:\t%d <- %d(%p) size %zu with tag %d",
-                             ep_rank, handle->args.remote, ep_rank,
+        lci_ce_debug_verbose("Get Send end:\t%d <- %d(%p) size %zu with tag %d",
+                             handle->args.remote, ep_rank,
                              (void *)handle->args.msg, handle->args.size,
                              handle->args.tag);
 #if 0
@@ -944,8 +928,8 @@ lci_pack(parsec_comm_engine_t *comm_engine,
          void *outbuf, int outsize,
          int *position)
 {
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tpack %p(%d) into %p(%d) + %d",
-                         ep_rank, inbuf, incount, outbuf, outsize, *position);
+    lci_ce_debug_verbose("pack %p(%d) into %p(%d) + %d",
+                         inbuf, incount, outbuf, outsize, *position);
     /* what's the behavior when outbuf overflows? MPI_Pack doesn't say lol */
     assert(*position + incount <= outsize && "pack overflow");
     int remaining = outsize - *position;
@@ -963,8 +947,8 @@ lci_unpack(parsec_comm_engine_t *comm_engine,
            void *inbuf, int insize, int *position,
            void *outbuf, int outcount)
 {
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tunpack %p(%d) + %d into %p(%d)",
-                         ep_rank, inbuf, insize, *position, outbuf, outcount);
+    lci_ce_debug_verbose("unpack %p(%d) + %d into %p(%d)",
+                         inbuf, insize, *position, outbuf, outcount);
     /* what happens if we try to unpack more than is available? */
     assert(*position + outcount <= insize && "unpack overflow");
     int remaining = insize - *position;
@@ -1004,7 +988,7 @@ lci_reshape(parsec_comm_engine_t *comm_engine,
 int
 lci_sync(parsec_comm_engine_t *comm_engine)
 {
-    parsec_debug_verbose(20, parsec_debug_output, "LCI[%d]:\tsync", ep_rank);
+    lci_ce_debug_verbose("sync");
     lc_barrier(collective_ep);
     return 1;
 }
