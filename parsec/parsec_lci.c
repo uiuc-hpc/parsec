@@ -45,11 +45,23 @@ typedef unsigned char byte_t;
                          ep_rank, ##__VA_ARGS__);                             \
   } while (0)
 
+#define NS_PER_S 1000000000L
 //#define RETRY(lci_call) do { } while (LC_OK != (lci_call))
 #define RETRY(lci_call)                                                       \
   do {                                                                        \
-    while (LC_OK != (lci_call)) {                                             \
-      lci_ce_debug_verbose("retrying " #lci_call " ...");                     \
+    struct timespec _ts = { .tv_sec = 0, .tv_nsec = 1 };                      \
+    lc_status _status = LC_OK;                                                \
+    for (long _ns = 0; _ns < NS_PER_S; _ns += _ts.tv_nsec) {                  \
+        lci_ce_debug_verbose(#lci_call);                                      \
+        _status = (lci_call);                                                 \
+        if (LC_OK == _status)                                                 \
+            break;                                                            \
+        nanosleep(&_ts, NULL);                                                \
+        _ts.tv_nsec *= 2;                                                     \
+    }                                                                         \
+    if (LC_OK != _status) {                                                   \
+        parsec_debug_coredump_on_fatal = 1;                                   \
+        parsec_fatal("LCI[%d]:\tretry failed: %d", ep_rank, _status);         \
     }                                                                         \
   } while (0)
 
@@ -204,7 +216,7 @@ void * lci_progress_thread(void *arg)
         while (lc_progress(0))
             continue;
         /* sleep for comm_yield_ns if set to comm_yield, else yield thread  */
-        struct timespec ts = { .tv_sec = 0, .tv_nsec = comm_yield_ns };
+        const struct timespec ts = { .tv_sec = 0, .tv_nsec = comm_yield_ns };
         switch (comm_yield) {
         case 1:
         case 2:
