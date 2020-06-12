@@ -52,7 +52,8 @@ typedef unsigned char byte_t;
   } while (0)
 
 #define NS_PER_S 1000000000L
-//#define RETRY(lci_call) do { } while (LC_OK != (lci_call))
+#define RETRY(lci_call) do { } while (LC_OK != (lci_call))
+#if 0
 #define RETRY(lci_call)                                                       \
   do {                                                                        \
     struct timespec _ts = { .tv_sec = 0, .tv_nsec = 1 };                      \
@@ -69,6 +70,7 @@ typedef unsigned char byte_t;
         lci_ce_fatal("retry failed: %d", _status);                            \
     }                                                                         \
   } while (0)
+#endif
 
 /* LCI memory handle type
  * PaRSEC object, inherits from parsec_list_item_t
@@ -107,8 +109,10 @@ typedef enum lci_cb_handle_type_e {
     LCI_ABORT,
     LCI_ACTIVE_MESSAGE,
     LCI_PUT_ORIGIN,
+    LCI_PUT_TARGET_HANDSHAKE,
     LCI_PUT_TARGET,
     LCI_GET_ORIGIN,
+    LCI_GET_TARGET_HANDSHAKE,
     LCI_GET_TARGET,
 } lci_cb_handle_type_t;
 
@@ -128,13 +132,12 @@ typedef struct lci_cb_handle_s {
             struct /* AM callback arguments - 24B */ {
                 parsec_ce_tag_t      tag;  /* AM tag  */
                 byte_t               *msg; /* message */
-                lc_req               *req; /* request, for deferred recvs */
             };
         };
         byte_t               *data;        /* callback data */
         size_t               size;         /* message size  */
         int                  remote;       /* remote peer   */
-        lci_cb_handle_type_t type;         /* callback type */
+        lci_cb_handle_type_t type;         /* callback type */ /* here for size/alignment */
     } args;                                                      /* 56 bytes */
     alignas(8) union /* callback function */ {
         parsec_ce_am_callback_t       am;
@@ -220,7 +223,7 @@ static enum { RUN, PAUSE, STOP } progress_status = RUN;
 static atomic_bool progress_thread_stop = false;
 static pthread_t progress_thread_id;
 
-static inline void * dyn_alloc(size_t size, void **ctx)
+static inline void * lci_dyn_alloc(size_t size, void **ctx)
 {
     assert(size <= lc_max_medium(0) && "dynamic message data too long");
     /* if size is 0, return NULL; else allocate from mempool */
@@ -233,11 +236,191 @@ static inline void * dyn_alloc(size_t size, void **ctx)
     return &dynmsg->data;
 }
 
-/* just push onto cb queue */
-static inline void lci_put_send_cb(void *ctx)
+
+
+/******************************************************************************
+ *            Wrappers for executing callbacks from their handles             *
+ *****************************************************************************/
+
+/* call the callback in handle and free all data */
+static inline void
+lci_active_message_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
+{
+    assert(handle->args.type == LCI_ACTIVE_MESSAGE && "wrong handle type");
+    lci_ce_debug_verbose("Active Message %"PRIu64" cb:\t%d -> %d message %p size %zu",
+                         handle->args.tag, handle->args.remote, ep_rank,
+                         (void *)handle->args.msg, handle->args.size);
+    handle->cb.am(comm_engine, handle->args.tag,
+                  handle->args.msg, handle->args.size,
+                  handle->args.remote, handle->args.data);
+    /* return memory to pool (only allocated if size > 0) */
+    if (handle->args.size > 0) {
+        lci_dynmsg_t *dynmsg = container_of(handle->args.msg, lci_dynmsg_t, data);
+        parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
+    }
+    /* return handle to mempool */
+    parsec_mempool_free(&lci_cb_handle_mempool, handle);
+}
+
+/* call the callback in handle and free all data */
+static inline void
+lci_put_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
+{
+    assert(handle->args.type == LCI_PUT_ORIGIN && "wrong handle type");
+    lci_ce_debug_verbose("Put Origin cb:\t%d(%p+%td) -> %d(%p+%td) size %zu data %p",
+                         ep_rank,
+                         (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
+                         handle->args.ldispl,
+                         handle->args.remote,
+                         (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
+                         handle->args.rdispl,
+                         handle->args.size, handle->args.data);
+    handle->cb.put_origin(comm_engine,
+                          handle->args.lreg, handle->args.ldispl,
+                          handle->args.rreg, handle->args.rdispl,
+                          handle->args.size, handle->args.remote,
+                          handle->args.data);
+    /* return handle to mempool */
+    parsec_mempool_free(&lci_cb_handle_mempool, handle);
+}
+
+/* call the callback in handle and free all data */
+static inline void
+lci_put_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
+{
+    assert(handle->args.type == LCI_PUT_TARGET && "wrong handle type");
+    lci_ce_debug_verbose("Put Target cb:\t%d -> %d(%p) size %zu with tag %d",
+                         handle->args.remote, ep_rank,
+                         (void *)handle->args.msg, handle->args.size,
+                         handle->args.tag);
+#if 0
+    handle->cb.put_target(comm_engine,         handle->args.tag,
+                          handle->args.msg,    handle->args.size,
+                          handle->args.remote, handle->args.data);
+#endif
+    /* API seems to be bugged, pass callback data as message */
+    handle->cb.put_target(comm_engine,         handle->args.tag,
+                          handle->args.data,   handle->args.size,
+                          handle->args.remote, NULL);
+    /* return memory from AM */
+    /* handle->args.data points to the cb_data field of the handshake info
+     * which is the data field of the dynmsg object */
+    lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
+    lci_dynmsg_t    *dynmsg    = container_of(handshake, lci_dynmsg_t, data);
+    parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
+    /* return handle to mempool */
+    parsec_mempool_free(&lci_cb_handle_mempool, handle);
+}
+
+/* call the callback in handle and free all data */
+static inline void
+lci_get_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
+{
+    assert(handle->args.type == LCI_GET_ORIGIN && "wrong handle type");
+    lci_ce_debug_verbose("Get Origin cb:\t%d(%p+%td) <- %d(%p+%td) size %zu data %p",
+                         ep_rank,
+                         (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
+                         handle->args.ldispl,
+                         handle->args.remote,
+                         (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
+                         handle->args.rdispl,
+                         handle->args.size, handle->args.data);
+    handle->cb.get_origin(comm_engine,
+                          handle->args.lreg, handle->args.ldispl,
+                          handle->args.rreg, handle->args.rdispl,
+                          handle->args.size, handle->args.remote,
+                          handle->args.data);
+    /* return handle to mempool */
+    parsec_mempool_free(&lci_cb_handle_mempool, handle);
+}
+
+/* call the callback in handle and free all data */
+static inline void
+lci_get_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
+{
+    assert(handle->args.type == LCI_GET_TARGET && "wrong handle type");
+    lci_ce_debug_verbose("Get Target cb:\t%d <- %d(%p) size %zu with tag %d",
+                         handle->args.remote, ep_rank,
+                         (void *)handle->args.msg, handle->args.size,
+                         handle->args.tag);
+#if 0
+    handle->cb.get_target(comm_engine,         handle->args.tag,
+                          handle->args.msg,    handle->args.size,
+                          handle->args.remote, handle->args.data);
+#endif
+    /* API seems to be bugged, pass callback data as message */
+    handle->cb.get_target(comm_engine,         handle->args.tag,
+                          handle->args.data,   handle->args.size,
+                          handle->args.remote, NULL);
+    /* return memory from AM */
+    /* handle->args.data points to the cb_data field of the handshake info
+     * which is the data field of the dynmsg object */
+    lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
+    lci_dynmsg_t    *dynmsg    = container_of(handshake, lci_dynmsg_t, data);
+    parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
+    /* return handle to mempool */
+    parsec_mempool_free(&lci_cb_handle_mempool, handle);
+}
+
+
+
+/******************************************************************************
+ *                Handlers for LCI send and receive functions                 *
+ *****************************************************************************/
+
+/* handler for abort
+ * only called from within lc_progress (i.e. on progress thread) */
+static inline void lci_abort_handler(lc_req *req)
+{
+    lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
+                                        lci_cb_handle_mempool.thread_mempools);
+    handle->args.tag    = req->meta;
+    handle->args.remote = req->rank;
+    handle->args.type   = LCI_ABORT;
+    lci_ce_debug_verbose("Abort %d recv:\t%d -> %d",
+                         (int)handle->args.tag, handle->args.remote, ep_rank);
+    /* push to front of local callback fifo */
+    parsec_list_nolock_push_front(&lci_progress_cb_fifo, &handle->list_item);
+}
+
+/* handler for active message
+ * only called from within lc_progress (i.e. on progress thread) */
+static inline void lci_active_message_handler(lc_req *req)
+{
+    parsec_key_t key = req->meta;
+    lci_ce_debug_verbose("Active Message %"PRIu64" recv:\t%d -> %d message %p size %zu",
+                         key, req->rank, ep_rank, req->buffer, req->size);
+    /* find AM handle, based on active message tag */
+    lci_cb_handle_t *am_handle = parsec_hash_table_find(&am_cb_hash_table, key);
+    /* warn if not found */
+    if (NULL == am_handle) {
+        parsec_warning("LCI[%d]:\tActive Message %"PRIu64" not registered",
+                       ep_rank, key);
+        return;
+    }
+
+    /* allocate callback handle & fill with info */
+    lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
+                                        lci_cb_handle_mempool.thread_mempools);
+    handle->args.tag    = am_handle->args.tag;
+    handle->args.msg    = req->buffer;
+    handle->args.data   = am_handle->args.data;
+    handle->args.size   = req->size;
+    handle->args.remote = req->rank;
+    handle->args.type   = LCI_ACTIVE_MESSAGE;
+    handle->cb.am       = am_handle->cb.am;
+
+    /* push to local callback fifo */
+    parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+}
+
+/* handler for put on origin
+ * can be called anywhere - deal with progress thread vs. elsewhere */
+static inline void lci_put_origin_handler(void *ctx)
 {
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
+    assert(handle->args.type == LCI_PUT_ORIGIN && "wrong handle type");
     lci_ce_debug_verbose("Put Origin end:\t%d(%p+%td) -> %d(%p+%td) size %zu",
                          ep_rank,
                          (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
@@ -251,69 +434,147 @@ static inline void lci_put_send_cb(void *ctx)
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
         /* we aren't on progress thread, just call the callback */
-        lci_ce_debug_verbose("Put Origin cb:\t%d(%p+%td) -> %d(%p+%td) size %zu data %p",
-                             ep_rank,
-                             (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
-                             handle->args.ldispl,
-                             handle->args.remote,
-                             (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
-                             handle->args.rdispl,
-                             handle->args.size, handle->args.data);
-        handle->cb.put_origin(&parsec_ce,
-                              handle->args.lreg, handle->args.ldispl,
-                              handle->args.rreg, handle->args.rdispl,
-                              handle->args.size, handle->args.remote,
-                              handle->args.data);
-        /* return handle to mempool */
-        parsec_mempool_free(&lci_cb_handle_mempool, handle);
+        lci_put_origin_callback(handle, &parsec_ce);
     }
 }
 
-/* just push onto cb queue */
-static inline void lci_get_send_cb(void *ctx)
+/* handler for put handshake on target
+ * only called from within lc_progress (i.e. on progress thread) */
+static inline void lci_put_target_handshake_handler(lc_req *req)
 {
-    /* ctx is pointer to lci_cb_handle_t */
-    lci_cb_handle_t *handle = ctx;
-    lci_ce_debug_verbose("Get Target end:\t%d <- %d(%p) size %zu with tag %d",
+    lci_handshake_t *handshake = req->buffer;
+
+    lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
+                                        lci_cb_handle_mempool.thread_mempools);
+    handle->args.tag         = req->meta;
+    handle->args.msg         = handshake->buffer;
+    /* array to pointer decay for handshake->cb_data */
+    handle->args.data        = handshake->cb_data;
+    handle->args.size        = handshake->size;
+    handle->args.remote      = req->rank;
+    handle->args.type        = LCI_PUT_TARGET_HANDSHAKE;
+    handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->cb;
+
+    lci_ce_debug_verbose("Put Target handshake:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
+                         handle->args.remote, ep_rank,
+                         (void *)handle->args.msg, handle->args.size,
+                         handle->args.tag, (void *)handle->args.data);
+
+    /* push to callback fifo - receive will be started by comm thread */
+    parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+}
+
+/* handler for put on target
+ * can be called anywhere - deal with progress thread vs. elsewhere */
+static inline void lci_put_target_handler(lc_req *req)
+{
+    /* get callback handle from request context */
+    lci_cb_handle_t *handle = req->ctx;
+    assert(handle->args.type == LCI_PUT_TARGET_HANDSHAKE && "wrong handle type");
+    lci_ce_debug_verbose("Put Target end:\t%d -> %d(%p) size %zu with tag %d",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
+    /* return request to pool */
+    lci_req_handle_t *req_handle = container_of(req, lci_req_handle_t, req);
+    parsec_mempool_free(&lci_req_mempool, req_handle);
+
+    /* prepare handle for put target callback */
+    handle->args.type = LCI_PUT_TARGET;
     if (pthread_equal(progress_thread_id, pthread_self())) {
         /* we are on progress thread, push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
-        lci_handshake_t *handshake = NULL;
-        lci_dynmsg_t    *dynmsg    = NULL;
         /* we aren't on progress thread, just call the callback */
-        lci_ce_debug_verbose("Get Target cb:\t%d <- %d(%p) size %zu with tag %d",
-                             handle->args.remote, ep_rank,
-                             (void *)handle->args.msg, handle->args.size,
-                             handle->args.tag);
-#if 0
-        handle->cb.get_target(&parsec_ce,
-                              handle->args.tag,  handle->args.msg,
-                              handle->args.size, handle->args.remote,
-                              handle->args.data);
-#endif
-        /* API seems to be bugged, pass callback data as message */
-        handle->cb.get_target(&parsec_ce,
-                              handle->args.tag,  handle->args.data,
-                              handle->args.size, handle->args.remote,
-                              NULL);
-        /* return memory from AM */
-        /* handle->args.data points to the cb_data field of the handshake info
-         * which is the data field of the dynmsg object */
-        handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
-        dynmsg    = container_of(handshake, lci_dynmsg_t, data);
-        parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
-        /* return handle to mempool */
-        parsec_mempool_free(&lci_cb_handle_mempool, handle);
+        lci_put_target_callback(handle, &parsec_ce);
     }
 }
 
+/* handler for get on origin
+ * can be called anywhere - deal with progress thread vs. elsewhere */
+static inline void lci_get_origin_handler(lc_req *req)
+{
+    /* get callback handle from request context */
+    lci_cb_handle_t *handle = req->ctx;
+    assert(handle->args.type == LCI_GET_ORIGIN && "wrong handle type");
+    lci_ce_debug_verbose("Get Origin end:\t%d(%p) <- %d(%p) size %zu with tag %d",
+                         ep_rank,
+                         (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
+                         handle->args.ldispl,
+                         handle->args.remote,
+                         (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
+                         handle->args.rdispl,
+                         handle->args.size, req->meta);
+    /* return request to pool */
+    lci_req_handle_t *req_handle = container_of(req, lci_req_handle_t, req);
+    parsec_mempool_free(&lci_req_mempool, req_handle);
+
+    if (pthread_equal(progress_thread_id, pthread_self())) {
+        /* we are on progress thread, push to back of progress cb fifo */
+        parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+    } else {
+        /* we aren't on progress thread, just call the callback */
+        lci_get_origin_callback(handle, &parsec_ce);
+    }
+}
+
+/* handler for get handshake on target
+ * only called from within lc_progress (i.e. on progress thread) */
+static inline void lci_get_target_handshake_handler(lc_req *req)
+{
+    lci_handshake_t *handshake = req->buffer;
+
+    lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
+                                        lci_cb_handle_mempool.thread_mempools);
+    handle->args.tag         = req->meta;
+    handle->args.msg         = handshake->buffer;
+    /* array to pointer decay for handshake->cb_data */
+    handle->args.data        = handshake->cb_data;
+    handle->args.size        = handshake->size;
+    handle->args.remote      = req->rank;
+    handle->args.type        = LCI_GET_TARGET_HANDSHAKE;
+    handle->cb.get_target    = (parsec_ce_am_callback_t)handshake->cb;
+
+    lci_ce_debug_verbose("Get Target handshake:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
+                         handle->args.remote, ep_rank,
+                         (void *)handle->args.msg, handle->args.size,
+                         handle->args.tag, (void *)handle->args.data);
+
+    /* push to callback fifo - send will be started by comm thread */
+    parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+}
+
+/* handler for get on target
+ * can be called anywhere - deal with progress thread vs. elsewhere */
+static inline void lci_get_target_handler(void *ctx)
+{
+    /* ctx is pointer to lci_cb_handle_t */
+    lci_cb_handle_t *handle = ctx;
+    assert(handle->args.type == LCI_GET_TARGET_HANDSHAKE && "wrong handle type");
+    lci_ce_debug_verbose("Get Target end:\t%d <- %d(%p) size %zu with tag %d",
+                         handle->args.remote, ep_rank,
+                         (void *)handle->args.msg, handle->args.size,
+                         handle->args.tag);
+    /* prepare handle for get target callback */
+    handle->args.type = LCI_GET_TARGET;
+    if (pthread_equal(progress_thread_id, pthread_self())) {
+        /* we are on progress thread, push to back of progress cb fifo */
+        parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+    } else {
+        /* we aren't on progress thread, just call the callback */
+        lci_get_target_callback(handle, &parsec_ce);
+    }
+}
+
+
+
+/******************************************************************************
+ *                    Communication Engine Implementation                     *
+ *****************************************************************************/
+
+/* progress thread main function */
 void * lci_progress_thread(void *arg)
 {
-    parsec_list_t deferred_fifo;
     parsec_list_item_t *ring = NULL;
     lc_req *req = NULL;
 
@@ -323,236 +584,18 @@ void * lci_progress_thread(void *arg)
     parsec_context_t *context = arg;
     remote_dep_bind_thread(context);
 
-    OBJ_CONSTRUCT(&deferred_fifo, parsec_list_t);
-
     /* loop until told to stop */
     while (!atomic_load_explicit(&progress_thread_stop, memory_order_acquire)) {
         /* progress until nothing progresses */
         while (lc_progress(0))
             continue;
 
-        /* start deferred sends and receives */
-        // this could maybe be done on comm thread
-        for (parsec_list_item_t *item = parsec_list_nolock_pop_front(&deferred_fifo);
-                                 item != NULL;
-                                 item = parsec_list_nolock_pop_front(&deferred_fifo)) {
-            lci_cb_handle_t *handle = container_of(item, lci_cb_handle_t, list_item);
-            switch (handle->args.type) {
-            case LCI_PUT_TARGET:
-                lci_ce_debug_verbose("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
-                                     handle->args.remote, ep_rank,
-                                     (void *)handle->args.msg, handle->args.size,
-                                     handle->args.tag);
-                if (LC_OK == lc_recv(handle->args.msg, handle->args.size,
-                                     handle->args.remote, handle->args.tag,
-                                     put_ep, handle->args.req)) {
-                    /* receive start was successful, go on to next iteration */
-                    continue;
-                } else {
-                    lci_ce_debug_verbose("Put Target defer:\t%d -> %d(%p) size %zu with tag %d",
-                                         handle->args.remote, ep_rank,
-                                         (void *)handle->args.msg, handle->args.size,
-                                         handle->args.tag);
-                }
-                break;
-            case LCI_GET_TARGET:
-                lci_ce_debug_verbose("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
-                                     handle->args.remote, ep_rank,
-                                     (void *)handle->args.msg,
-                                     handle->args.size, handle->args.tag);
-                if (LC_OK == lc_send(handle->args.msg, handle->args.size,
-                                     handle->args.remote, handle->args.tag,
-                                     get_ep, lci_get_send_cb, handle)) {
-                    /* send start was successful, go on to next iteration */
-                    continue;
-                } else {
-                    lci_ce_debug_verbose("Get Target defer:\t%d <- %d(%p) size %zu with tag %d",
-                                         handle->args.remote, ep_rank,
-                                         (void *)handle->args.msg,
-                                         handle->args.size, handle->args.tag);
-                }
-                break;
-            default:
-                lci_ce_fatal("invalid callback type: %d", handle->args.type);
-                break;
-            }
-            /* if we got here, send/receive didn't start
-             * push request to front of deferred fifo and bail out of loop */
-            parsec_list_nolock_push_front(&deferred_fifo, &handle->list_item);
-            break;
-        }
-
-        /* handle abort */
-        if (LC_OK == lc_cq_pop(abort_ep, &req)) {
-            lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
-                                        lci_cb_handle_mempool.thread_mempools);
-            handle->args.tag    = req->meta;
-            handle->args.remote = req->rank;
-            handle->args.type   = LCI_ABORT;
-            lc_cq_reqfree(abort_ep, req);
-            lci_ce_debug_verbose("Abort %d recv:\t%d -> %d",
-                                 (int)handle->args.tag,
-                                 handle->args.remote, ep_rank);
-            /* push to front of local callback fifo */
-            parsec_list_nolock_push_front(&lci_progress_cb_fifo, &handle->list_item);
-        }
-
-        /* handle active messages - at target */
-        while (LC_OK == lc_cq_pop(am_ep, &req)) {
-            parsec_key_t key = req->meta;
-            lci_ce_debug_verbose("Active Message %"PRIu64" recv:\t%d -> %d message %p size %zu",
-                                 key, req->rank, ep_rank, req->buffer, req->size);
-            /* find AM handle, based on active message tag */
-            lci_cb_handle_t *am_handle = parsec_hash_table_find(&am_cb_hash_table, key);
-            /* warn if not found */
-            if (NULL == am_handle) {
-                parsec_warning("LCI[%d]:\tActive Message %"PRIu64" not registered",
-                        ep_rank, key);
-                lc_cq_reqfree(am_ep, req);
-                continue;
-            }
-
-            /* allocate callback handle & fill with info */
-            lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
-                                        lci_cb_handle_mempool.thread_mempools);
-            handle->args.tag    = am_handle->args.tag;
-            handle->args.msg    = req->buffer;
-            handle->args.data   = am_handle->args.data;
-            handle->args.size   = req->size;
-            handle->args.remote = req->rank;
-            handle->args.type   = LCI_ACTIVE_MESSAGE;
-            handle->cb.am       = am_handle->cb.am;
-
-            lc_cq_reqfree(am_ep, req);
-            /* push to local callback fifo */
-            parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
-        }
-
-        /* repond to put request - at target */
-        while (LC_OK == lc_cq_pop(put_am_ep, &req)) {
-            lci_handshake_t *handshake = req->buffer;
-
-            lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
-                                        lci_cb_handle_mempool.thread_mempools);
-            handle->args.tag         = req->meta;
-            handle->args.msg         = handshake->buffer;
-            /* array to pointer decay for handshake->cb_data */
-            handle->args.data        = handshake->cb_data;
-            handle->args.size        = handshake->size;
-            handle->args.remote      = req->rank;
-            handle->args.type        = LCI_PUT_TARGET;
-            handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->cb;
-
-            lci_ce_debug_verbose("Put Target handshake:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag, (void *)handle->args.data);
-            lc_cq_reqfree(put_am_ep, req);
-
-            /* get request from pool and set context to callback handle */
-            lci_req_handle_t *req_handle = parsec_thread_mempool_allocate(
-                                              lci_req_mempool.thread_mempools);
-            lc_req *recv_req = &req_handle->req;
-            recv_req->ctx = handle;
-
-            /* start receive for the put */
-            lci_ce_debug_verbose("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag);
-            if (LC_OK != lc_recv(handle->args.msg, handle->args.size,
-                                 handle->args.remote, handle->args.tag,
-                                 put_ep, recv_req)) {
-                lci_ce_debug_verbose("Put Target defer:\t%d -> %d(%p) size %zu with tag %d",
-                                     handle->args.remote, ep_rank,
-                                     (void *)handle->args.msg, handle->args.size,
-                                     handle->args.tag);
-                /* save allocated request, so we don't need to reallocate */
-                handle->args.req = recv_req;
-                /* if receive didn't start, push request to deferred fifo */
-                parsec_list_nolock_push_back(&deferred_fifo, &handle->list_item);
-            }
-        }
-
-        /* put receive - at target */
-        while (LC_OK == lc_cq_pop(put_ep, &req)) {
-            /* get callback handle from request context */
-            lci_cb_handle_t *handle = req->ctx;
-            lci_ce_debug_verbose("Put Target end:\t%d -> %d(%p) size %zu with tag %d",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag);
-            /* return request to pool */
-            lc_cq_reqfree(put_ep, req); // returns packet to pool, not req
-            lci_req_handle_t *req_handle = container_of(req, lci_req_handle_t, req);
-            parsec_mempool_free(&lci_req_mempool, req_handle);
-            /* push to local callback fifo */
-            parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
-        }
-
-        /* respond to get request - at target */
-        while (LC_OK == lc_cq_pop(get_am_ep, &req)) {
-            lci_handshake_t *handshake = req->buffer;
-
-            lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
-                                        lci_cb_handle_mempool.thread_mempools);
-            handle->args.tag         = req->meta;
-            handle->args.msg         = handshake->buffer;
-            /* array to pointer decay for handshake->cb_data */
-            handle->args.data        = handshake->cb_data;
-            handle->args.size        = handshake->size;
-            handle->args.remote      = req->rank;
-            handle->args.type        = LCI_GET_TARGET;
-            handle->cb.get_target    = (parsec_ce_am_callback_t)handshake->cb;
-
-            lci_ce_debug_verbose("Get Target handshake:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag, (void *)handle->args.data);
-            lc_cq_reqfree(get_am_ep, req);
-
-            /* start send for the get */
-            lci_ce_debug_verbose("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag);
-            if (LC_OK != lc_send(handle->args.msg, handle->args.size,
-                                 handle->args.remote, handle->args.tag,
-                                 get_ep, lci_get_send_cb, handle)) {
-                /* send didn't start, push request to deferred fifo */
-                lci_ce_debug_verbose("Get Target defer:\t%d <- %d(%p) size %zu with tag %d",
-                                     handle->args.remote, ep_rank,
-                                     (void *)handle->args.msg,
-                                     handle->args.size, handle->args.tag);
-                parsec_list_nolock_push_back(&deferred_fifo, &handle->list_item);
-            }
-        }
-
-        /* get receive - at origin */
-        while (LC_OK == lc_cq_pop(get_ep, &req)) {
-            /* get callback handle from request context */
-            lci_cb_handle_t *handle = req->ctx;
-            lci_ce_debug_verbose("Get Origin end:\t%d(%p) <- %d(%p) size %zu with tag %d",
-                                 ep_rank,
-                                 (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
-                                 handle->args.ldispl,
-                                 handle->args.remote,
-                                 (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
-                                 handle->args.rdispl,
-                                 handle->args.size, req->meta);
-            /* return request to pool */
-            lc_cq_reqfree(get_ep, req); // returns packet to pool, not req
-            lci_req_handle_t *req_handle = container_of(req, lci_req_handle_t, req);
-            parsec_mempool_free(&lci_req_mempool, req_handle);
-            /* push to local callback fifo */
-            parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
-        }
-
+#if 0
         /* push back to shared callback fifo */
         if (NULL != (ring = parsec_list_nolock_unchain(&lci_progress_cb_fifo))) {
             parsec_list_chain_back(&lci_cb_fifo, ring);
         }
-#if 0
+#endif
         /* push back to shared callback fifo if we could get the lock
          * if we can't, we'll try again the next iteration */
         if (!parsec_list_nolock_is_empty(&lci_progress_cb_fifo) &&
@@ -561,7 +604,6 @@ void * lci_progress_thread(void *arg)
             parsec_list_nolock_chain_back(&lci_cb_fifo, ring);
             parsec_atomic_unlock(&lci_cb_fifo.atomic_lock);
         }
-#endif
 
         /* sleep for comm_yield_ns if set to comm_yield, else yield thread  */
         const struct timespec ts = { .tv_sec = 0, .tv_nsec = comm_yield_ns };
@@ -595,7 +637,6 @@ void * lci_progress_thread(void *arg)
     }
 #endif
 
-    OBJ_DESTRUCT(&deferred_fifo);
     lci_ce_debug_verbose("progress thread stop");
     return NULL;
 }
@@ -699,21 +740,27 @@ lci_init(parsec_context_t *context)
     lc_ep_dup(&opt, *default_ep, &collective_ep);
 
     /* active message endpoint */
-    opt.desc = LC_DYN_CQ;
-    opt.alloc = dyn_alloc;
+    opt.desc = LC_DYN_AM;
+    opt.alloc = lci_dyn_alloc;
+    opt.handler = lci_active_message_handler;
     lc_ep_dup(&opt, *default_ep, &am_ep);
 
     /* one-sided AM endpoint */
+    opt.handler = lci_put_target_handshake_handler;
     lc_ep_dup(&opt, *default_ep, &put_am_ep);
+    opt.handler = lci_get_target_handshake_handler;
     lc_ep_dup(&opt, *default_ep, &get_am_ep);
 
     /* abort endpoint */
+    opt.handler = lci_abort_handler;
     lc_ep_dup(&opt, *default_ep, &abort_ep);
 
     /* one-sided endpoint */
-    opt.desc = LC_EXP_CQ;
+    opt.desc = LC_EXP_AM;
     opt.alloc = NULL;
+    opt.handler = lci_put_target_handler;
     lc_ep_dup(&opt, *default_ep, &put_ep);
+    opt.handler = lci_get_origin_handler;
     lc_ep_dup(&opt, *default_ep, &get_ep);
 
     /* start progress thread */
@@ -743,11 +790,11 @@ lci_fini(parsec_comm_engine_t *comm_engine)
 #endif
     pthread_join(progress_thread_id, &progress_retval);
 
-    OBJ_DESTRUCT(&lci_cb_fifo);
-    OBJ_DESTRUCT(&lci_progress_cb_fifo);
-
     parsec_hash_table_fini(&am_cb_hash_table);
     OBJ_DESTRUCT(&am_cb_hash_table);
+
+    OBJ_DESTRUCT(&lci_cb_fifo);
+    OBJ_DESTRUCT(&lci_progress_cb_fifo);
 
     parsec_mempool_destruct(&lci_dynmsg_mempool);
     parsec_mempool_destruct(&lci_req_mempool);
@@ -921,7 +968,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
-    RETRY(lc_send(lbuf, ldata->size, remote, tag, put_ep, lci_put_send_cb, handle));
+    RETRY(lc_send(lbuf, ldata->size, remote, tag, put_ep, lci_put_origin_handler, handle));
     return 1;
 }
 
@@ -981,15 +1028,14 @@ lci_get(parsec_comm_engine_t *comm_engine,
     /* get request from pool and set context to callback handle */
     lci_req_handle_t *req_handle = parsec_thread_mempool_allocate(
                                               lci_req_mempool.thread_mempools);
-    lc_req *req = &req_handle->req;
-    req->ctx = handle;
+    req_handle->req.ctx = handle;
 
     /* start recieve from remote with tag */
     lci_ce_debug_verbose("Get Origin start:\t%d(%p+%td) <- %d(%p+%td) size %zu with tag %d",
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
-    RETRY(lc_recv(lbuf, ldata->size, remote, tag, get_ep, req));
+    RETRY(lc_recv(lbuf, ldata->size, remote, tag, get_ep, &req_handle->req));
     return 1;
 }
 
@@ -1030,6 +1076,7 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
     int ret = 0;
     parsec_list_t cb_fifo;
     parsec_list_item_t *ring = NULL;
+    lci_req_handle_t *req_handle = NULL;
 
     OBJ_CONSTRUCT(&cb_fifo, parsec_list_t);
     if (NULL != (ring = parsec_list_unchain(&lci_cb_fifo))) {
@@ -1054,342 +1101,61 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
             break;
 
         case LCI_ACTIVE_MESSAGE:
-            lci_ce_debug_verbose("Active Message %"PRIu64" cb:\t%d -> %d message %p size %zu",
-                                 handle->args.tag, handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size);
-            handle->cb.am(comm_engine, handle->args.tag,
-                          handle->args.msg, handle->args.size,
-                          handle->args.remote, handle->args.data);
-            /* return memory to pool (only allocated if size > 0) */
-            if (handle->args.size > 0) {
-                dynmsg = container_of(handle->args.msg, lci_dynmsg_t, data);
-                parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
-            }
+            lci_active_message_callback(handle, comm_engine);
             break;
 
         case LCI_PUT_ORIGIN:
-            lci_ce_debug_verbose("Put Origin cb:\t%d(%p+%td) -> %d(%p+%td) size %zu data %p",
-                                 ep_rank,
-                                 (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
-                                 handle->args.ldispl,
-                                 handle->args.remote,
-                                 (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
-                                 handle->args.rdispl,
-                                 handle->args.size, handle->args.data);
-            handle->cb.put_origin(comm_engine,
-                                  handle->args.lreg, handle->args.ldispl,
-                                  handle->args.rreg, handle->args.rdispl,
-                                  handle->args.size, handle->args.remote,
-                                  handle->args.data);
+            lci_put_origin_callback(handle, comm_engine);
+            break;
+
+        case LCI_PUT_TARGET_HANDSHAKE:
+            /* start receive on target for put */
+            /* get request from pool and set context to callback handle */
+            req_handle = parsec_thread_mempool_allocate(
+                                              lci_req_mempool.thread_mempools);
+            req_handle->req.ctx = handle;
+            lci_ce_debug_verbose("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
+                                 handle->args.remote, ep_rank,
+                                 (void *)handle->args.msg, handle->args.size,
+                                 handle->args.tag);
+            RETRY(lc_recv(handle->args.msg, handle->args.size,
+                          handle->args.remote, handle->args.tag,
+                          put_ep, &req_handle->req));
             break;
 
         case LCI_PUT_TARGET:
-            lci_ce_debug_verbose("Put Target cb:\t%d -> %d(%p) size %zu with tag %d",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag);
-#if 0
-            handle->cb.put_target(comm_engine,
-                                  handle->args.tag,  handle->args.msg,
-                                  handle->args.size, handle->args.remote,
-                                  handle->args.data);
-#endif
-            /* API seems to be bugged, pass callback data as message */
-            handle->cb.put_target(comm_engine,
-                                  handle->args.tag,  handle->args.data,
-                                  handle->args.size, handle->args.remote,
-                                  NULL);
-            /* return memory from AM */
-            /* handle->args.data points to the cb_data field of the handshake info
-             * which is the data field of the dynmsg object */
-            handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
-            dynmsg    = container_of(handshake, lci_dynmsg_t, data);
-            parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
+            lci_put_target_callback(handle, comm_engine);
             break;
 
         case LCI_GET_ORIGIN:
-            lci_ce_debug_verbose("Get Origin cb:\t%d(%p+%td) <- %d(%p+%td) size %zu data %p",
-                                 ep_rank,
-                                 (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
-                                 handle->args.ldispl,
-                                 handle->args.remote,
-                                 (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
-                                 handle->args.rdispl,
-                                 handle->args.size, handle->args.data);
-            handle->cb.get_origin(comm_engine,
-                                  handle->args.lreg, handle->args.ldispl,
-                                  handle->args.rreg, handle->args.rdispl,
-                                  handle->args.size, handle->args.remote,
-                                  handle->args.data);
+            lci_get_origin_callback(handle, comm_engine);
             break;
 
-        case LCI_GET_TARGET:
-            lci_ce_debug_verbose("Get Target cb:\t%d <- %d(%p) size %zu with tag %d",
+        case LCI_GET_TARGET_HANDSHAKE:
+            /* start send on target for get */
+            lci_ce_debug_verbose("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
                                  handle->args.remote, ep_rank,
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
-#if 0
-            handle->cb.get_target(comm_engine,
-                                  handle->args.tag,  handle->args.msg,
-                                  handle->args.size, handle->args.remote,
-                                  handle->args.data);
-#endif
-            /* API seems to be bugged, pass callback data as message */
-            handle->cb.get_target(comm_engine,
-                                  handle->args.tag,  handle->args.data,
-                                  handle->args.size, handle->args.remote,
-                                  NULL);
-            /* return memory from AM */
-            /* handle->args.data points to the cb_data field of the handshake info
-             * which is the data field of the dynmsg object */
-            handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
-            dynmsg    = container_of(handshake, lci_dynmsg_t, data);
-            parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
+            RETRY(lc_send(handle->args.msg, handle->args.size,
+                          handle->args.remote, handle->args.tag,
+                          get_ep, lci_get_target_handler, handle));
             break;
+
+        case LCI_GET_TARGET:
+            lci_get_target_callback(handle, comm_engine);
+            break;
+
         default:
             lci_ce_fatal("invalid callback type: %d", handle->args.type);
             break;
         }
 
-        /* return handle to mempool */
-        parsec_mempool_free(&lci_cb_handle_mempool, handle);
         ret++;
     }
 
     OBJ_DESTRUCT(&cb_fifo);
 }
-
-#if 0
-int
-lci_progress(parsec_comm_engine_t *comm_engine)
-{
-    int ret = 0;
-    lc_req *req;
-
-    /* handle abort */
-    if (LC_OK == lc_cq_pop(abort_ep, &req)) {
-        lci_ce_debug_verbose("Abort %d recv:\t%d -> %d",
-                             req->meta, req->rank, ep_rank);
-        int exit_code = req->meta;
-        lc_cq_reqfree(abort_ep, req);
-        /* wait for all processes to ack the abort */
-        lc_barrier(collective_ep);
-        /* exit without cleaning up */
-        _Exit(exit_code);
-    }
-
-    /* handle active messages */
-    while (LC_OK == lc_cq_pop(am_ep, &req)) {
-        parsec_key_t key = req->meta;
-        /* find callback handle, based on active message tag */
-        lci_cb_handle_t *handle = parsec_hash_table_nolock_find(&am_cb_hash_table, key);
-        lci_ce_debug_verbose("Active Message %"PRIu64" recv:\t%d -> %d with message %p size %zu",
-                             key, req->rank, ep_rank, req->buffer, req->size);
-        /* if callback found, call it; else warn */
-        if (NULL != handle) {
-            handle->cb.am(comm_engine, handle->args.tag,
-                          req->buffer, req->size,
-                          req->rank, handle->args.data);
-        } else {
-            parsec_warning("LCI[%d]:\tActive Message %"PRIu64" not registered",
-                           ep_rank, key);
-        }
-        /* return memory to pool (only allocated if size > 0) */
-        if (req->size > 0) {
-            lci_dynmsg_t *dynmsg = container_of(req->buffer, lci_dynmsg_t, data);
-            parsec_thread_mempool_free(dynmsg->mempool_owner, dynmsg);
-        }
-        lc_cq_reqfree(am_ep, req);
-        ret++;
-    }
-
-    /* repond to put request */
-    while (LC_OK == lc_cq_pop(put_am_ep, &req)) {
-        lci_handshake_t *handshake = req->buffer;
-
-        lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
-                                        lci_cb_handle_mempool.thread_mempools);
-        handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->cb;
-        handle->args.tag         = req->meta;
-        handle->args.msg         = handshake->buffer;
-        /* array to pointer decay for handshake->cb_data */
-        handle->args.data        = handshake->cb_data;
-        handle->args.size        = handshake->size;
-        handle->args.remote      = req->rank;
-        handle->type             = LCI_PUT_TARGET;
-
-        lci_ce_debug_verbose("Put Req recv:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
-                             handle->args.remote, ep_rank,
-                             (void *)handle->args.msg, handle->args.size,
-                             handle->args.tag, (void *)handle->args.data);
-
-        /* get request from pool and set context to callback handle */
-        lci_req_handle_t *req_handle = parsec_thread_mempool_allocate(
-                                              lci_req_mempool.thread_mempools);
-        lc_req *recv_req = &req_handle->req;
-        recv_req->ctx = handle;
-
-        /* start receive for the put */
-        RETRY(lc_recv(handshake->buffer, handshake->size, req->rank, req->meta,
-                      put_ep, recv_req));
-        lci_ce_debug_verbose("Put Recv start:\t%d -> %d(%p) size %zu with tag %d",
-                             handle->args.remote, ep_rank,
-                             (void *)handle->args.msg, handle->args.size,
-                             handle->args.tag);
-
-        lc_cq_reqfree(put_am_ep, req);
-        ret++;
-    }
-
-    /* put receive - at target */
-    while (LC_OK == lc_cq_pop(put_ep, &req)) {
-        /* get callback handle from request context */
-        lci_cb_handle_t *handle = req->ctx;
-        lci_ce_debug_verbose("Put Recv end:\t%d -> %d(%p) size %zu with tag %d",
-                             handle->args.remote, ep_rank,
-                             (void *)handle->args.msg, handle->args.size,
-                             handle->args.tag);
-#if 0
-        handle->cb.put_target(handle->args.comm_engine,
-                              handle->args.tag,  handle->args.msg,
-                              handle->args.size, handle->args.remote,
-                              handle->args.data);
-#endif
-        /* API seems to be bugged, pass callback data as message */
-        handle->cb.put_target(handle->args.comm_engine,
-                              handle->args.tag,  handle->args.data,
-                              handle->args.size, handle->args.remote,
-                              NULL);
-        lci_ce_debug_verbose("called %p", (void *)handle->cb.put_target);
-
-        /* return memory from AM */
-        /* handle->args.data points to the cb_data field of the handshake info
-         * which is the data field of the dynmsg object */
-        lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
-        lci_dynmsg_t *dynmsg = container_of(handshake, lci_dynmsg_t, data);
-        parsec_thread_mempool_free(dynmsg->mempool_owner, dynmsg);
-
-        /* return handle and request to pools */
-        parsec_thread_mempool_free(handle->mempool_owner, handle);
-        lc_cq_reqfree(put_ep, req); // returns packet to pool, not req
-        lci_req_handle_t *req_handle = container_of(req, lci_req_handle_t, req);
-        parsec_thread_mempool_free(req_handle->mempool_owner, req_handle);
-        ret++;
-    }
-
-    /* put send - at origin */
-    for (parsec_list_item_t *item = parsec_dequeue_try_pop_front(lci_put_send_queue);
-                             item != NULL;
-                             item = parsec_dequeue_try_pop_front(lci_put_send_queue)) {
-        lci_cb_handle_t *handle = (lci_cb_handle_t *)item;
-        lci_ce_debug_verbose("Put Send end:\t%d(%p) -> %d(%p) size %zu",
-                             ep_rank,
-                             (void *)(((lci_mem_reg_handle_t *)handle->args.lreg)->mem + handle->args.ldispl),
-                             handle->args.remote,
-                             (void *)(((lci_mem_reg_handle_t *)handle->args.rreg)->mem + handle->args.rdispl),
-                             handle->args.size);
-        handle->cb.put_origin(handle->args.comm_engine,
-                              handle->args.lreg, handle->args.ldispl,
-                              handle->args.rreg, handle->args.rdispl,
-                              handle->args.size, handle->args.remote,
-                              handle->args.data);
-        /* return handle to mempool */
-        parsec_thread_mempool_free(handle->mempool_owner, handle);
-        ret++;
-    }
-
-    /* respond to get request */
-    while (LC_OK == lc_cq_pop(get_am_ep, &req)) {
-        lci_handshake_t *handshake = req->buffer;
-
-        lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
-                                        lci_cb_handle_mempool.thread_mempools);
-        handle->cb.get_target    = (parsec_ce_am_callback_t)handshake->cb;
-        handle->args.tag         = req->meta;
-        handle->args.msg         = handshake->buffer;
-        /* array to pointer decay for handshake->cb_data */
-        handle->args.data        = handshake->cb_data;
-        handle->args.size        = handshake->size;
-        handle->args.remote      = req->rank;
-        handle->type             = LCI_GET_TARGET;
-
-        lci_ce_debug_verbose("Get Req recv:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
-                             handle->args.remote, ep_rank,
-                             (void *)handle->args.msg, handle->args.size,
-                             handle->args.tag, (void *)handle->args.data);
-
-        /* start send for the get */
-        RETRY(lc_send(handshake->buffer, handshake->size, req->rank, req->meta,
-                      get_ep, lci_get_send_cb, handle));
-        lci_ce_debug_verbose("Get Send start:\t%d <- %d(%p) size %zu with tag %d",
-                             handle->args.remote, ep_rank,
-                             (void *)handle->args.msg, handle->args.size,
-                             handle->args.tag);
-
-        lc_cq_reqfree(get_am_ep, req);
-        ret++;
-    }
-
-    /* get receive - at origin */
-    while (LC_OK == lc_cq_pop(get_ep, &req)) {
-        /* get callback handle from request context */
-        lci_cb_handle_t *handle = req->ctx;
-        lci_ce_debug_verbose("Get Recv end:\t%d(%p) <- %d(%p) size %zu with tag %d",
-                             ep_rank,
-                             (void *)(((lci_mem_reg_handle_t *)handle->args.lreg)->mem + handle->args.ldispl),
-                             handle->args.remote,
-                             (void *)(((lci_mem_reg_handle_t *)handle->args.rreg)->mem + handle->args.rdispl),
-                             handle->args.size, req->meta);
-        handle->cb.get_origin(handle->args.comm_engine,
-                              handle->args.lreg, handle->args.ldispl,
-                              handle->args.rreg, handle->args.rdispl,
-                              handle->args.size, handle->args.remote,
-                              handle->args.data);
-
-        /* return handle and request to pools */
-        parsec_thread_mempool_free(handle->mempool_owner, handle);
-        lc_cq_reqfree(get_ep, req); // returns packet to pool, not req
-        lci_req_handle_t *req_handle = container_of(req, lci_req_handle_t, req);
-        parsec_thread_mempool_free(req_handle->mempool_owner, req_handle);
-        ret++;
-    }
-
-    /* get send - at target */
-    for (parsec_list_item_t *item = parsec_dequeue_try_pop_front(lci_get_send_queue);
-                             item != NULL;
-                             item = parsec_dequeue_try_pop_front(lci_get_send_queue)) {
-        lci_cb_handle_t *handle = (lci_cb_handle_t *)item;
-        lci_ce_debug_verbose("Get Send end:\t%d <- %d(%p) size %zu with tag %d",
-                             handle->args.remote, ep_rank,
-                             (void *)handle->args.msg, handle->args.size,
-                             handle->args.tag);
-#if 0
-        handle->cb.get_target(handle->args.comm_engine,
-                              handle->args.tag,  handle->args.msg,
-                              handle->args.size, handle->args.remote,
-                              handle->args.data);
-#endif
-        /* API seems to be bugged, pass callback data as message */
-        handle->cb.get_target(handle->args.comm_engine,
-                              handle->args.tag,  handle->args.data,
-                              handle->args.size, handle->args.remote,
-                              NULL);
-
-        /* return memory from AM */
-        /* handle->args.data points to the cb_data field of the handshake info
-         * which is the data field of the dynmsg object */
-        lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
-        lci_dynmsg_t *dynmsg = container_of(handshake, lci_dynmsg_t, data);
-        parsec_thread_mempool_free(dynmsg->mempool_owner, dynmsg);
-
-        /* return handle to mempool */
-        parsec_thread_mempool_free(handle->mempool_owner, handle);
-        ret++;
-    }
-
-    return ret;
-}
-#endif
 
 /* restarts progress thread, if paused */
 int
