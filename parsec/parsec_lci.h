@@ -58,7 +58,7 @@ int lci_send_active_message(parsec_comm_engine_t *comm_engine,
 
 _Noreturn void lci_abort(int exit_code);
 
-int lci_progress(parsec_comm_engine_t *comm_engine);
+int lci_cb_progress(parsec_comm_engine_t *comm_engine);
 
 int lci_enable(parsec_comm_engine_t *comm_engine);
 int lci_disable(parsec_comm_engine_t *comm_engine);
