@@ -22,8 +22,8 @@ RW T <- (k ==0) ? A(k % WS) : T PING(k-1)
 
 BODY
     int r;
-#if   defined(PARSEC_HAVE_MPI) 
-	MPI_Comm_rank(MPI_COMM_WORLD, &r);
+#if   defined(PARSEC_HAVE_MPI)
+    MPI_Comm_rank(MPI_COMM_WORLD, &r);
 #elif defined(PARSEC_HAVE_LCI)
     lc_get_proc_num(&r);
 #endif
