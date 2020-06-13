@@ -51,9 +51,6 @@ parsec_taskpool_t *BT_reduction_new(parsec_tiled_matrix_dc_t *A, int nb, int nt)
  */
 void BT_reduction_destroy(parsec_taskpool_t *o)
 {
-#if defined(PARSEC_HAVE_MPI)
-    MPI_Type_free( &block );
-#endif
-
+    parsec_type_free(&block);
     parsec_taskpool_free(o);
 }
