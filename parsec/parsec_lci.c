@@ -99,7 +99,7 @@ typedef struct lci_mem_reg_handle_s {
     size_t                         count;
     parsec_datatype_t              datatype;
 } lci_mem_reg_handle_t;
-static OBJ_CLASS_INSTANCE(lci_mem_reg_handle_t, parsec_list_item_t, NULL, NULL);
+static PARSEC_OBJ_CLASS_INSTANCE(lci_mem_reg_handle_t, parsec_list_item_t, NULL, NULL);
 
 /* memory pool for memory handles */
 static parsec_mempool_t lci_mem_reg_handle_mempool;
@@ -147,7 +147,7 @@ typedef struct lci_cb_handle_s {
         parsec_ce_am_callback_t       get_target;
     } cb;                                                        /*  8 bytes */
 } lci_cb_handle_t;
-static OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
+static PARSEC_OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
 
 /* memory pool for callbacks */
 static parsec_mempool_t lci_cb_handle_mempool;
@@ -167,7 +167,7 @@ typedef struct lci_req_handle_s {
     alignas(8)   parsec_thread_mempool_t *mempool_owner;
     alignas(64)  lc_req                  req;
 } lci_req_handle_t;
-static OBJ_CLASS_INSTANCE(lci_req_handle_t, parsec_list_item_t, NULL, NULL);
+static PARSEC_OBJ_CLASS_INSTANCE(lci_req_handle_t, parsec_list_item_t, NULL, NULL);
 
 /* memory pool for requests */
 static parsec_mempool_t lci_req_mempool;
@@ -178,7 +178,7 @@ typedef struct lci_dynmsg_s {
     alignas(8)   parsec_thread_mempool_t *mempool_owner;
     alignas(64)  byte_t                  data[]; /* cache-line alignment */
 } lci_dynmsg_t;
-static OBJ_CLASS_INSTANCE(lci_dynmsg_t, parsec_list_item_t, NULL, NULL);
+static PARSEC_OBJ_CLASS_INSTANCE(lci_dynmsg_t, parsec_list_item_t, NULL, NULL);
 
 /* memory pool for dynamic messages */
 static parsec_mempool_t lci_dynmsg_mempool;
@@ -679,7 +679,7 @@ lci_init(parsec_context_t *context)
 
     /* create a mempool for memory registration */
     parsec_mempool_construct(&lci_mem_reg_handle_mempool,
-                             OBJ_CLASS(lci_mem_reg_handle_t),
+                             PARSEC_OBJ_CLASS(lci_mem_reg_handle_t),
                              sizeof(lci_mem_reg_handle_t),
                              offsetof(lci_mem_reg_handle_t, mempool_owner),
                              1);
@@ -690,7 +690,7 @@ lci_init(parsec_context_t *context)
 
     /* create a mempool for callbacks */
     parsec_mempool_construct(&lci_cb_handle_mempool,
-                             OBJ_CLASS(lci_cb_handle_t),
+                             PARSEC_OBJ_CLASS(lci_cb_handle_t),
                              sizeof(lci_cb_handle_t),
                              offsetof(lci_cb_handle_t, mempool_owner),
                              1);
@@ -701,7 +701,7 @@ lci_init(parsec_context_t *context)
 
     /* create a mempool for requests */
     parsec_mempool_construct(&lci_req_mempool,
-                             OBJ_CLASS(lci_req_handle_t),
+                             PARSEC_OBJ_CLASS(lci_req_handle_t),
                              sizeof(lci_req_handle_t),
                              offsetof(lci_req_handle_t, mempool_owner),
                              1);
@@ -712,7 +712,7 @@ lci_init(parsec_context_t *context)
 
     /* create a mempool for dynamic messages */
     parsec_mempool_construct(&lci_dynmsg_mempool,
-                             OBJ_CLASS(lci_dynmsg_t),
+                             PARSEC_OBJ_CLASS(lci_dynmsg_t),
                              /* ensure enough space for any medium message */
                              sizeof(lci_dynmsg_t) + lc_max_medium(0),
                              offsetof(lci_dynmsg_t, mempool_owner),
@@ -723,11 +723,11 @@ lci_init(parsec_context_t *context)
     }
 
     /* create send callback queues */
-    OBJ_CONSTRUCT(&lci_progress_cb_fifo, parsec_list_t);
-    OBJ_CONSTRUCT(&lci_cb_fifo, parsec_list_t);
+    PARSEC_OBJ_CONSTRUCT(&lci_progress_cb_fifo, parsec_list_t);
+    PARSEC_OBJ_CONSTRUCT(&lci_cb_fifo, parsec_list_t);
 
     /* allocated hash tables for callbacks */
-    OBJ_CONSTRUCT(&am_cb_hash_table, parsec_hash_table_t);
+    PARSEC_OBJ_CONSTRUCT(&am_cb_hash_table, parsec_hash_table_t);
     parsec_hash_table_init(&am_cb_hash_table,
                            offsetof(lci_cb_handle_t, ht_item),
                            4, key_fns, &am_cb_hash_table);
@@ -792,10 +792,10 @@ lci_fini(parsec_comm_engine_t *comm_engine)
     pthread_join(progress_thread_id, &progress_retval);
 
     parsec_hash_table_fini(&am_cb_hash_table);
-    OBJ_DESTRUCT(&am_cb_hash_table);
+    PARSEC_OBJ_DESTRUCT(&am_cb_hash_table);
 
-    OBJ_DESTRUCT(&lci_cb_fifo);
-    OBJ_DESTRUCT(&lci_progress_cb_fifo);
+    PARSEC_OBJ_DESTRUCT(&lci_cb_fifo);
+    PARSEC_OBJ_DESTRUCT(&lci_progress_cb_fifo);
 
     parsec_mempool_destruct(&lci_dynmsg_mempool);
     parsec_mempool_destruct(&lci_req_mempool);
@@ -1079,7 +1079,7 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
     parsec_list_item_t *ring = NULL;
     lci_req_handle_t *req_handle = NULL;
 
-    OBJ_CONSTRUCT(&cb_fifo, parsec_list_t);
+    PARSEC_OBJ_CONSTRUCT(&cb_fifo, parsec_list_t);
     if (NULL != (ring = parsec_list_unchain(&lci_cb_fifo))) {
         parsec_list_nolock_chain_back(&cb_fifo, ring);
     }
@@ -1155,7 +1155,7 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
         ret++;
     }
 
-    OBJ_DESTRUCT(&cb_fifo);
+    PARSEC_OBJ_DESTRUCT(&cb_fifo);
 }
 
 /* restarts progress thread, if paused */
