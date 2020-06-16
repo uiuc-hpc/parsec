@@ -242,14 +242,15 @@ static void remote_dep_mpi_profiling_fini(void)
  */
 int remote_dep_set_ctx(parsec_context_t* context, intptr_t opaque_comm_ctx )
 {
-    MPI_Comm comm;
-    int rc;
-
     /* We can only change the communicator if the communication engine is not active */
     if( 1 < parsec_communication_engine_up ) {
         parsec_warning("Cannot change PaRSEC's MPI communicator while the engine is running [ignored]");
         return PARSEC_ERROR;
     }
+#if defined(PARSEC_HAVE_MPI)
+    MPI_Comm comm;
+    int rc;
+
     /* Are we trying to set a congruent communicator a second time? */
     assert(-1 != opaque_comm_ctx /* -1 reserved for non-initialized */);
     if( -1 != context->comm_ctx ) {
@@ -263,6 +264,10 @@ int remote_dep_set_ctx(parsec_context_t* context, intptr_t opaque_comm_ctx )
     rc = MPI_Comm_dup((MPI_Comm)opaque_comm_ctx, &comm);
     context->comm_ctx = (intptr_t)comm;
     return (MPI_SUCCESS == rc) ? PARSEC_SUCCESS : PARSEC_ERROR;
+#elif defined(PARSEC_HAVE_LCI)
+    context->comm_ctx = opaque_comm_ctx;
+    return PARSEC_SUCCESS;
+#endif
 }
 
 static void remote_dep_mpi_params(parsec_context_t* context) {
@@ -792,8 +797,8 @@ remote_dep_dequeue_init(parsec_context_t* context)
         parsec_communication_engine_up = -1;  /* No communications supported */
         return 1;
     }
-    if (NULL == context->comm_ctx)
-        context->comm_ctx = lci_global_ep;
+    if (-1 == context->comm_ctx)
+        context->comm_ctx = (intptr_t)lci_global_ep;
 #endif
 
     parsec_communication_engine_up = 0;  /* we have communication capabilities */
@@ -1238,7 +1243,7 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
             int dtt_size;
             parsec_type_size(dtt, &dtt_size);
             parsec_ce.mem_register(dataptr, PARSEC_MEM_TYPE_CONTIGUOUS,
-                                   -1, NULL,
+                                   -1, PARSEC_DATATYPE_NULL,
                                    dtt_size,
                                    &source_memory_handle, &source_memory_handle_size);
 
@@ -1441,7 +1446,7 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
             int dtt_size;
             parsec_type_size(dtt, &dtt_size);
             parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), PARSEC_MEM_TYPE_CONTIGUOUS,
-                                   -1, NULL,
+                                   -1, PARSEC_DATATYPE_NULL,
                                    dtt_size,
                                    &receiver_memory_handle, &receiver_memory_handle_size);
 

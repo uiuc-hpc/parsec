@@ -672,7 +672,7 @@ lci_init(parsec_context_t *context)
     parsec_ce.reshape             = lci_reshape;
     parsec_ce.sync                = lci_sync;
     parsec_ce.can_serve           = lci_can_push_more;
-    parsec_ce.send_active_message = lci_send_active_message;
+    parsec_ce.send_am             = lci_send_am;
     parsec_ce.parsec_context = context;
     parsec_ce.capabilites.sided = 1;
     parsec_ce.capabilites.supports_noncontiguous_datatype = 0;
@@ -733,7 +733,7 @@ lci_init(parsec_context_t *context)
                            4, key_fns, &am_cb_hash_table);
 
     /* init LCI */
-    lc_ep *default_ep = context->comm_ctx;
+    lc_ep *default_ep = (lc_ep *)context->comm_ctx;
     lc_opt opt = { .dev = 0 };
 
     /* collective endpoint */
@@ -1041,10 +1041,10 @@ lci_get(parsec_comm_engine_t *comm_engine,
 }
 
 int
-lci_send_active_message(parsec_comm_engine_t *comm_engine,
-                        parsec_ce_tag_t tag,
-                        int remote,
-                        void *addr, size_t size)
+lci_send_am(parsec_comm_engine_t *comm_engine,
+            parsec_ce_tag_t tag,
+            int remote,
+            void *addr, size_t size)
 {
     assert(size <= lc_max_medium(0) && "active message data too long");
     lci_ce_debug_verbose("Active Message %"PRIu64" send:\t%d -> %d with message %p size %zu",

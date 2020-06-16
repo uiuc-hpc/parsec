@@ -51,10 +51,10 @@ int lci_get(parsec_comm_engine_t *comm_engine,
             parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
             parsec_ce_tag_t r_tag, void *r_cb_data, size_t r_cb_data_size);
 
-int lci_send_active_message(parsec_comm_engine_t *comm_engine,
-                            parsec_ce_tag_t tag,
-                            int remote,
-                            void *addr, size_t size);
+int lci_send_am(parsec_comm_engine_t *comm_engine,
+                parsec_ce_tag_t tag,
+                int remote,
+                void *addr, size_t size);
 
 _Noreturn void lci_abort(int exit_code);
 
@@ -71,6 +71,15 @@ int lci_pack(parsec_comm_engine_t *comm_engine,
 int lci_unpack(parsec_comm_engine_t *comm_engine,
                void *inbuf, int insize, int *position,
                void *outbuf, int outcount);
+
+int lci_reshape(parsec_comm_engine_t *comm_engine,
+                parsec_execution_stream_t* es,
+                parsec_data_copy_t *dst,
+                parsec_data_copy_t *src,
+                parsec_datatype_t layout,
+                int64_t displ_src,
+                int64_t displ_dst,
+                uint64_t count);
 
 int lci_sync(parsec_comm_engine_t *comm_engine);
 
