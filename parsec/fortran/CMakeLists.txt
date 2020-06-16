@@ -15,3 +15,5 @@ set_target_properties(parsec_fortran PROPERTIES POSITION_INDEPENDENT_CODE ${BUIL
 target_include_directories(parsec_fortran
   INTERFACE
   $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>)
+
+target_include_directories(parsec_fortran PRIVATE $<$<BOOL:${LCI_FOUND}>:${LCI_INCLUDE_DIRS}>)
