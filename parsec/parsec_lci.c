@@ -41,7 +41,7 @@ typedef unsigned char byte_t;
 
 #define lci_ce_debug_verbose(FMT, ...)                                        \
   do {                                                                        \
-    parsec_debug_verbose(20, parsec_debug_output,                             \
+    parsec_debug_verbose(20, parsec_comm_output_stream,                       \
                          "LCI[%d]:\t" FMT,                                    \
                          ep_rank, ##__VA_ARGS__);                             \
   } while (0)
