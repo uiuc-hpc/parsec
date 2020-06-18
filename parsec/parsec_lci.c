@@ -198,6 +198,7 @@ static atomic_int current_tag = 0;
 
 /* global endpoint */
 lc_ep *lci_global_ep = NULL;
+static lc_ep *default_ep = NULL;
 /* abort endpoint */
 static lc_ep abort_ep;
 /* collective endpoint */
@@ -645,13 +646,18 @@ void * lci_progress_thread(void *arg)
 parsec_comm_engine_t *
 lci_init(parsec_context_t *context)
 {
+    assert(-1 != context->comm_ctx);
+    if (default_ep == (lc_ep *)context->comm_ctx) {
+        return &parsec_ce;
+    }
+
     /* set size and rank */
     lc_get_num_proc(&ep_size);
     lc_get_proc_num(&ep_rank);
-    if (NULL != context) {
-        context->nb_nodes = ep_size;
-        context->my_rank  = ep_rank;
-    }
+    context->nb_nodes = ep_size;
+    context->my_rank  = ep_rank;
+
+    default_ep = (lc_ep *)context->comm_ctx;
 
     lci_ce_debug_verbose("init");
 
@@ -733,7 +739,6 @@ lci_init(parsec_context_t *context)
                            4, key_fns, &am_cb_hash_table);
 
     /* init LCI */
-    lc_ep *default_ep = (lc_ep *)context->comm_ctx;
     lc_opt opt = { .dev = 0 };
 
     /* collective endpoint */
@@ -827,12 +832,12 @@ int lci_tag_register(parsec_ce_tag_t tag,
         parsec_warning("LCI[%d]:\tActive Message %"PRIu64" already registered",
                        ep_rank, tag);
         parsec_hash_table_unlock_bucket(&am_cb_hash_table, key);
-        return 0;
+        return PARSEC_EXISTS;
     }
 
     parsec_hash_table_nolock_insert(&am_cb_hash_table, &handle->ht_item);
     parsec_hash_table_unlock_bucket(&am_cb_hash_table, key);
-    return 1;
+    return PARSEC_SUCCESS;
 }
 
 int lci_tag_unregister(parsec_ce_tag_t tag)
