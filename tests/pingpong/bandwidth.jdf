@@ -17,6 +17,8 @@ extern "C" %{
 
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif
 
 %}
@@ -271,6 +273,8 @@ int main(int argc, char *argv[])
         /* Time start */
 #if defined(PARSEC_HAVE_MPI)
         MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lc_barrier(ep);
 #endif  /* defined(PARSEC_HAVE_MPI) */
         gettimeofday(&tstart, NULL);
 
@@ -281,6 +285,8 @@ int main(int argc, char *argv[])
         /* Time end */
 #if defined(PARSEC_HAVE_MPI)
         MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lc_barrier(ep);
 #endif  /* defined(PARSEC_HAVE_MPI) */
         gettimeofday(&tend, NULL);
 
