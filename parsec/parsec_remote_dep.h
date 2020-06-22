@@ -322,7 +322,7 @@ typedef struct {
     int rank_dst;  // 4
     uint64_t tid;  // 8
     uint32_t tpid;  // 16
-    uint32_t did;   // 20
+    uint32_t tcid;  // 20
 } parsec_profile_remote_dep_mpi_info_t; // 24 bytes
 
 #ifdef PARSEC_PROF_TRACE
@@ -344,12 +344,9 @@ extern int put_cb_trace_sk, put_cb_trace_ek;
         __info.rank_src = (src);                                        \
         __info.rank_dst = (dst);                                        \
         __info.tpid = __tp->taskpool_id;                                \
-        /** Recompute the base profiling key of that function */        \
-        __info.did = __tp->profiling_array != NULL ?                    \
-             BASE_KEY(__tp->profiling_array[2*__tc->task_class_id]) :   \
-             -__tc->task_class_id;                                      \
-        __info.tid = __tc->key_functions->key_hash(                     \
-             __tc->make_key(__tp, (rdw).locals), NULL);                 \
+        __info.tcid = (rdw).task_class_id;                              \
+        __info.tid  = __tc->key_functions->key_hash(                    \
+                             __tc->make_key(__tp, (rdw).locals), NULL); \
         PARSEC_PROFILING_TRACE((PROF), (KEY), (I),                      \
                                PROFILE_OBJECT_ID_NULL, &__info);        \
     }

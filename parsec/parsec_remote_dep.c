@@ -35,7 +35,10 @@ static int parsec_param_nb_tasks_extracted = 20;
  */
 static size_t parsec_param_short_limit = RDEP_MSG_SHORT_LIMIT;
 #if RDEP_MSG_EAGER_LIMIT != 0
-static size_t parsec_param_eager_limit = RDEP_MSG_EAGER_LIMIT;
+/* Disable this by default as it is currently broken
+ static size_t parsec_param_eager_limit = RDEP_MSG_EAGER_LIMIT;
+*/
+static size_t parsec_param_eager_limit = 0;
 #endif  /* RDEP_MSG_EAGER_LIMIT != 0 */
 static int parsec_param_enable_aggregate = 0;
 #if defined(PARSEC_HAVE_MPI_OVERTAKE)
@@ -267,13 +270,8 @@ static void remote_dep_mpi_params(parsec_context_t* context) {
     }
 #endif
 #if RDEP_MSG_EAGER_LIMIT != 0
-    if( parsec_param_comm_thread_multiple ) parsec_param_eager_limit = 0;
     parsec_mca_param_reg_sizet_name("runtime", "comm_eager_limit", "Controls the maximum size of a message that uses the eager protocol. Eager messages are sent eagerly before a 2-sided synchronization and may cause flow control and memory contentions at the receiver, but have a better latency.",
                                   false, false, parsec_param_eager_limit, &parsec_param_eager_limit);
-    if( parsec_param_comm_thread_multiple && parsec_param_eager_limit ) {
-        parsec_warning("Using eager and thread multiple MPI messaging is not implemented yet. Disabling Eager.");
-        parsec_param_eager_limit = 0;
-    }
 #endif
     parsec_mca_param_reg_int_name("runtime", "comm_aggregate", "Aggregate multiple dependencies in the same short message (1=true,0=false).",
                                   false, false, parsec_param_enable_aggregate, &parsec_param_enable_aggregate);
@@ -457,7 +455,7 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
         return -1; /* the parsec taskpool doesn't exist yet */
 
     task.taskpool   = origin->taskpool;
-    task.task_class = task.taskpool->task_classes_array[origin->msg.task_class_id];
+    /* Do not set the task.task_class here, because it might trigger a race condition in DTD */
 
     task.priority = 0;  /* unknown yet */
 
@@ -527,6 +525,8 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
                                                origin);
         }
     } else {
+        task.task_class = task.taskpool->task_classes_array[origin->msg.task_class_id];
+
         for(i = 0; i < task.task_class->nb_locals; i++)
             task.locals[i] = origin->msg.locals[i];
 
@@ -801,6 +801,12 @@ remote_dep_dequeue_init(parsec_context_t* context)
             parsec_warning("Requested multithreaded access to the communication engine, but MPI is not initialized with MPI_THREAD_MULTIPLE.\n"
                         "\t* PaRSEC will continue with the funneled thread communication engine model.\n");
         }
+#if RDEP_MSG_EAGER_LIMIT != 0
+        if( (context->flags & PARSEC_CONTEXT_FLAG_COMM_MT) && parsec_param_eager_limit ) {
+            parsec_warning("Using eager and thread multiple MPI messaging is not implemented yet. Disabling Eager.");
+            parsec_param_eager_limit = 0;
+        }
+#endif
     }
 #if defined(PARSEC_HAVE_MPI_OVERTAKE)
     parsec_mca_param_reg_int_name("runtime", "comm_mpi_overtake", "Lets MPI allow overtaking of messages (if applicable). (0: no, 1: yes)",
