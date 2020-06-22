@@ -81,8 +81,7 @@ typedef enum { PASSED_BY_REF=-1,
  * Array of arenas to hold the data region shape and other information.
  * Currently only 16 types of different regions are supported at a time.
  */
-extern parsec_arena_t **parsec_dtd_arenas;
-
+extern parsec_arena_datatype_t *parsec_dtd_arenas_datatypes;
 /**
  * Users can use this two variables to control the sliding window of task insertion.
  * This is set using a default number or the number set by the mca_param.
@@ -271,7 +270,7 @@ parsec_dtd_data_collection_fini( parsec_data_collection_t *dc );
  * tasks, and has no callback associated with.
  */
 parsec_taskpool_t*
-parsec_dtd_taskpool_new();
+parsec_dtd_taskpool_new(void);
 
 /**
  * This function will block until all the tasks inserted
@@ -281,8 +280,7 @@ parsec_dtd_taskpool_new();
  * Takes a parsec context and a parsec taskpool as input.
  */
 int
-parsec_dtd_taskpool_wait( parsec_context_t *parsec,
-                          parsec_taskpool_t  *tp );
+parsec_dtd_taskpool_wait( parsec_taskpool_t  *tp );
 
 /**
  * This function flushes a specific data,
@@ -324,8 +322,7 @@ parsec_dtd_get_taskpool(parsec_task_t *this_task);
  * Taskpools are automatically dequeued in parsec_context_wait()
  */
 int
-parsec_dtd_dequeue_taskpool(parsec_taskpool_t *tp,
-                            parsec_context_t  *context);
+parsec_dtd_dequeue_taskpool(parsec_taskpool_t *tp);
 
 /**
  * @}

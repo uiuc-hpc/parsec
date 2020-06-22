@@ -105,9 +105,9 @@ int main(int argc, char **argv)
 
     parsec_taskpool_t *dtd_tp = parsec_dtd_taskpool_new();
 
-    parsec_matrix_add2arena_rect(parsec_dtd_arenas[TILE_FULL],
-                                 parsec_datatype_int32_t,
-                                 nb, 1, nb);
+    parsec_matrix_add2arena_rect( &parsec_dtd_arenas_datatypes[TILE_FULL],
+                                  parsec_datatype_int32_t,
+                                  nb, 1, nb );
 
     /* Correctness checking */
     dcA = create_and_distribute_data(rank, world, nb, nt);
@@ -151,7 +151,7 @@ int main(int argc, char **argv)
 
     parsec_dtd_data_flush_all( dtd_tp, A );
 
-    rc = parsec_dtd_taskpool_wait( parsec, dtd_tp );
+    rc = parsec_dtd_taskpool_wait( dtd_tp );
     PARSEC_CHECK_ERROR(rc, "parsec_dtd_taskpool_wait");
     rc = parsec_context_wait(parsec);
     PARSEC_CHECK_ERROR(rc, "parsec_context_wait");
@@ -165,7 +165,8 @@ int main(int argc, char **argv)
         assert( *real_data == 1);
     }
 
-    parsec_arena_destruct(parsec_dtd_arenas[0]);
+    parsec_type_free(&parsec_dtd_arenas_datatypes[TILE_FULL].opaque_dtt);
+    PARSEC_OBJ_RELEASE(parsec_dtd_arenas_datatypes[TILE_FULL].arena);
     parsec_dtd_data_collection_fini( A );
     free_data(dcA);
 
@@ -202,9 +203,9 @@ if(0) {
         nb = sizes[i];
         nt = 2;
 
-        parsec_matrix_add2arena_rect(parsec_dtd_arenas[TILE_FULL],
-                                     parsec_datatype_int32_t,
-                                     nb, 1, nb);
+        parsec_matrix_add2arena_rect( &parsec_dtd_arenas_datatypes[TILE_FULL],
+                                      parsec_datatype_int32_t,
+                                      nb, 1, nb);
 
         dcA = create_and_distribute_data(rank, world, nb, nt);
         parsec_data_collection_set_key((parsec_data_collection_t *)dcA, "A");
@@ -225,14 +226,15 @@ if(0) {
         }
         parsec_dtd_data_flush_all( dtd_tp, A );
         /* finishing all the tasks inserted, but not finishing the handle */
-        rc = parsec_dtd_taskpool_wait( parsec, dtd_tp );
+        rc = parsec_dtd_taskpool_wait( dtd_tp );
         PARSEC_CHECK_ERROR(rc, "parsec_dtd_taskpool_wait");
 
         rc = parsec_context_wait(parsec);
         PARSEC_CHECK_ERROR(rc, "parsec_context_wait");
         SYNC_TIME_PRINT(rank, ("\tSize of message : %ld bytes\tTime for each pingpong : %12.5f\n", sizes[i]*sizeof(int), sync_time_elapsed/repeat_pingpong));
 
-        parsec_arena_destruct(parsec_dtd_arenas[0]);
+        parsec_type_free(&parsec_dtd_arenas_datatypes[TILE_FULL].opaque_dtt);
+        PARSEC_OBJ_RELEASE(parsec_dtd_arenas_datatypes[TILE_FULL].arena);
         parsec_dtd_data_collection_fini( A );
         free_data(dcA);
     }

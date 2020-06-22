@@ -3,12 +3,20 @@ if( NOT BUILD_SHARED_LIBS )
   return()
 endif( NOT BUILD_SHARED_LIBS )
 
-FIND_PACKAGE(Python COMPONENTS Interpreter Development QUIET)
+FIND_PACKAGE(Python COMPONENTS Interpreter Development
+             QUIET)
 
 if( NOT Python_Development_FOUND )
+  message(STATUS "Python Development not found. Disabling the profiling tools")
   return()
 endif( NOT Python_Development_FOUND )
 
+# Python support for profiling (requires Cython 0.21.2)
+find_package(Cython 0.21.2)
+if( NOT CYTHON_EXECUTABLE )
+  message(STATUS "Cython > 0.21.2 not found. Disabling the profiling tools")
+  return()
+endif( NOT CYTHON_EXECUTABLE )
 #
 # Based on http://bloerg.net/2012/11/10/cmake-and-distutils.html
 #
@@ -51,6 +59,14 @@ if(Python_VERSION_MAJOR GREATER 2)
   else()
     execute_process(OUTPUT_QUIET
                     COMMAND ${PYTHON_2TO3_EXECUTABLE} -w -n ${CMAKE_CURRENT_BINARY_DIR}/examples)
+    #
+    # Convert all python utilities
+    #
+    set(SRC_PYTHON_SUPPORT "common_utils.py" "parsec_trace_tables.py" "ptt_utils.py")
+    foreach(file ${SRC_PYTHON_SUPPORT})
+      execute_process(OUTPUT_QUIET
+                      COMMAND ${PYTHON_2TO3_EXECUTABLE} -w -n "${CMAKE_CURRENT_BINARY_DIR}/${file}")
+    endforeach()
   endif(NOT PYTHON_2TO3_EXECUTABLE)
 endif(Python_VERSION_MAJOR GREATER 2)
 

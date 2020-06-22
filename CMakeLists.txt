@@ -6,13 +6,29 @@ include(CMakePushCheckState)
 include(GNUInstallDirs)
 
 # The current version number
-set (PARSEC_VERSION_MAJOR 2)
-set (PARSEC_VERSION_MINOR 0)
-set (PARSEC_VERSION_PATCH 0)
+#   This uses the numbering scheme from libtool -version_number c:r:a
+#      see http://www.sourceware.org/autobook/autobook/autobook_61.html
+#   with PARSEC_VERSION_MAJOR=c-a
+#        PARSEC_VERSION_MINOR=a
+#        PARSEC_VERSION_RELEASE=YYWW
+#   When making a backward compatible addition to the API
+#     PARSEC_VERSION_MAJOR does not change
+#     PARSEC_VERSION_MINOR increases by 1
+#   When making a backward incompabilte change to an API (or exposed structure)
+#     PARSEC_VERSION_MAJOR increases by 1
+#     PARSEC_VERSION_MINOR resets to 0
+# Unlike strict libtool numbering, PARSEC_VERSION_RELEASE is an monotonous 
+# increasing number that corresponds to the software version release number
+# and never resets to 0 (e.g., for a release number 20.06 made in the second week
+# of february 2020, PARSEC_VERSION_RELEASE=2006)
+set (PARSEC_VERSION_MAJOR   3)
+set (PARSEC_VERSION_MINOR   0)
+set (PARSEC_VERSION_RELEASE 0) # Devel master have no release number
+#set (PARSEC_VERSION_RELEASE 2023) # Set and uncomment for a release
 
 # Set the following values for a release
 #set(GIT_COMMIT_HASH deafbeed)
-#set(GIT_COMMIT_TAG vX.Y.Z)
+#set(GIT_COMMIT_TAG vYY.WW)
 #set(GIT_COMMIT_DATE yyyy-mm-dd)
 
 # Configure the installation paths
@@ -29,6 +45,12 @@ if(POLICY CMP0074)
   #          in addition to the specified paths
   cmake_policy(SET CMP0074 NEW)
 ENDIF(POLICY CMP0074)
+if(POLICY CMP0094)
+  # CMP0094: Starting with CMake 3.16, all FIND_Python will use the first matching version instead of
+  #          of searching for the largest available version number (which defeats our selection logic)
+  cmake_policy(SET CMP0094 NEW)
+ENDIF(POLICY CMP0094)
+
 
 set(CMAKE_NO_SYSTEM_FROM_IMPORTED True)
 # On OSX only find the Apple frameworks is nothing else is available.
@@ -150,8 +172,6 @@ option(PARSEC_DEBUG_NOISIER
   "Enable chatterbox-like verbose debugging (may impact performance)." OFF)
 option(PARSEC_DEBUG_HISTORY
   "Keep a summarized history of critical events in memory that can be dumped in gdb when deadlock occur." OFF)
-option(PARSEC_CALL_TRACE
-  "Enable the output of the kernels call trace during execution" OFF)
 
 ### Simulating Options
 option(PARSEC_SIM
@@ -448,7 +468,6 @@ set(EXTRA_INCLUDES "")
 # Find optional packages
 #
 IF( BUILD_PARSEC )
-  set(PARSEC_HAVE_PAPI 0)
   find_package(HWLOC)
   set(PARSEC_HAVE_HWLOC ${HWLOC_FOUND})
   IF( HWLOC_FOUND )
@@ -815,6 +834,10 @@ check_symbol_exists(PARSEC_ATOMIC_HAS_ATOMIC_CAS_INT128 "parsec/parsec_config.h;
 list(APPEND CMAKE_REQUIRED_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 list(APPEND CMAKE_EXTRA_INCLUDE_FILES "parsec/parsec_config.h;parsec/sys/atomic.h;parsec/class/lifo.h")
 
+# We remove these definitions from the cache, as using the cache version
+# causes problems if switching options between two configure...
+unset(HAVE_PARSEC_OPAQUE_LIFO_SIZEOF CACHE)
+unset(HAVE_PARSEC_LIFO_HEAD_OFFSET CACHE)
 check_type_size("parsec_lifo_t" PARSEC_LIFO_OPAQUE_SIZEOF)
 include(CheckStructureFieldOffset)
 # NB: the structure below *needs* to be kept in sync with the structure
@@ -883,9 +906,11 @@ install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/class/fifo.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/class/barrier.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/class/list.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/class/info.h
   DESTINATION ${PARSEC_INSTALL_INCLUDEDIR}/parsec/class)
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/scheduling.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/recursive.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/remote_dep.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/include/parsec/parsec_description_structures.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/datarepo.h
@@ -961,7 +986,7 @@ set (CPACK_RESOURCE_FILE_LICENSE
      "${CMAKE_CURRENT_SOURCE_DIR}/License.txt")
 set (CPACK_PACKAGE_VERSION_MAJOR "${PARSEC_VERSION_MAJOR}")
 set (CPACK_PACKAGE_VERSION_MINOR "${PARSEC_VERSION_MINOR}")
-set (CPACK_PACKAGE_VERSION_PATCH "${PARSEC_VERSION_PATCH}")
+set (CPACK_PACKAGE_VERSION_RELEASE "${PARSEC_VERSION_RELEASE}")
 include (CPack)
 
 # Prepare the cflags/ldflags for the PkgConfig parsec.pc file
@@ -1043,8 +1068,8 @@ configure_package_config_file(cmake_modules/PaRSECConfig.cmake.in
   PARSEC_INSTALL_INCLUDEDIR PARSEC_INSTALL_BINDIR PARSEC_INSTALL_LIBEXECDIR PARSEC_INSTALL_CMAKEDIR)
 
 write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/ParsecConfigVersion.cmake
-    VERSION ${PARSEC_VERSION_MAJOR}.${PARSEC_VERSION_MINOR}.${PARSEC_VERSION_PATCH}
-                                 COMPATIBILITY SameMajorVersion)
+  VERSION ${PARSEC_VERSION_MAJOR}.${PARSEC_VERSION_MINOR}.${PARSEC_VERSION_RELEASE}
+  COMPATIBILITY SameMajorVersion)
 
 install(FILES
   ${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/PaRSECConfig.cmake

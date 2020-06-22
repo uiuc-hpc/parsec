@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2019 The University of Tennessee and The University
+ * Copyright (c) 2009-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  */
@@ -8,6 +8,7 @@
 #define PARSEC_RUNTIME_H_HAS_BEEN_INCLUDED
 
 #include "parsec/parsec_config.h"
+#include "parsec/class/list.h"
 
 BEGIN_C_DECLS
 
@@ -21,6 +22,12 @@ BEGIN_C_DECLS
  *
  *  @{
  */
+
+
+/**
+ * Arena-datatype management.
+ */
+typedef struct parsec_arena_datatype_s parsec_arena_datatype_t;
 
 /**
  * @brief Define a weak symbol called by PaRSEC in case of fatal error.
@@ -58,6 +65,20 @@ typedef struct parsec_arena_s             parsec_arena_t;
  * @brief Opaque structure representing a Task Class
  */
 typedef struct parsec_task_class_s      parsec_task_class_t;
+
+
+/**
+ * @brief Prototype of a external fini function
+ */
+typedef void (*parsec_external_fini_cb_t)(void*);
+
+/**
+ * @brief External fini function & data
+ */
+typedef struct parsec_external_fini_s {
+    parsec_external_fini_cb_t  cb;   /**< external fini callback */
+    void                      *data; /**< external fini callback args */
+}parsec_external_fini_t;
 
 /**
  * @brief Prototype of the allocator function
@@ -142,14 +163,14 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[]);
  * @details
  * Obtain the version number of the PaRSEC runtime
  *
- * @param[out]   version_major a pointer to the major version number (i.e., 19, in version 19.11.1)
- * @param[out]   version_minor a pointer to the minor version number (i.e., 11 in version 19.11.1)
- * @param[out]   version_patch a pointer to the patch version number (i.e., 1 in version 19.11.1)
+ * @param[out]   version_major a pointer to the major version number (i.e., 3, in version 3.0.1911)
+ * @param[out]   version_minor a pointer to the minor version number (i.e., 0 in version 3.0.1911)
+ * @param[out]   version_release a pointer to the patch version number (i.e., 1911 in version 3.0.1911)
  *               Unreleased (e.g., git master) versions will have patch=0
  *
  * @return PARSEC_SUCCESS on success
  */
-int parsec_version( int* version_major, int* version_minor, int* version_patch);
+int parsec_version( int* version_major, int* version_minor, int* version_release);
 
 /**
  * @brief Obtain the version string describing important options used when
@@ -215,6 +236,11 @@ void parsec_abort( parsec_context_t* pcontext, int status);
  * @return PARSEC_SUCCESS on success
  */
 int parsec_fini( parsec_context_t** pcontext );
+
+/**
+ * Setup external finilize routine to be callback during parsec_fini
+ */
+void parsec_context_at_fini(parsec_external_fini_cb_t cb, void *data);
 
 /**
  * @brief Enqueue a PaRSEC taskpool into the PaRSEC context

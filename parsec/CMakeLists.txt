@@ -15,6 +15,7 @@ set(BASE_SOURCES
   class/parsec_value_array.c
   class/parsec_hash_table.c
   class/parsec_rwlock.c
+  class/info.c
   utils/argv.c
   utils/cmd_line.c
   utils/colors.c
@@ -58,7 +59,7 @@ endif( PARSEC_PAPI_SDE )
 # set (CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib" ${TAU_LIBRARY_DIR})
 
 # Assume no support for OTF2
-set(PARSEC_HAVE_OTF2 FALSE)
+set(PARSEC_HAVE_OTF2 FALSE CACHE INTERNAL "Has support for the OTF2 format")
 if(PARSEC_PROF_TRACE)
   if(PARSEC_PROF_TRACE_SYSTEM STREQUAL "OTF2" OR PARSEC_PROF_TRACE_SYSTEM STREQUAL "Auto")
     find_package(OTF2 2.1.1)
@@ -202,7 +203,7 @@ if( BUILD_PARSEC )
   # version (same version as the major of the build version). Thus, every
   # change in the high-level API (and ABI) should be reflected on the
   # major version of PaRSEC.
-  set_target_properties(parsec PROPERTIES VERSION ${PARSEC_VERSION_MAJOR}.${PARSEC_VERSION_MINOR}.${PARSEC_VERSION_PATCH}
+  set_target_properties(parsec PROPERTIES VERSION ${PARSEC_VERSION_MAJOR}.${PARSEC_VERSION_MINOR}.${PARSEC_VERSION_RELEASE}
     SOVERSION ${PARSEC_VERSION_MAJOR})
 
   if( PARSEC_PAPI_SDE )

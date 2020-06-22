@@ -88,7 +88,10 @@ static int parsec_param_nb_tasks_extracted = 20;
  */
 static size_t parsec_param_short_limit = RDEP_MSG_SHORT_LIMIT;
 #if RDEP_MSG_EAGER_LIMIT != 0
+/* Disable this by default as it is currently broken
 static size_t parsec_param_eager_limit = RDEP_MSG_EAGER_LIMIT;
+*/
+static size_t parsec_param_eager_limit = 0;
 #endif  /* RDEP_MSG_EAGER_LIMIT != 0 */
 static int parsec_param_enable_aggregate = 1;
 #if defined(PARSEC_HAVE_MPI_OVERTAKE)
@@ -276,6 +279,12 @@ static int remote_dep_dequeue_init(parsec_context_t* context)
             parsec_warning("Requested multithreaded access to the communication engine, but MPI is not initialized with MPI_THREAD_MULTIPLE.\n"
                         "\t* PaRSEC will continue with the funneled thread communication engine model.\n");
         }
+#if RDEP_MSG_EAGER_LIMIT != 0
+        if( (context->flags & PARSEC_CONTEXT_FLAG_COMM_MT) && parsec_param_eager_limit ) {
+            parsec_warning("Using eager and thread multiple MPI messaging is not implemented yet. Disabling Eager.");
+            parsec_param_eager_limit = 0;
+        }
+#endif
     }
 #if defined(PARSEC_HAVE_MPI_OVERTAKE)
     parsec_mca_param_reg_int_name("runtime", "comm_mpi_overtake", "Lets MPI allow overtaking of messages (if applicable). (0: no, 1: yes)",
@@ -674,8 +683,7 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
         return -1; /* the parsec taskpool doesn't exist yet */
 
     task.taskpool   = origin->taskpool;
-    task.task_class = task.taskpool->task_classes_array[origin->msg.task_class_id];
-
+    /* Do not set the task.task_class here, because it might trigger a race condition in DTD */
     task.priority = 0;  /* unknown yet */
 
     /* This function is divided into DTD and PTG's logic */
@@ -744,6 +752,8 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
                                                origin);
         }
     } else {
+        task.task_class = task.taskpool->task_classes_array[origin->msg.task_class_id];
+
         for(i = 0; i < task.task_class->nb_locals; i++)
             task.locals[i] = origin->msg.locals[i];
 
@@ -1078,8 +1088,15 @@ int put_cb_trace_sk, put_cb_trace_ek;
  * string represent it's description so that an external package can decrypt the
  * binary format of the stream.
  */
+typedef struct {
+    int rank_src;  // 0
+    int rank_dst;  // 4
+    uint64_t tid;  // 8
+    uint32_t tpid;  // 16
+    uint32_t tcid;  // 20
+} parsec_profile_remote_dep_mpi_info_t; // 24 bytes
 
-char parsec_profile_remote_dep_mpi_info_to_string[] = "src{int32_t};dst{int32_t};tid{int64_t};tpid{int32_t};did{int32_t}";
+static char parsec_profile_remote_dep_mpi_info_to_string[] = "src{int32_t};dst{int32_t};tid{int64_t};tpid{int32_t};tcid{int32_t}";
 
 void remote_dep_mpi_profiling_init(void)
 {
@@ -1122,7 +1139,6 @@ static void remote_dep_mpi_profiling_fini(void)
     MPIrcv_prof = NULL;
     MPIctl_prof = NULL;
 }
-
 #endif  /* PARSEC_PROF_TRACE */
 
 typedef int (*parsec_comm_callback_f)(parsec_execution_stream_t*,
@@ -1377,13 +1393,8 @@ static void remote_dep_mpi_params(parsec_context_t* context) {
     }
 #endif
 #if RDEP_MSG_EAGER_LIMIT != 0
-    if( parsec_param_comm_thread_multiple ) parsec_param_eager_limit = 0;
     parsec_mca_param_reg_sizet_name("runtime", "comm_eager_limit", "Controls the maximum size of a message that uses the eager protocol. Eager messages are sent eagerly before a 2-sided synchronization and may cause flow control and memory contentions at the receiver, but have a better latency.",
                                   false, false, parsec_param_eager_limit, &parsec_param_eager_limit);
-    if( parsec_param_comm_thread_multiple && parsec_param_eager_limit ) {
-        parsec_warning("Using eager and thread multiple MPI messaging is not implemented yet. Disabling Eager.");
-        parsec_param_eager_limit = 0;
-    }
 #endif
     parsec_mca_param_reg_int_name("runtime", "comm_aggregate", "Aggregate multiple dependencies in the same short message (1=true,0=false).",
                                   false, false, parsec_param_enable_aggregate, &parsec_param_enable_aggregate);
@@ -1705,6 +1716,10 @@ static remote_dep_datakey_t
 remote_dep_mpi_eager_which(const parsec_remote_deps_t* deps,
                            remote_dep_datakey_t output_mask)
 {
+    if( 0 == parsec_param_eager_limit &&
+        0 == parsec_param_short_limit )  /* both disabled via MCA */
+        return 0;
+
     for(int k = 0; output_mask>>k; k++) {
         if( !(output_mask & (1U<<k)) ) continue;            /* No dependency */
         if( NULL == deps->output[k].data.arena ) continue;  /* CONTROL dependency */
@@ -1712,7 +1727,7 @@ remote_dep_mpi_eager_which(const parsec_remote_deps_t* deps,
 
         if( (extent <= parsec_param_eager_limit) || (extent <= parsec_param_short_limit) ) {
             PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI:\tPEER\tNA\t%5s MODE  k=%d\tsize=%d <= %d\t(tag=base+%d)",
-                    (extent <= (RDEP_MSG_EAGER_LIMIT) ? "Eager" : "Short"),
+                    (extent <= (RDEP_MSG_SHORT_LIMIT) ? "Short" : "Eager"),
                     k, extent, RDEP_MSG_SHORT_LIMIT, k);
             continue;
         }

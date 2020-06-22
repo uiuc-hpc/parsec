@@ -79,9 +79,9 @@ int main(int argc, char **argv)
 
     parsec_taskpool_t *dtd_tp = parsec_dtd_taskpool_new();
 
-    parsec_matrix_add2arena_rect(parsec_dtd_arenas[TILE_FULL],
-                                 parsec_datatype_int32_t,
-                                 nb, 1, nb);
+    parsec_matrix_add2arena_rect( &parsec_dtd_arenas_datatypes[TILE_FULL],
+                                  parsec_datatype_int32_t,
+                                  nb, 1, nb);
 
     /* Correctness checking */
     dcA = create_and_distribute_data(rank, world, nb, nt);
@@ -106,10 +106,10 @@ int main(int argc, char **argv)
                             PARSEC_DTD_ARG_END );
     }
 
-    rc = parsec_dtd_taskpool_wait( parsec, dtd_tp );
+    rc = parsec_dtd_taskpool_wait( dtd_tp );
     PARSEC_CHECK_ERROR(rc, "parsec_dtd_taskpool_wait");
 
-    rc = parsec_dtd_taskpool_wait( parsec, dtd_tp );
+    rc = parsec_dtd_taskpool_wait( dtd_tp );
     PARSEC_CHECK_ERROR(rc, "parsec_dtd_taskpool_wait");
 
     for( i = 0; i < world - 1; i++ ) {
@@ -123,13 +123,14 @@ int main(int argc, char **argv)
     }
 
     parsec_dtd_data_flush_all( dtd_tp, A );
-    rc = parsec_dtd_taskpool_wait( parsec, dtd_tp );
+    rc = parsec_dtd_taskpool_wait( dtd_tp );
     PARSEC_CHECK_ERROR(rc, "parsec_dtd_taskpool_wait");
     parsec_taskpool_free( dtd_tp );
 
     parsec_context_wait(parsec);
 
-    parsec_arena_destruct(parsec_dtd_arenas[0]);
+    parsec_type_free(&parsec_dtd_arenas_datatypes[TILE_FULL].opaque_dtt);
+    PARSEC_OBJ_RELEASE(parsec_dtd_arenas_datatypes[TILE_FULL].arena);
     parsec_dtd_data_collection_fini( A );
     free_data(dcA);
 

@@ -333,7 +333,7 @@ parsec_cuda_module_init( int dev_id, parsec_device_module_t** module )
     computemode = prop.computeMode;
 
     gpu_device = (parsec_device_cuda_module_t*)calloc(1, sizeof(parsec_device_cuda_module_t));
-    PARSEC_OBJ_CONSTRUCT(gpu_device, parsec_list_item_t);
+    PARSEC_OBJ_CONSTRUCT(gpu_device, parsec_device_cuda_module_t);
     gpu_device->cuda_index = (uint8_t)dev_id;
     gpu_device->major      = (uint8_t)major;
     gpu_device->minor      = (uint8_t)minor;
@@ -1248,12 +1248,12 @@ parsec_gpu_data_stage_in( parsec_device_cuda_module_t* gpu_device,
                 parsec_profile_data_collection_info_t info;
 
                 if( NULL != original->dc ) {
-                    info.desc = original->dc;
-                    info.id   = original->key;
+                    info.desc    = original->dc;
+                    info.data_id = original->key;
                 } else {
                     assert( GPU_TASK_TYPE_PREFETCH != gpu_task->task_type );
-                    info.desc = (parsec_dc_t*)original;
-                    info.id   = -1;
+                    info.desc    = (parsec_dc_t*)original;
+                    info.data_id = -1;
                 }
                 gpu_task->prof_key_end = -1;
 
@@ -2427,11 +2427,11 @@ parsec_gpu_kernel_pop( parsec_device_cuda_module_t            *gpu_device,
                     if(parsec_cuda_trackable_events & PARSEC_PROFILE_CUDA_TRACK_DATA_OUT) {
                         parsec_profile_data_collection_info_t info;
                         if( NULL != original->dc ) {
-                            info.desc = original->dc;
-                            info.id   = original->key;
+                            info.desc    = original->dc;
+                            info.data_id = original->key;
                         } else {
-                            info.desc = (parsec_dc_t*)original;
-                            info.id   = -1;
+                            info.desc    = (parsec_dc_t*)original;
+                            info.data_id = -1;
                         }
                         gpu_task->prof_key_end = parsec_cuda_moveout_key_end;
                         gpu_task->prof_tp_id   = this_task->taskpool->taskpool_id;

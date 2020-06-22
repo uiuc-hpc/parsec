@@ -64,7 +64,7 @@ int parsec_dtd_window_size             = 8000;   /**< Default window size */
 int parsec_dtd_threshold_size          = 4000;   /**< Default threshold size of tasks for master thread to wait on */
 static int parsec_dtd_task_hash_table_size = 1<<16; /**< Default task hash table size */
 static int parsec_dtd_tile_hash_table_size = 1<<16; /**< Default tile hash table size */
-static int parsec_dtd_no_of_arenas = 16;
+static int parsec_dtd_no_of_arenas_datatypes = 16;
 
 int parsec_dtd_dump_traversal_info = 60; /**< Level for printing traversal info */
 int parsec_dtd_dump_function_info  = 50; /**< Level for printing function_structure info */
@@ -73,7 +73,7 @@ int insert_task_trace_keyout = -1;
 int hashtable_trace_keyin = -1;
 int hashtable_trace_keyout = -1;
 
-parsec_arena_t **parsec_dtd_arenas;
+parsec_arena_datatype_t *parsec_dtd_arenas_datatypes;
 
 extern parsec_sched_module_t *parsec_current_scheduler;
 
@@ -126,36 +126,37 @@ static inline unsigned long exponential_backoff(uint64_t k)
     return r * TIME_STEP;
 }
 
-void
-parsec_detach_dtd_taskpool_from_context(parsec_taskpool_t *tp,
-                                        parsec_context_t  *context)
+static void
+parsec_detach_dtd_taskpool_from_context(parsec_taskpool_t *tp)
 {
     assert(tp != NULL);
-    assert(context != NULL);
-    parsec_dtd_taskpool_t *dtd_tp = (parsec_dtd_taskpool_t *)tp;
-    (void)context;
-    (void)dtd_tp;
-    assert(dtd_tp->enqueue_flag);
+    assert(((parsec_dtd_taskpool_t*)tp)->enqueue_flag);
     parsec_taskpool_update_runtime_nbtask(tp, -1);
 }
 
 int
-parsec_dtd_dequeue_taskpool(parsec_taskpool_t *tp,
-                            parsec_context_t  *context)
+parsec_dtd_dequeue_taskpool(parsec_taskpool_t *tp)
 {
     int should_dequeue = 0;
-    parsec_list_lock(context->taskpool_list);
-    if(parsec_list_nolock_contains(context->taskpool_list,
+    if( NULL == tp->context ) {
+        return PARSEC_NOT_SUPPORTED;
+    }
+    /* If the taskpool is attached to a context then we better find it
+     * taskpool_list.
+     */
+    parsec_list_lock(tp->context->taskpool_list);
+    if(parsec_list_nolock_contains(tp->context->taskpool_list,
                                    (parsec_list_item_t *)tp)) {
         should_dequeue = 1;
-        parsec_list_nolock_remove(context->taskpool_list,
+        parsec_list_nolock_remove(tp->context->taskpool_list,
                                   (parsec_list_item_t *)tp);
     }
-    parsec_list_unlock(context->taskpool_list);
+    parsec_list_unlock(tp->context->taskpool_list);
     if(should_dequeue) {
-        parsec_detach_dtd_taskpool_from_context(tp, context);
+        parsec_detach_dtd_taskpool_from_context(tp);
+        return 0;
     }
-    return 1;
+    return PARSEC_ERR_NOT_FOUND;
 }
 
 void
@@ -164,7 +165,7 @@ parsec_detach_all_dtd_taskpool_from_context(parsec_context_t *context)
     if(NULL != context->taskpool_list) {
         parsec_taskpool_t *tp;
         while(NULL != (tp = (parsec_taskpool_t *)parsec_list_pop_front(context->taskpool_list))) {
-            parsec_detach_dtd_taskpool_from_context(tp, context);
+            parsec_detach_dtd_taskpool_from_context(tp);
         }
     }
 }
@@ -446,11 +447,7 @@ parsec_dtd_lazy_init(void)
                               offsetof(parsec_dtd_tile_t, mempool_owner),
                               1/* no. of threads*/ );
 
-    int i;
-    parsec_dtd_arenas = (parsec_arena_t **) malloc(parsec_dtd_no_of_arenas * sizeof(parsec_arena_t *));
-    for (i = 0; i < parsec_dtd_no_of_arenas; i++) {
-        parsec_dtd_arenas[i] = (parsec_arena_t *) calloc(1, sizeof(parsec_arena_t));
-    }
+    parsec_dtd_arenas_datatypes = (parsec_arena_datatype_t *) calloc(parsec_dtd_no_of_arenas_datatypes, sizeof(parsec_arena_datatype_t));
 }
 
 /* **************************************************************************** */
@@ -466,14 +463,8 @@ void parsec_dtd_fini(void)
 #if defined(PARSEC_DEBUG_PARANOID)
     assert(parsec_dtd_taskpool_mempool != NULL);
 #endif
-    int i;
-    for( i = 0; i < parsec_dtd_no_of_arenas; i++ ) {
-        if (parsec_dtd_arenas[i] != NULL) {
-            free(parsec_dtd_arenas[i]);
-            parsec_dtd_arenas[i] = NULL;
-        }
-    }
-    free(parsec_dtd_arenas);
+    free(parsec_dtd_arenas_datatypes); parsec_dtd_arenas_datatypes = NULL;
+    parsec_dtd_no_of_arenas_datatypes = 0;
 
     parsec_mempool_destruct( parsec_dtd_tile_mempool );
     free( parsec_dtd_tile_mempool );
@@ -503,22 +494,19 @@ extern int __parsec_task_progress( parsec_execution_stream_t* es,
  * once the number of pending tasks in the engine reaches the
  * threshold size.
  *
- * @param[in]   context
- *                  The PaRSEC context (pointer to the runtime instance)
  * @param[in]   tp
  *                  PaRSEC dtd taskpool
  *
  * @ingroup     DTD_INTERFACE_INTERNAL
  */
 void
-parsec_execute_and_come_back( parsec_context_t *context,
-                              parsec_taskpool_t *tp,
+parsec_execute_and_come_back( parsec_taskpool_t *tp,
                               int task_threshold_count )
 {
     uint64_t misses_in_a_row;
-    parsec_execution_stream_t* es = context->virtual_processes[0]->execution_streams[0];
+    parsec_execution_stream_t* es = tp->context->virtual_processes[0]->execution_streams[0];
     parsec_task_t* task;
-    int rc, nbiterations = 0, distance;
+    int rc, distance;
     struct timespec rqtp;
 
     rqtp.tv_sec = 0;
@@ -528,15 +516,15 @@ parsec_execute_and_come_back( parsec_context_t *context,
     /* The master thread might not have to trigger the barrier if the other
      * threads have been activated by a previous start.
      */
-    if( !(PARSEC_CONTEXT_FLAG_CONTEXT_ACTIVE & context->flags) ) {
-        (void)parsec_remote_dep_on(context);
+    if( !(PARSEC_CONTEXT_FLAG_CONTEXT_ACTIVE & tp->context->flags) ) {
+        (void)parsec_remote_dep_on(tp->context);
         /* Mark the context so that we will skip the initial barrier during the _wait */
-        context->flags |= PARSEC_CONTEXT_FLAG_CONTEXT_ACTIVE;
+        tp->context->flags |= PARSEC_CONTEXT_FLAG_CONTEXT_ACTIVE;
         /* Wake up the other threads */
-        parsec_barrier_wait( &(context->barrier) );
+        parsec_barrier_wait( &(tp->context->barrier) );
     }
 
-    /* we wait for only all the tasks inserted in the taskpool and not for all the communication
+    /* we wait for all tasks inserted in the taskpool but not for the communication
      * invoked by those tasks.
      */
     while(tp->nb_tasks > task_threshold_count) {
@@ -553,17 +541,14 @@ parsec_execute_and_come_back( parsec_context_t *context,
 
             rc = __parsec_task_progress(es, task, distance);
             (void)rc;
-            nbiterations++;
         }
     }
 }
 
 /* Function to wait on all pending action of a taskpool */
 static int
-parsec_dtd_taskpool_wait_on_pending_action(parsec_context_t *parsec,
-                                           parsec_taskpool_t  *tp)
+parsec_dtd_taskpool_wait_on_pending_action(parsec_taskpool_t  *tp)
 {
-    (void)parsec;
     struct timespec rqtp;
     rqtp.tv_sec = 0;
 
@@ -590,31 +575,30 @@ parsec_dtd_taskpool_wait_on_pending_action(parsec_context_t *parsec,
  * Users should call this function everytime they insert a bunch of tasks.
  * Users can call this function once per taskpool.
  *
- * @param[in]       parsec
- *                      The PaRSEC context
- * @param[in,out]   tp
+ * @param[in]   tp
  *                      PaRSEC dtd taskpool
  *
  * @ingroup         DTD_INTERFACE
  */
 int
-parsec_dtd_taskpool_wait(parsec_context_t *parsec,
-                         parsec_taskpool_t  *tp)
+parsec_dtd_taskpool_wait(parsec_taskpool_t  *tp)
 {
     parsec_dtd_taskpool_t *dtd_tp = (parsec_dtd_taskpool_t *)tp;
+    if( NULL == tp->context ) {  /* the taskpool is not associated with any parsec_context
+                                    so it can't be waited upon */
+        return PARSEC_NOT_SUPPORTED;
+    }
     parsec_dtd_schedule_tasks(dtd_tp);
-    dtd_tp->wait_func(parsec, tp);
-    parsec_dtd_taskpool_wait_on_pending_action(parsec, tp);
+    dtd_tp->wait_func(tp);
+    parsec_dtd_taskpool_wait_on_pending_action(tp);
     return 0;
 }
 
 /* This function only waits until all local tasks are done */
 static void
-parsec_dtd_taskpool_wait_func(parsec_context_t *parsec,
-                              parsec_taskpool_t  *tp)
+parsec_dtd_taskpool_wait_func(parsec_taskpool_t  *tp)
 {
-    (void)parsec;
-    parsec_execute_and_come_back(tp->context, tp, 1);
+    parsec_execute_and_come_back(tp, 1);
 }
 
 /* **************************************************************************** */
@@ -717,8 +701,7 @@ parsec_dtd_add_profiling_info( parsec_taskpool_t *tp,
 {
     char *str = fill_color(task_class_id, PARSEC_DTD_NB_TASK_CLASSES);
     parsec_profiling_add_dictionary_keyword(name, str,
-                                            sizeof(parsec_profile_data_collection_info_t),
-                                            PARSEC_PROFILE_DATA_COLLECTION_INFO_CONVERTOR,
+                                            sizeof(parsec_task_prof_info_t), PARSEC_TASK_PROF_INFO_CONVERTOR,
                                             (int *) &tp->profiling_array[0 +
                                                                          2 * task_class_id]  /* start key */,
                                             (int *) &tp->profiling_array[1 +
@@ -734,8 +717,7 @@ parsec_dtd_add_profiling_info_generic( parsec_taskpool_t *tp,
     (void)tp;
     char *str = fill_color(*keyin, PARSEC_DTD_NB_TASK_CLASSES);
     parsec_profiling_add_dictionary_keyword(name, str,
-                                            sizeof(parsec_profile_data_collection_info_t),
-                                            PARSEC_PROFILE_DATA_COLLECTION_INFO_CONVERTOR,
+                                            sizeof(parsec_task_prof_info_t), PARSEC_TASK_PROF_INFO_CONVERTOR,
                                             keyin,
                                             keyout);
     free(str);
@@ -1890,8 +1872,8 @@ static int datatype_lookup_of_dtd_task(parsec_execution_stream_t *es,
     int i;
     for( i = 0; i < this_task->task_class->nb_flows; i++) {
         if((*flow_mask) & (1U<<i)) {
-            data->arena  = parsec_dtd_arenas[(FLOW_OF(((parsec_dtd_task_t *)this_task), i))->arena_index];
-            data->layout = data->arena->opaque_dtt;
+            data->arena  = parsec_dtd_arenas_datatypes[(FLOW_OF(((parsec_dtd_task_t *)this_task), i))->arena_index].arena;
+            data->layout = parsec_dtd_arenas_datatypes[(FLOW_OF(((parsec_dtd_task_t *)this_task), i))->arena_index].opaque_dtt;
             (*flow_mask) &= ~(1U<<i);
             return PARSEC_HOOK_RETURN_NEXT;
         }
@@ -2463,7 +2445,7 @@ parsec_dtd_block_if_threshold_reached(parsec_dtd_taskpool_t *dtd_tp, int task_th
         if( dtd_tp->task_window_size < parsec_dtd_window_size ) {
             dtd_tp->task_window_size *= 2;
         } else {
-            parsec_execute_and_come_back(dtd_tp->super.context, &dtd_tp->super,
+            parsec_execute_and_come_back(&dtd_tp->super,
                                          task_threshold);
             return 1; /* Indicating we blocked */
         }
@@ -2556,7 +2538,9 @@ parsec_insert_dtd_task(parsec_task_t *__this_task)
 
         if( INOUT == (tile_op_type & GET_OP_TYPE) || OUTPUT == (tile_op_type & GET_OP_TYPE) ) {
 #if defined(PARSEC_PROF_TRACE)
-            this_task->super.prof_info.id = tile->key;
+            this_task->super.prof_info.desc = NULL;
+            this_task->super.prof_info.data_id = tile->key;
+            this_task->super.prof_info.task_class_id = tc->task_class_id;
 #endif
 
             /* Setting the last_user info with info of this_task */

@@ -74,11 +74,10 @@ endif()
 
 # Some compilers produce better debugging outputs with Og vs O0
 # but this should only be used in RelWithDebInfo mode.
+set(ogflag "")
 check_c_compiler_flag( "-Og" PARSEC_HAVE_Og )
 if( PARSEC_HAVE_Og )
-  set(o0flag "-Og")
-else()
-  set(o0flag "-O0")
+  set(ogflag "-Og")
 endif()
 
 # Set warnings for debug builds
@@ -117,11 +116,24 @@ endif(_match_icc)
 
 # verbose compilation in debug
 add_compile_options(
-  "$<$<CONFIG:RELWITHDEBINFO>:${o0flag};${wflags}>"
+  "$<$<CONFIG:RELWITHDEBINFO>:${ogflag};${wflags}>"
   "$<$<CONFIG:DEBUG>:${wflags}>")
 # remove asserts in release
 add_compile_definitions(
   $<$<CONFIG:RELEASE>:NDEBUG>)
+
+if(CMAKE_GENERATOR STREQUAL "Ninja")
+  # Ninja is weird with colors. It does not present a pty to cc (hence 
+  # colors get disabled by default), but if colors are forced upon it, it 
+  # will do the right thing and print colors only on terminals.
+  foreach(colorflag -fdiagnostics-color -fcolor-diagnostics)
+    check_c_compiler_flag(${colorflag} PARSEC_CC_COLORS${colorflag})
+    if(${PARSEC_CC_COLORS${colorflag}})
+      add_compile_options(${colorflag})
+      break()
+    endif()
+  endforeach()
+endif()
 
 #
 # Fortran tricks: Debug/Release FFLAGS depend on the compiler

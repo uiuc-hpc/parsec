@@ -14,7 +14,7 @@
 /** @brief Define the PaRSEC minor version number */
 #define PARSEC_VERSION_MINOR @PARSEC_VERSION_MINOR@
 /** @brief Define the PaRSEC patch version number */
-#define PARSEC_VERSION_PATCH @PARSEC_VERSION_PATCH@
+#define PARSEC_VERSION_RELEASE @PARSEC_VERSION_RELEASE@
 /** @brief Define the branch that was compiled */
 #define PARSEC_GIT_BRANCH "@GIT_COMMIT_BRANCH@"
 /** @brief Define the commit hash that was compiled */
@@ -77,7 +77,6 @@
 #cmakedefine PARSEC_DEBUG_NOISIER
 #cmakedefine PARSEC_DEBUG_HISTORY
 #cmakedefine PARSEC_LIFO_USE_ATOMICS
-#cmakedefine PARSEC_CALL_TRACE
 
 /* profiling */
 #cmakedefine PARSEC_PROF_TRACE

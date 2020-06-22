@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The University of Tennessee and The University
+ * Copyright (c) 2012-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  */
@@ -23,16 +23,29 @@
 #include "parsec/data.h"
 #include "parsec/utils/debug.h"
 #include "parsec/utils/output.h"
+#include "parsec/class/info.h"
 
 #if defined(PARSEC_PROF_GRAPHER)
 #include "parsec/parsec_prof_grapher.h"
 #endif  /* defined(PARSEC_PROF_GRAPHER) */
 #include "parsec/mca/device/device.h"
 
-
 #include <string.h>
 
 BEGIN_C_DECLS
+
+/**
+ * Arena-datatype management.
+ */
+struct parsec_arena_datatype_s {
+    parsec_arena_t     *arena;      /**< allocator for this datatype */
+    parsec_datatype_t  opaque_dtt;  /**< datatype */
+};
+
+int parsec_arena_datatype_construct(parsec_arena_datatype_t *adt,
+                                   size_t elem_size,
+                                   size_t alignment,
+                                   parsec_datatype_t opaque_dtt);
 
 /* NULL terminated local hostname of the current PaRSEC process */
 PARSEC_DECLSPEC extern const char* parsec_hostname;
@@ -427,7 +440,7 @@ PARSEC_DECLSPEC extern int parsec_want_rusage;
 struct parsec_minimal_execution_context_s {
     PARSEC_MINIMAL_EXECUTION_CONTEXT
 #if defined(PARSEC_PROF_TRACE)
-    parsec_profile_data_collection_info_t prof_info;
+    parsec_task_prof_info_t         prof_info;
 #endif /* defined(PARSEC_PROF_TRACE) */
     /* WARNING: The following locals field must ABSOLUTELY stay contiguous with
      * prof_info so that the locals are part of the event specific infos */
@@ -437,7 +450,7 @@ struct parsec_minimal_execution_context_s {
 struct parsec_task_s {
     PARSEC_MINIMAL_EXECUTION_CONTEXT
 #if defined(PARSEC_PROF_TRACE)
-    parsec_profile_data_collection_info_t prof_info;
+    parsec_task_prof_info_t    prof_info;
 #endif /* defined(PARSEC_PROF_TRACE) */
     /* WARNING: The following locals field must ABSOLUTELY stay contiguous with
      * prof_info so that the locals are part of the event specific infos */
@@ -483,10 +496,10 @@ extern int device_delegate_begin, device_delegate_end;
                            (KEY),                                       \
                            (TASK)->task_class->key_functions->          \
                            key_hash((TASK)->task_class->make_key(       \
-                             (TASK)->taskpool, (TASK)->locals ), NULL), \
-                           (TASK)->taskpool->taskpool_id, (void*)&(TASK)->prof_info)
+                              (TASK)->taskpool, (TASK)->locals ), NULL), \
+                              (TASK)->taskpool->taskpool_id, (void*)&(TASK)->prof_info); 
 
-#define PARSEC_TASK_PROF_TRACE_IF(COND, PROFILE, KEY, TASK)   \
+#define PARSEC_TASK_PROF_TRACE_IF(COND, PROFILE, KEY, TASK)  \
     if(!!(COND)) {                                           \
         PARSEC_TASK_PROF_TRACE((PROFILE), (KEY), (TASK));     \
     }

@@ -174,7 +174,7 @@ int put_cb_trace_sk, put_cb_trace_ek;
  * binary format of the stream.
  */
 
-char parsec_profile_remote_dep_mpi_info_to_string[] = "src{int32_t};dst{int32_t};tid{int64_t};tpid{int32_t};did{int32_t}";
+static char parsec_profile_remote_dep_mpi_info_to_string[] = "src{int32_t};dst{int32_t};tid{int64_t};tpid{int32_t};tcid{int32_t}";
 
 static void remote_dep_mpi_profiling_init(void)
 {

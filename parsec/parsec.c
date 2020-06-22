@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2009-2019 The University of Tennessee and The University
+ * Copyright (c) 2009-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  */
@@ -36,6 +36,7 @@
 #include "parsec/bindthread.h"
 #include "parsec/parsec_prof_grapher.h"
 #include "parsec/vpmap.h"
+#include "parsec/class/info.h"
 #include "parsec/utils/mca_param.h"
 #include "parsec/utils/installdirs.h"
 #include "parsec/utils/cmd_line.h"
@@ -66,6 +67,10 @@
 /*
  * Global variables.
  */
+
+parsec_external_fini_t *external_fini_cbs = NULL;
+int                     n_external_fini_cbs = 0;
+
 char parsec_hostname_array[128] = "not yet initialized";
 const char* parsec_hostname = parsec_hostname_array;
 
@@ -515,17 +520,26 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
 
     parsec_hash_tables_init();
 
+#if defined(PARSEC_PROF_GRAPHER)
+    char *parsec_mca_enable_dot = parsec_enable_dot;
+    parsec_mca_param_reg_string_name("parsec", "dot", "Create a DOT file from the DAGs executed by parsec (one file per rank)",
+                                     false, false, parsec_mca_enable_dot, &parsec_mca_enable_dot);
+    if( NULL != parsec_mca_enable_dot ) {
+        asprintf(&parsec_enable_dot, "%s-%d.dot", parsec_mca_enable_dot, parsec_debug_rank);
+    }
     if( parsec_cmd_line_is_taken(cmd_line, "dot") ) {
+        // command-line has priority over MCA parameter
         char* optarg = NULL;
         GET_STR_ARGV(cmd_line, "dot", optarg);
 
         if( parsec_enable_dot ) free( parsec_enable_dot );
         if( NULL == optarg ) {
-            parsec_enable_dot = strdup(parsec_app_name);
+            asprintf(&parsec_enable_dot, "%s-%d.dot", parsec_app_name, parsec_debug_rank);
         } else {
-            parsec_enable_dot = strdup(optarg);
+            asprintf(&parsec_enable_dot, "%s-%d.dot", optarg, parsec_debug_rank);
         }
     }
+#endif
 
     /* the extra allocation will pertain to the virtual_processes array */
     context = (parsec_context_t*)malloc(sizeof(parsec_context_t) + (nb_vp-1) * sizeof(parsec_vp_t*));
@@ -698,14 +712,12 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     /* Initialize Performance Instrumentation (PARSEC_PINS) */
     PARSEC_PINS_INIT(context);
 
-    if(parsec_enable_dot) {
 #if defined(PARSEC_PROF_GRAPHER)
-        parsec_prof_grapher_init(context, parsec_enable_dot, nb_total_comp_threads);
+    if(parsec_enable_dot) {
+        parsec_prof_grapher_init(context, parsec_enable_dot);
         slow_option_warning = 1;
-#else
-        parsec_warning("DOT generation requested, but PARSEC_PROF_GRAPHER was not selected during compilation: DOT generation ignored.");
-#endif  /* defined(PARSEC_PROF_GRAPHER) */
     }
+#endif  /* defined(PARSEC_PROF_GRAPHER) */
 
 #if defined(PARSEC_DEBUG_NOISIER) || defined(PARSEC_DEBUG_PARANOID)
     slow_option_warning = 1;
@@ -829,10 +841,10 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     return context;
 }
 
-int parsec_version( int* version_major, int* version_minor, int* version_patch) {
+int parsec_version( int* version_major, int* version_minor, int* version_release) {
     *version_major = PARSEC_VERSION_MAJOR;
     *version_minor = PARSEC_VERSION_MINOR;
-    *version_patch = PARSEC_VERSION_PATCH;
+    *version_release = PARSEC_VERSION_RELEASE;
     return PARSEC_SUCCESS;
 }
 
@@ -864,7 +876,7 @@ int parsec_version_ex( size_t len, char* version_string) {
         "c_flags\t\t= %s\n",
         PARSEC_VERSION_MAJOR,
         PARSEC_VERSION_MINOR,
-        PARSEC_VERSION_PATCH,
+        PARSEC_VERSION_RELEASE,
         PARSEC_GIT_HASH,
         PARSEC_GIT_BRANCH,
         PARSEC_GIT_DIRTY,
@@ -1042,6 +1054,15 @@ static void parsec_vp_fini( parsec_vp_t *vp )
     }
 }
 
+void parsec_context_at_fini(parsec_external_fini_cb_t cb, void *data)
+{
+    n_external_fini_cbs++;
+    external_fini_cbs = (parsec_external_fini_t *)realloc(
+            external_fini_cbs, sizeof(parsec_external_fini_t)*n_external_fini_cbs);
+    external_fini_cbs[n_external_fini_cbs-1].cb = cb;
+    external_fini_cbs[n_external_fini_cbs-1].data = data;
+}
+
 int parsec_fini( parsec_context_t** pcontext )
 {
     parsec_context_t* context = *pcontext;
@@ -1074,6 +1095,19 @@ int parsec_fini( parsec_context_t** pcontext )
     /* Now wait until every thread is back */
     context->__parsec_internal_finalization_in_progress = 1;
     parsec_barrier_wait( &(context->barrier) );
+
+    /**
+     * The registered at_fini callbacks should be called as early as possible in the
+     * context finalization, but not before any actions visible to the outside world
+     * has been completed (aka. not until the communication engine is up).
+     */
+    if( NULL != external_fini_cbs ) {
+        for(int i = 0; i < n_external_fini_cbs; i++){
+            external_fini_cbs[i].cb( external_fini_cbs[i].data ) ;
+        }
+        free(external_fini_cbs); external_fini_cbs = NULL;
+        n_external_fini_cbs = 0;
+    }
 
     parsec_rusage(true);
 
@@ -1252,6 +1286,27 @@ parsec_check_IN_dependencies_with_mask(const parsec_taskpool_t *tp,
     return ret;
 }
 
+static parsec_ontask_iterate_t count_deps_fct(struct parsec_execution_stream_s* es,
+                                              const parsec_task_t *newcontext,
+                                              const parsec_task_t *oldcontext,
+                                              const parsec_dep_t* dep,
+                                              parsec_dep_data_description_t *data,
+                                              int rank_src, int rank_dst, int vpid_dst,
+                                              void *param)
+{
+    int *pactive = (int*)param;
+    (void)es;
+    (void)newcontext;
+    (void)oldcontext;
+    (void)dep;
+    (void)data;
+    (void)rank_src;
+    (void)rank_dst;
+    (void)vpid_dst;
+    *pactive = *pactive+1;
+    return PARSEC_ITERATE_CONTINUE;
+}
+
 static parsec_dependency_t
 parsec_check_IN_dependencies_with_counter( const parsec_taskpool_t *tp,
                                            const parsec_task_t* task )
@@ -1290,14 +1345,18 @@ parsec_check_IN_dependencies_with_counter( const parsec_taskpool_t *tp,
                 dep = flow->dep_in[j];
                 if( NULL != dep->cond ) {
                     /* Check if the condition apply on the current setting */
-                    assert( dep->cond->op == PARSEC_EXPR_OP_INLINE );
-                    if( dep->cond->inline_func32(tp, task->locals) ) {
-                        if( NULL == dep->ctl_gather_nb)
-                            active++;
-                        else {
-                            assert( dep->ctl_gather_nb->op == PARSEC_EXPR_OP_INLINE );
-                            active += dep->ctl_gather_nb->inline_func32(tp, task->locals);
+                    if( dep->cond->op == PARSEC_EXPR_OP_INLINE ) {
+                        if( dep->cond->inline_func32(tp, task->locals) ) {
+                            if( NULL == dep->ctl_gather_nb)
+                                active++;
+                            else {
+                                assert( dep->ctl_gather_nb->op == PARSEC_EXPR_OP_INLINE );
+                                active += dep->ctl_gather_nb->inline_func32(tp, task->locals);
+                            }
                         }
+                    } else {
+                        /* Complicated case: fall back to iterate_predecessors with a counter */
+                        task->task_class->iterate_predecessors(NULL, task, 1 << flow->flow_index,  count_deps_fct, &active);
                     }
                 } else {
                     if( NULL == dep->ctl_gather_nb)
