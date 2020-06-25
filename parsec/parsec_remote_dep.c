@@ -841,7 +841,9 @@ remote_dep_dequeue_init(parsec_context_t* context)
 #  endif
 #elif defined(PARSEC_HAVE_LCI)
     lc_get_num_proc(&context->nb_nodes);
-    context->flags |= PARSEC_CONTEXT_FLAG_COMM_MT;
+    if (parsec_param_comm_thread_multiple) {
+        context->flags |= PARSEC_CONTEXT_FLAG_COMM_MT;
+    }
 #endif
 
     /**
