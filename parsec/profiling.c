@@ -23,6 +23,8 @@
 #include <fcntl.h>
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif  /* defined(PARSEC_HAVE_MPI) */
 
 #include "parsec/profiling.h"
@@ -559,6 +561,10 @@ void parsec_profiling_start(void)
         (void)MPI_Initialized(&flag);
         if(flag) MPI_Barrier(MPI_COMM_WORLD);
     }
+#elif defined(PARSEC_HAVE_LCI)
+    if (NULL != lci_global_ep) {
+        lc_barrier(*lci_global_ep);
+    }
 #endif
     start_called = 1;
     parsec_start_time = take_time();
@@ -694,6 +700,10 @@ int parsec_profiling_fini( void )
         if(MPI_ready) {
             MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         }
+#elif defined(PARSEC_HAVE_LCI)
+    if (NULL != lci_global_ep) {
+        lc_get_proc_num(&rank);
+    }
 #endif
         parsec_profiling_perf_t *pa = parsec_profiling_global_perf;
         char *ti;
@@ -1372,20 +1382,46 @@ int parsec_profiling_dbp_dump( void )
     return 0;
 }
 
+#if defined(PARSEC_HAVE_LCI)
+/* we haven't started comm engine yet, must do own progress ... */
+#define LCI_COLL_PROGRESS(call, ...) \
+  do {                               \
+    lc_colreq req;                   \
+    call(__VA_ARGS__, &req);         \
+    while (!req.flag) {              \
+        lc_progress(0);              \
+        lc_col_progress(&req);       \
+    }                                \
+  } while (0)
+
+static void lci_min_op(void *dst, void *src, size_t count)
+{
+    int *d = dst;
+    int *s = src;
+    if (*s < *d)
+        *d = *s;
+}
+#endif
+
 int parsec_profiling_dbp_start( const char *basefile, const char *hr_info )
 {
     int64_t zero;
     char *xmlbuffer;
     int rank = 0, worldsize = 1, buflen;
     int  min_fd = -1, rc, na_s, na_e;
-#if defined(PARSEC_HAVE_MPI)
     char *unique_str;
 
+#if defined(PARSEC_HAVE_MPI)
     int MPI_ready;
     (void)MPI_Initialized(&MPI_ready);
     if(MPI_ready) {
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &worldsize);
+    }
+#elif defined(PARSEC_HAVE_LCI)
+    if (NULL != lci_global_ep) {
+        lc_get_proc_num(&rank);
+        lc_get_num_proc(&worldsize);
     }
 #endif
 
@@ -1412,19 +1448,26 @@ int parsec_profiling_dbp_start( const char *basefile, const char *hr_info )
         }
     }
 
-#if defined(PARSEC_HAVE_MPI)
     if( worldsize > 1) {
         unique_str = bpf_filename + (strlen(bpf_filename) - 6);  /* pinpoint directly into the bpf_filename */
 
+#if defined(PARSEC_HAVE_MPI)
         MPI_Bcast(unique_str, 7, MPI_CHAR, 0, MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        LCI_COLL_PROGRESS(lc_ibcast, unique_str, sizeof(char[7]), 0, *lci_global_ep);
+#endif
         if( 0 != rank ) {
             if( *unique_str != '\0') {
                 file_backend_fd = open(bpf_filename, O_RDWR | O_CREAT | O_TRUNC, 00600);
             }  /* else we are in the error propagation from the rank 0 */
         }
+#if defined(PARSEC_HAVE_MPI)
         MPI_Allreduce(&file_backend_fd, &min_fd, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-    }
+#elif defined(PARSEC_HAVE_LCI)
+        LCI_COLL_PROGRESS(lc_ialreduce, &file_backend_fd, &min_fd, sizeof(int), lci_min_op, *lci_global_ep);
 #endif
+    }
+
     if( -1 == min_fd ) {
         set_last_error("Profiling system: error: one (or more) process could not create the backend file. Events not logged.\n");
         if( -1 != file_backend_fd ) {
