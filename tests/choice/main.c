@@ -111,6 +111,8 @@ int main(int argc, char *argv[])
         }
 #if defined(PARSEC_HAVE_MPI)
         MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lc_barrier(ep);
 #endif
     }
 

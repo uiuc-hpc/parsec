@@ -484,6 +484,8 @@ int main(int argc, char **argv)
     /* To make sure all the ranks have the tags registered */
 #ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_barrier(ep);
 #endif
 
     /* Testing active message */
@@ -510,6 +512,8 @@ int main(int argc, char **argv)
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_barrier(ep);
 #endif
     counter = 0;
     printf("-------------------------------------\n");
@@ -536,6 +540,8 @@ int main(int argc, char **argv)
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_barrier(ep);
 #endif
     counter = 0;
     printf("-------------------------------------\n");
@@ -613,6 +619,8 @@ int main(int argc, char **argv)
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_barrier(ep);
 #endif
     counter = 0;
 
@@ -685,6 +693,8 @@ int main(int argc, char **argv)
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_barrier(ep);
 #endif
 
     ce->tag_unregister(ACTIVE_MESSAGE_FROM_0_TAG);

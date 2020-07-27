@@ -33,6 +33,8 @@ parsec_taskpool_t *ctlgat_new(parsec_data_collection_t *A, int size, int nb)
     parsec_ctlgat_taskpool_t *tp = NULL;
 #if defined(PARSEC_HAVE_MPI)
     MPI_Comm_size(MPI_COMM_WORLD, &worldsize);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_get_num_proc(&worldsize);
 #else
     worldsize = 1;
 #endif

@@ -11,8 +11,11 @@
 #include <string.h>
 #include <stdio.h>
 #include "parsec/profiling.h"
+#include "parsec/parsec_config.h"
 
+#ifdef PARSEC_HAVE_MPI
 #include <mpi.h>
+#endif
 
 typedef struct {
     pthread_t                 pthread_id;
@@ -80,7 +83,9 @@ int main(int argc, char *argv[])
     int nbthreads = 1;
     char *filename = NULL;
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Init(&argc, &argv);
+#endif
     
     while ((opt = getopt(argc, argv, "f:n:N:h?")) != -1) {
         switch (opt) {
@@ -141,7 +146,9 @@ int main(int argc, char *argv[])
     }
     free(thread_info);
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
+#endif
 
     exit(EXIT_SUCCESS);
 }

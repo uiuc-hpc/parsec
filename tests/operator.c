@@ -22,6 +22,8 @@ parsec_operator_print_id( struct parsec_execution_stream_s *es,
 
 #if defined(PARSEC_HAVE_MPI)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_get_proc_num(&rank);
 #endif
 
     va_start(ap, op_data);

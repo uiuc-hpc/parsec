@@ -62,6 +62,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    parsec_setenv_mca_param("runtime_comm_thread_multiple", m ? "1" : "0", &environ);
+
 #if defined(PARSEC_HAVE_MPI)
     {
         int provided;
@@ -70,6 +72,12 @@ int main(int argc, char *argv[])
     }
     MPI_Comm_size(MPI_COMM_WORLD, &nodes);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_num_proc(&nodes);
+    lc_get_proc_num(&rank);
 #else
     nodes = 1;
     rank = 0;
@@ -166,8 +174,12 @@ int main(int argc, char *argv[])
         }
     }
 
+#if defined(PARSEC_HAVE_MPI)
     MPI_Barrier(MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI);
+    lc_barrier(ep);
 #endif
+#endif /* LOOPGEN */
 
     /* Stencil_1D */
     SYNC_TIME_START(); 
@@ -187,6 +199,8 @@ int main(int argc, char *argv[])
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
 #endif
 
 

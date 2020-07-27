@@ -25,8 +25,11 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "parsec/profiling.h"
+#include "parsec/parsec_config.h"
 
+#ifdef PARSEC_HAVE_MPI
 #include <mpi.h>
+#endif
 
 #define NB_THREADS         4
 #define EVENTS_PER_THREAD 10
@@ -131,7 +134,9 @@ int main(int argc, char *argv[])
     int i, rc;
     per_thread_info_t thread_info[NB_THREADS];
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Init(&argc, &argv); // MPI is only needed if using OTF2 as a backend. It can be ignored otherwise.
+#endif
 
     /** First, there is a sequential part (no threads) */
 
@@ -192,5 +197,7 @@ int main(int argc, char *argv[])
     parsec_profiling_dbp_dump();
     parsec_profiling_fini();
 
+#ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
+#endif
 }

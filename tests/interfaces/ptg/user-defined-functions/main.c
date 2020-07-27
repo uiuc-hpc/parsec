@@ -6,6 +6,8 @@
 
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lc.h>
 #endif  /* defined(PARSEC_HAVE_MPI) */
 
 #include "udf_wrapper.h"
@@ -46,6 +48,12 @@ int main(int argc, char *argv[])
     }
     MPI_Comm_size(MPI_COMM_WORLD, &world);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    lc_ep ep;
+    lc_init(1, &ep);
+    lci_global_ep = &ep;
+    lc_get_num_proc(&world);
+    lc_get_proc_num(&rank);
 #else
     world = 1;
     rank = 0;
@@ -88,14 +96,13 @@ int main(int argc, char *argv[])
                         "  P:  number of rows of processes in the 2D grid (default np, must divide np)\n"
                         "  c:  number of computing threads to create per rank (default one per core)\n"
                         "\n", argv[0]);
-#if defined(PARSEC_HAVE_MPI)
-                MPI_Abort(MPI_COMM_WORLD, 1);
-#endif
-                exit(1);
             }
 #if defined(PARSEC_HAVE_MPI)
-            MPI_Barrier(MPI_COMM_WORLD); /**< Will let the other ranks wait for the MPI_Abort */
+            MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+            lc_finalize();
 #endif
+            exit(1);
             break; /**< To silent warnings */
         }
     }
@@ -117,12 +124,11 @@ int main(int argc, char *argv[])
     if( -1 == N || -1 == NB ) {
         if( 0 == rank ) {
             fprintf(stderr, "Incorrect usage, see --help\n");
-#if defined(PARSEC_HAVE_MPI)
-            MPI_Abort(MPI_COMM_WORLD, 1);
-#endif
         }
 #if defined(PARSEC_HAVE_MPI)
-        MPI_Barrier(MPI_COMM_WORLD); /**< Will let the other ranks wait for the MPI_Abort */
+        MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+        lc_finalize();
 #endif
         exit(1);
     }
@@ -151,6 +157,8 @@ int main(int argc, char *argv[])
 
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    lc_finalize();
 #endif
 
     return 0;
