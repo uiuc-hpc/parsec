@@ -229,6 +229,7 @@ static struct {
     pthread_mutex_t mutex;
     _Bool           status;
 } progress_start = { PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, false };
+static int lci_comm_yield = 1;
 static atomic_bool progress_thread_stop = false;
 static pthread_t progress_thread_id;
 
@@ -601,9 +602,10 @@ void * lci_progress_thread(void *arg)
 
     /* loop until told to stop */
     while (!atomic_load_explicit(&progress_thread_stop, memory_order_acquire)) {
+        size_t progress_count = 0;
         /* progress until nothing progresses */
         while (lc_progress(0))
-            continue;
+            progress_count++;
 
 #if 0
         /* push back to shared callback fifo */
@@ -620,15 +622,21 @@ void * lci_progress_thread(void *arg)
             parsec_atomic_unlock(&lci_cb_fifo.atomic_lock);
         }
 
-        /* sleep for comm_yield_ns if set to comm_yield, else yield thread  */
+        /* sleep for comm_yield_ns if:
+         *     lci_comm_yield == 1 && we made no progress in last loop
+         *     lci_comm_yield == 2
+         * else continue */
         const struct timespec ts = { .tv_sec = 0, .tv_nsec = comm_yield_ns };
-        switch (comm_yield) {
+        switch (lci_comm_yield) {
         case 1:
+            /* if we made progress, continue for another loop */
+            if (progress_count > 0)
+                break;
+            __attribute__((fallthrough));
         case 2:
             nanosleep(&ts, NULL);
             break;
         default:
-            sched_yield();
             break;
         }
     }
@@ -675,6 +683,8 @@ lci_init(parsec_context_t *context)
     default_ep = (lc_ep *)context->comm_ctx;
 
     lci_ce_debug_verbose("init");
+
+    lci_comm_yield = comm_yield;
 
     /* Make all the fn pointers point to this component's functions */
     parsec_ce.tag_register        = lci_tag_register;
