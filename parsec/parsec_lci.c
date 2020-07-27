@@ -705,7 +705,7 @@ lci_init(parsec_context_t *context)
     parsec_ce.can_serve           = lci_can_push_more;
     parsec_ce.send_am             = lci_send_am;
     parsec_ce.parsec_context = context;
-    parsec_ce.capabilites.sided = 1;
+    parsec_ce.capabilites.sided = 2;
     parsec_ce.capabilites.supports_noncontiguous_datatype = 0;
 
     /* create a mempool for memory registration */
@@ -1291,9 +1291,8 @@ lci_reshape(parsec_comm_engine_t *comm_engine,
     size_t bytes = size * count;
     uint8_t *dst_buf = (uint8_t *)PARSEC_DATA_COPY_GET_PTR(dst) + displ_dst;
     uint8_t *src_buf = (uint8_t *)PARSEC_DATA_COPY_GET_PTR(src) + displ_src;
-    PARSEC_DEBUG_VERBOSE(20, parsec_debug_output,
-                         "LCI[%d]:\treshape %p into %p: %"PRIu64" x datatype(%p)",
-                         ep_rank, src_buf, dst_buf, count, (void *)layout);
+    lci_ce_debug_verbose("reshape %p into %p: %"PRIu64" x datatype(%p)",
+                         src_buf, dst_buf, count, (void *)layout);
     memcpy(dst_buf, src_buf, bytes);
     return 1;
 }
