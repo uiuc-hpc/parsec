@@ -25,14 +25,15 @@
 /* PaRSEC */
 #include "parsec/runtime.h"
 #include "parsec/execution_stream.h"
-#include "parsec/class/list_item.h"
-#include "parsec/class/parsec_hash_table.h"
-#include "parsec/class/parsec_object.h"
 #include "parsec/mempool.h"
+#include "parsec/papi_sde.h"
 #include "parsec/parsec_comm_engine.h"
 #include "parsec/parsec_internal.h"
 #include "parsec/parsec_lci.h"
 #include "parsec/parsec_remote_dep.h"
+#include "parsec/class/list_item.h"
+#include "parsec/class/parsec_hash_table.h"
+#include "parsec/class/parsec_object.h"
 #include "parsec/utils/debug.h"
 
 /* ------- LCI implementation below ------- */
@@ -217,10 +218,17 @@ static int ep_rank = 0;
 static int ep_size = 0;
 
 #if 0
-static pthread_cond_t  progress_condition = PTHREAD_COND_INITIALIZER;
-static pthread_mutex_t progress_mutex     = PTHREAD_MUTEX_INITIALIZER;
-static enum { RUN, PAUSE, STOP } progress_status = RUN;
+static struct {
+    pthread_cond_t  cond;
+    pthread_mutex_t mutex;
+    enum { LCI_RUN, LCI_PAUSE, LCI_STOP } status;
+} progress_continue = { PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, LCI_STOP };
 #endif
+static struct {
+    pthread_cond_t  cond;
+    pthread_mutex_t mutex;
+    _Bool           status;
+} progress_start = { PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, false };
 static atomic_bool progress_thread_stop = false;
 static pthread_t progress_thread_id;
 
@@ -577,13 +585,19 @@ static inline void lci_get_target_handler(void *ctx)
 void * lci_progress_thread(void *arg)
 {
     parsec_list_item_t *ring = NULL;
-    lc_req *req = NULL;
 
     lci_ce_debug_verbose("progress thread start");
+    PARSEC_PAPI_SDE_THREAD_INIT();
 
     /* bind thread */
     parsec_context_t *context = arg;
     remote_dep_bind_thread(context);
+
+    /* signal init */
+    pthread_mutex_lock(&progress_start.mutex);
+    progress_start.status = true;
+    pthread_cond_signal(&progress_start.cond);
+    pthread_mutex_unlock(&progress_start.mutex);
 
     /* loop until told to stop */
     while (!atomic_load_explicit(&progress_thread_stop, memory_order_acquire)) {
@@ -622,22 +636,23 @@ void * lci_progress_thread(void *arg)
 #if 0
     _Bool stop = false;
     while (!stop) {
-        pthread_mutex_lock(&progress_mutex);
-        switch (progress_status) {
-        case RUN:
+        pthread_mutex_lock(&progress_continue.mutex);
+        switch (progress_continue.status) {
+        case LCI_RUN:
             lc_progress(0);
             break;
-        case PAUSE:
-            pthread_cond_wait(&progress_condition, &progress_mutex);
+        case LCI_PAUSE:
+            pthread_cond_wait(&progress_continue.cond, &progress_continue.mutex);
             break;
-        case STOP:
+        case LCI_STOP:
             stop = true;
             break;
         }
-        pthread_mutex_unlock(&progress_mutex);
+        pthread_mutex_unlock(&progress_continue.mutex);
     }
 #endif
 
+    PARSEC_PAPI_SDE_THREAD_FINI();
     lci_ce_debug_verbose("progress thread stop");
     return NULL;
 }
@@ -769,10 +784,21 @@ lci_init(parsec_context_t *context)
     opt.handler = lci_get_origin_handler;
     lc_ep_dup(&opt, *default_ep, &get_ep);
 
-    /* start progress thread */
-    lci_ce_debug_verbose("starting progress thread");
-    atomic_store_explicit(&progress_thread_stop, false, memory_order_release);
-    pthread_create(&progress_thread_id, NULL, lci_progress_thread, context);
+    /* start progress thread if multiple nodes */
+    if (ep_size > 1) {
+        lci_ce_debug_verbose("starting progress thread");
+        /* lock mutex before starting thread */
+        pthread_mutex_lock(&progress_start.mutex);
+        /* ensure progress_thread_stop == false */
+        atomic_store_explicit(&progress_thread_stop, false, memory_order_release);
+        /* start thread */
+        pthread_create(&progress_thread_id, NULL, lci_progress_thread, context);
+        /* wait until thread started */
+        while (!progress_start.status)
+            pthread_cond_wait(&progress_start.cond, &progress_start.mutex);
+        /* unlock mutex */
+        pthread_mutex_unlock(&progress_start.mutex);
+    }
 
     return &parsec_ce;
 }
@@ -785,16 +811,18 @@ lci_fini(parsec_comm_engine_t *comm_engine)
     lci_sync(comm_engine);
     void *progress_retval = NULL;
 
-    /* stop progress thread */
-    lci_ce_debug_verbose("stopping progress thread");
-    atomic_store_explicit(&progress_thread_stop, true, memory_order_release);
+    /* stop progress thread if multiple nodes */
+    if (ep_size > 1) {
+        lci_ce_debug_verbose("stopping progress thread");
+        atomic_store_explicit(&progress_thread_stop, true, memory_order_release);
 #if 0
-    pthread_mutex_lock(&progress_mutex);
-    progress_status = STOP;
-    pthread_cond_signal(&progress_condition); /* if paused */
-    pthread_mutex_unlock(&progress_mutex);
+        pthread_mutex_lock(&progress_continue.mutex);
+        progress_continue.status = LCI_STOP;
+        pthread_cond_signal(&progress_continue.cond); /* if paused */
+        pthread_mutex_unlock(&progress_continue.mutex);
 #endif
-    pthread_join(progress_thread_id, &progress_retval);
+        pthread_join(progress_thread_id, &progress_retval);
+    }
 
     parsec_hash_table_fini(&am_cb_hash_table);
     PARSEC_OBJ_DESTRUCT(&am_cb_hash_table);
@@ -1169,12 +1197,12 @@ lci_enable(parsec_comm_engine_t *comm_engine)
 {
 #if 0
     int ret;
-    pthread_mutex_lock(&progress_mutex);
-    if (ret = (progress_status == PAUSE)) {
-        progress_status = RUN;
-        pthread_cond_signal(&progress_condition);
+    pthread_mutex_lock(&progress_continue.mutex);
+    if (ret = (progress_continue.status == LCI_PAUSE)) {
+        progress_continue.status = LCI_RUN;
+        pthread_cond_signal(&progress_continue.cond);
     }
-    pthread_mutex_unlock(&progress_mutex);
+    pthread_mutex_unlock(&progress_continue.mutex);
     return ret;
 #endif
     return 1;
@@ -1186,11 +1214,12 @@ lci_disable(parsec_comm_engine_t *comm_engine)
 {
 #if 0
     int ret;
-    pthread_mutex_lock(&progress_mutex);
-    if (ret = (progress_status == RUN)) {
-        progress_status = PAUSE;
+    pthread_mutex_lock(&progress_continue.mutex);
+    if (ret = (progress_continue.status == LCI_RUN)) {
+        progress_continue.status = LCI_PAUSE;
+        pthread_cond_signal(&progress_continue.cond);
     }
-    pthread_mutex_unlock(&progress_mutex);
+    pthread_mutex_unlock(&progress_continue.mutex);
     return ret;
 #endif
     return 1;
