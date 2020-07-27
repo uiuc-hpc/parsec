@@ -604,47 +604,43 @@ void remote_deps_allocation_fini(void)
 int remote_dep_bind_thread(parsec_context_t* context)
 {
 #if defined(PARSEC_HAVE_HWLOC) && defined(PARSEC_HAVE_HWLOC_BITMAP)
-    char *str = NULL;
-    if( context->comm_th_core >= 0 ) {
+    /* If given binding, use it; else try to use free cpu from mask */
+    int binding = context->comm_th_core >= 0 ? context->comm_th_core : hwloc_bitmap_first(context->cpuset_free_mask);
+    if( binding >= 0 ) {
         /* Bind to the specified core */
-        if(parsec_bindthread(context->comm_th_core, -1) == context->comm_th_core) {
-            parsec_debug_verbose(4, parsec_comm_output_stream, "Communication thread bound to physical core %d",  context->comm_th_core);
-
+        if(parsec_bindthread(binding, -1) > -1) {
             /* Check if this core is not used by a computation thread */
-            if( hwloc_bitmap_isset(context->cpuset_free_mask, context->comm_th_core) ) {
+            if( !hwloc_bitmap_isset(context->cpuset_allowed_mask, binding) ||
+                 hwloc_bitmap_isset(context->cpuset_free_mask,    binding) ) {
                 /* The thread enjoys an exclusive core. Force disable comm_yield. */
                 comm_yield = 0;
             } else {
                 /* The thread shares the core. Let comm_yield as user-set. */
-                parsec_debug_verbose(4, parsec_comm_output_stream, "Communication thread is bound to core %d which is also hosting a compute execution unit", context->comm_th_core);
+                parsec_debug_verbose(4, parsec_comm_output_stream, "Communication thread is bound to core %d which is also hosting a compute execution unit", binding);
             }
+            /* Set bit in allowed mask & clear bit in free mask */
+            hwloc_bitmap_set(context->cpuset_allowed_mask, binding);
+            hwloc_bitmap_clr(context->cpuset_free_mask, binding);
+            parsec_debug_verbose(4, parsec_comm_output_stream, "Communication thread bound to physical core %d (with%s backoff)",
+                                 binding, (comm_yield ? "" : "out"));
+
         } else {
 #if !defined(PARSEC_OSX)
             /* There is no guarantee the thread doesn't share the core. Let comm_yield as user-set. */
-            parsec_warning("Request to bind the communication thread on core %d failed.", context->comm_th_core);
+            parsec_warning("Request to bind the communication thread on core %d failed.", binding);
 #endif  /* !defined(PARSEC_OSX) */
         }
     } else {
-        /* bind the communication thread to any available core (which means described by the
-         * binding scheme but not used by a computational thread), or if no such core exists
-         * as a floating thread on all computational cores.
-         */
-        if( !hwloc_bitmap_iszero(context->cpuset_free_mask) ) {
-            if( parsec_bindthread_mask(context->cpuset_free_mask) > -1 ) {
-                hwloc_bitmap_asprintf(&str, context->cpuset_free_mask);
-                /* The thread enjoys an exclusive core. Force disable comm_yield. */
-                comm_yield = 0;
-            }
-        } else {
-            if( parsec_bindthread_mask(context->cpuset_allowed_mask) > -1 ) {
-                hwloc_bitmap_asprintf(&str, context->cpuset_allowed_mask);
-                /* There is no guarantee the thread doesn't share the core. Let comm_yield as user-set. */
-            }
+        /* communication thread is floating */
+        if( parsec_bindthread_mask(context->cpuset_allowed_mask) > -1 ) {
+            char *str = NULL;
+            hwloc_bitmap_asprintf(&str, context->cpuset_allowed_mask);
+            /* There is no guarantee the thread doesn't share the core. Let comm_yield as user-set. */
+            parsec_debug_verbose(4, parsec_comm_output_stream,
+                                "Communication thread bound on the cpu mask %s (with%s yield back-off)",
+                                str, (comm_yield ? "" : "out"));
+            free(str);
         }
-        parsec_debug_verbose(4, parsec_comm_output_stream,
-                            "Communication thread bound on the cpu mask %s (with%s yield back-off)",
-                            str, (comm_yield ? "" : "out"));
-        free(str);
     }
 #else /* NO PARSEC_HAVE_HWLOC */
     /* If we don't have hwloc, try to bind the thread on the core #nbcore as the

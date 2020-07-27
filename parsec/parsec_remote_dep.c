@@ -1094,10 +1094,12 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
 {
     int whatsup;
 
-    remote_dep_bind_thread(context);
     PARSEC_PAPI_SDE_THREAD_INIT();
 
+    /* must bind thread only after initializing CE
+     * CE might spawn & bind other threads we don't know about */
     remote_dep_ce_init(context);
+    remote_dep_bind_thread(context);
 
     /* Now synchronize with the main thread */
     pthread_mutex_lock(&mpi_thread_mutex);

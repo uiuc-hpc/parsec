@@ -24,6 +24,7 @@
 
 /* PaRSEC */
 #include "parsec/runtime.h"
+#include "parsec/bindthread.h"
 #include "parsec/execution_stream.h"
 #include "parsec/mempool.h"
 #include "parsec/papi_sde.h"
@@ -35,6 +36,7 @@
 #include "parsec/class/parsec_hash_table.h"
 #include "parsec/class/parsec_object.h"
 #include "parsec/utils/debug.h"
+#include "parsec/utils/mca_param.h"
 
 /* ------- LCI implementation below ------- */
 
@@ -43,6 +45,13 @@ typedef unsigned char byte_t;
 #define lci_ce_debug_verbose(FMT, ...)                                        \
   do {                                                                        \
     parsec_debug_verbose(20, parsec_comm_output_stream,                       \
+                         "LCI[%d]:\t" FMT,                                    \
+                         ep_rank, ##__VA_ARGS__);                             \
+  } while (0)
+
+#define lci_ce_debug_verbose_lvl(LVL, FMT, ...)                               \
+  do {                                                                        \
+    parsec_debug_verbose(LVL, parsec_comm_output_stream,                      \
                          "LCI[%d]:\t" FMT,                                    \
                          ep_rank, ##__VA_ARGS__);                             \
   } while (0)
@@ -230,6 +239,7 @@ static struct {
     _Bool           status;
 } progress_start = { PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, false };
 static int lci_comm_yield = 1;
+static int progress_thread_binding = -1;
 static atomic_bool progress_thread_stop = false;
 static pthread_t progress_thread_id;
 
@@ -582,6 +592,76 @@ static inline void lci_get_target_handler(void *ctx)
  *                    Communication Engine Implementation                     *
  *****************************************************************************/
 
+/* bind progress thread to core */
+static void progress_thread_bind(parsec_context_t *context, int binding)
+{
+#if defined(PARSEC_HAVE_HWLOC) && defined(PARSEC_HAVE_HWLOC_BITMAP)
+    /* we weren't given a binding, so choose one from free mask */
+    if (binding < 0) {
+        binding = hwloc_bitmap_first(context->cpuset_free_mask);
+        /* if this consumed last free core, make sure to bind comm thread here too */
+        if (hwloc_bitmap_next(context->cpuset_free_mask, binding) < 0 &&
+            context->comm_th_core < 0) {
+            context->comm_th_core = binding;
+        }
+    }
+#endif /* PARSEC_HAVE_HWLOC */
+
+    if (binding >= 0) {
+        /* we have a valid binding */
+        if (parsec_bindthread(binding, -1) > -1) {
+#if defined(PARSEC_HAVE_HWLOC) && defined(PARSEC_HAVE_HWLOC_BITMAP)
+            /* we are alone if:
+             *   1a: requested binding is not in allowed mask
+             *       (so obviously not used by compute thread) OR
+             *   1b: requested binding is in free mask
+             *       (so obviously not used by anyone) AND
+             *   2:  requested binding isn't the same as that of comm thread */
+            if ((!hwloc_bitmap_isset(context->cpuset_allowed_mask, binding) ||
+                  hwloc_bitmap_isset(context->cpuset_free_mask, binding)) &&
+                context->comm_th_core != binding) {
+                /* we are alone, disable yielding */
+                lci_comm_yield = 0;
+            } else {
+                lci_ce_debug_verbose_lvl(4, "core %d hosts progress thread "
+                                            "and compute eu or comm thread",
+                                         binding);
+            }
+            /* set bit in allowed mask, clear in free mask */
+            hwloc_bitmap_set(context->cpuset_allowed_mask, binding);
+            hwloc_bitmap_clr(context->cpuset_free_mask, binding);
+#else /* PARSEC_HAVE_HWLOC */
+            /* we were given an explicit binding, presumably we're alone? */
+            lci_comm_yield = 0;
+#endif /* PARSEC_HAVE_HWLOC */
+            lci_ce_debug_verbose_lvl(4, "progress thread bound "
+                                        "to physical core %d (with%s backoff)",
+                                     binding, (lci_comm_yield ? "" : "out"));
+
+
+        } else {
+#if !defined(PARSEC_OSX)
+            /* might share a core */
+            parsec_warning("Request to bind LCI progress thread on core %d failed.", binding);
+#endif  /* !defined(PARSEC_OSX) */
+        }
+    } else {
+#if defined(PARSEC_HAVE_HWLOC) && defined(PARSEC_HAVE_HWLOC_BITMAP)
+        /* no binding given or no free core, let thread float */
+        if (parsec_bindthread_mask(context->cpuset_allowed_mask) > -1) {
+            char *mask_str = NULL;
+            hwloc_bitmap_asprintf(&mask_str, context->cpuset_allowed_mask);
+            lci_ce_debug_verbose_lvl(4, "progress thread bound "
+                                        "on the cpu mask %s (with%s yielding)",
+                                     mask_str, (lci_comm_yield ? "" : "out"));
+            free(mask_str);
+        }
+#else /* PARSEC_HAVE_HWLOC */
+        /* we don't even bother with this case for now, just use hwloc */
+#endif /* PARSEC_HAVE_HWLOC */
+    }
+}
+
 /* progress thread main function */
 void * lci_progress_thread(void *arg)
 {
@@ -592,7 +672,7 @@ void * lci_progress_thread(void *arg)
 
     /* bind thread */
     parsec_context_t *context = arg;
-    remote_dep_bind_thread(context);
+    progress_thread_bind(context, progress_thread_binding);
 
     /* signal init */
     pthread_mutex_lock(&progress_start.mutex);
@@ -684,6 +764,10 @@ lci_init(parsec_context_t *context)
 
     lci_ce_debug_verbose("init");
 
+    parsec_mca_param_reg_int_name("lci", "thread_bind",
+                                  "Bind LCI progress thread to core",
+                                  false, false,
+                                  -1, &progress_thread_binding);
     lci_comm_yield = comm_yield;
 
     /* Make all the fn pointers point to this component's functions */
