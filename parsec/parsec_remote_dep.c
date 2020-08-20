@@ -1179,7 +1179,7 @@ remote_dep_mpi_put_end_cb(parsec_comm_engine_t *ce,
                        int remote,
                        void *cb_data)
 {
-    (void) ldispl; (void) rdispl; (void) size; (void) remote; (void) rreg;
+    (void) ldispl; (void) rdispl; (void) size; (void) remote;
     /* Retreive deps from callback_data */
     parsec_remote_deps_t* deps = ((remote_dep_cb_data_t *)cb_data)->deps;
 
@@ -1193,6 +1193,7 @@ remote_dep_mpi_put_end_cb(parsec_comm_engine_t *ce,
 
     ce->mem_unregister(&lreg);
     parsec_thread_mempool_free(parsec_remote_dep_cb_data_mempool->thread_mempools, cb_data);
+    free(rreg);
 
     parsec_comm_puts--;
     return 1;
@@ -1286,10 +1287,6 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
     }
 #endif  /* !defined(PARSEC_PROF_DRY_DEP) */
     if(0 == task->output_mask) {
-        if(NULL != item->cmd.activate.remote_memory_handle) {
-            free(item->cmd.activate.remote_memory_handle);
-            item->cmd.activate.remote_memory_handle = NULL;
-        }
         free(item);
     }
 }
