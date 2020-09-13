@@ -157,9 +157,9 @@ static int remote_dep_ce_init(parsec_context_t* context);
 static int remote_dep_ce_fini(parsec_context_t* context);
 
 #ifdef PARSEC_PROF_TRACE
-parsec_thread_profiling_t* MPIctl_prof;
-parsec_thread_profiling_t* MPIsnd_prof;
-parsec_thread_profiling_t* MPIrcv_prof;
+parsec_profiling_stream_t* MPIctl_prof;
+parsec_profiling_stream_t* MPIsnd_prof;
+parsec_profiling_stream_t* MPIrcv_prof;
 int MPI_Activate_sk, MPI_Activate_ek;
 int MPI_Data_ctl_sk, MPI_Data_ctl_ek;
 int MPI_Data_plds_sk, MPI_Data_plds_ek;
