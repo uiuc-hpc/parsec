@@ -434,6 +434,9 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     MPI_Initialized(&mpi_is_up);
     if( mpi_is_up ) {
         MPI_Comm_rank(MPI_COMM_WORLD, &parsec_debug_rank);
+#if defined(PARSEC_PROF_TRACE)
+        profiling_id = parsec_debug_rank;
+#endif
         parsec_weaksym_exit = parsec_mpi_exit;
     }
 #  elif defined(PARSEC_HAVE_LCI)
