@@ -359,6 +359,9 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     char **env_variable, *env_name, *env_value;
     char *parsec_enable_profiling = NULL;  /* profiling file prefix when PARSEC_PROF_TRACE is on */
     int slow_option_warning = 0;
+#if defined(PARSEC_PROF_TRACE)
+    int profiling_id = 0;
+#endif
     int profiling_enabled = 0;
 
     gethostname(parsec_hostname_array, sizeof(parsec_hostname_array));
@@ -404,7 +407,7 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     } else {
         ret = asprintf( &parsec_app_name, DEFAULT_APPNAME, (int)getpid() );
         if (ret == -1) {
-            parsec_app_name = strdup( "app_name_XXXXXX" );
+            parsec_app_name = strdup( "app_name" );
         }
     }
 
@@ -439,7 +442,10 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
         parsec_weaksym_exit = parsec_lci_exit;
     }
 #  endif
-#endif    
+#if defined(PARSEC_PROF_TRACE)
+    profiling_id = parsec_debug_rank;
+#endif
+#endif /* defined(DISTRIBUTED) */
     parsec_debug_init();
     mca_components_repository_init();
 
@@ -644,7 +650,7 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
 #endif  /* defined(PARSEC_PROF_TRACE) */
                                     "<none>", &parsec_enable_profiling);
 #if defined(PARSEC_PROF_TRACE)
-    if( (0 != strncasecmp(parsec_enable_profiling, "<none>", 6)) && (0 == parsec_profiling_init( )) ) {
+    if( (0 != strncasecmp(parsec_enable_profiling, "<none>", 6)) && (0 == parsec_profiling_init( profiling_id )) ) {
         int i, l;
         char *cmdline_info = basename(parsec_app_name);
 
