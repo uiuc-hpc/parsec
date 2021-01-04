@@ -342,16 +342,6 @@ typedef struct {
 } parsec_profile_remote_dep_mpi_info_t; // 24 bytes
 
 #ifdef PARSEC_PROF_TRACE
-extern parsec_profiling_stream_t* MPIctl_prof;
-extern parsec_profiling_stream_t* MPIsnd_prof;
-extern parsec_profiling_stream_t* MPIrcv_prof;
-extern int MPI_Activate_sk, MPI_Activate_ek;
-extern int MPI_Data_ctl_sk, MPI_Data_ctl_ek;
-extern int MPI_Data_plds_sk, MPI_Data_plds_ek;
-extern int MPI_Data_pldr_sk, MPI_Data_pldr_ek;
-extern int activate_cb_trace_sk, activate_cb_trace_ek;
-extern int put_cb_trace_sk, put_cb_trace_ek;
-
 #define TAKE_TIME_WITH_INFO(PROF, KEY, I, src, dst, rdw)                \
     if( parsec_profile_enabled ) {                                      \
         parsec_profile_remote_dep_mpi_info_t __info;                    \
