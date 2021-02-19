@@ -151,6 +151,7 @@ typedef enum lci_cb_handle_type_e {
     LCI_GET_ORIGIN,
     LCI_GET_TARGET_HANDSHAKE,
     LCI_GET_TARGET,
+    LCI_CB_HANDLE_TYPE_MAX
 } lci_cb_handle_type_t;
 
 /* LCI callback hash table type - 128 bytes */
@@ -282,6 +283,18 @@ static inline void * lci_dyn_alloc(size_t size, void **ctx)
                                              lci_dynmsg_mempool.thread_mempools);
     return &dynmsg->data;
 }
+
+#ifdef PARSEC_LCI_HANDLER_COUNT;
+static struct {
+    atomic_size_t progress;
+    atomic_size_t other;
+} lci_handler_thread[LCI_CB_HANDLE_TYPE_MAX];
+static inline void LCI_HANDLER_PROGRESS(lci_cb_handle_type_t type) { lci_handler_thread[type].progress++; }
+static inline void LCI_HANDLER_OTHER(lci_cb_handle_type_t type) { lci_handler_thread[type].other++; }
+#else /* PARSEC_LCI_HANDLER_COUNT */
+#define LCI_HANDLER_PROGRESS(CB_HANDLE_TYPE)
+#define LCI_HANDLER_OTHER(CB_HANDLE_TYPE)
+#endif /* PARSEC_LCI_HANDLER_COUNT */
 
 
 
@@ -477,9 +490,11 @@ static inline void lci_put_origin_handler(void *ctx)
                          handle->args.rdispl,
                          handle->args.size);
     if (pthread_equal(progress_thread_id, pthread_self())) {
+        LCI_HANDLER_PROGRESS(LCI_PUT_ORIGIN);
         /* we are on progress thread, push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
+        LCI_HANDLER_OTHER(LCI_PUT_ORIGIN);
         /* we aren't on progress thread, just call the callback */
         lci_put_origin_callback(handle, &parsec_ce);
     }
@@ -529,9 +544,11 @@ static inline void lci_put_target_handler(lc_req *req)
     /* prepare handle for put target callback */
     handle->args.type = LCI_PUT_TARGET;
     if (pthread_equal(progress_thread_id, pthread_self())) {
+        LCI_HANDLER_PROGRESS(LCI_PUT_TARGET);
         /* we are on progress thread, push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
+        LCI_HANDLER_OTHER(LCI_PUT_TARGET);
         /* we aren't on progress thread, just call the callback */
         lci_put_target_callback(handle, &parsec_ce);
     }
@@ -557,9 +574,11 @@ static inline void lci_get_origin_handler(lc_req *req)
     parsec_mempool_free(&lci_req_mempool, req_handle);
 
     if (pthread_equal(progress_thread_id, pthread_self())) {
+        LCI_HANDLER_PROGRESS(LCI_GET_ORIGIN);
         /* we are on progress thread, push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
+        LCI_HANDLER_OTHER(LCI_GET_ORIGIN);
         /* we aren't on progress thread, just call the callback */
         lci_get_origin_callback(handle, &parsec_ce);
     }
@@ -605,9 +624,11 @@ static inline void lci_get_target_handler(void *ctx)
     /* prepare handle for get target callback */
     handle->args.type = LCI_GET_TARGET;
     if (pthread_equal(progress_thread_id, pthread_self())) {
+        LCI_HANDLER_PROGRESS(LCI_GET_TARGET);
         /* we are on progress thread, push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
+        LCI_HANDLER_OTHER(LCI_GET_TARGET);
         /* we aren't on progress thread, just call the callback */
         lci_get_target_callback(handle, &parsec_ce);
     }
