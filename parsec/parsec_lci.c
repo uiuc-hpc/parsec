@@ -221,8 +221,9 @@ static PARSEC_OBJ_CLASS_INSTANCE(lci_dynmsg_t, parsec_list_item_t, NULL, NULL);
 /* memory pool for dynamic messages */
 static parsec_mempool_t lci_dynmsg_mempool;
 
+static parsec_list_t lci_shared_cb_fifo;
 static parsec_list_t lci_progress_cb_fifo;
-static parsec_list_t lci_cb_fifo;
+static parsec_list_t lci_comm_cb_fifo;
 
 /* LCI one-sided activate message handshake type */
 typedef struct lci_handshake_s {
@@ -738,16 +739,16 @@ void * lci_progress_thread(void *arg)
 #if 0
         /* push back to shared callback fifo */
         if (NULL != (ring = parsec_list_nolock_unchain(&lci_progress_cb_fifo))) {
-            parsec_list_chain_back(&lci_cb_fifo, ring);
+            parsec_list_chain_back(&lci_shared_cb_fifo, ring);
         }
 #endif
         /* push back to shared callback fifo if we could get the lock
          * if we can't, we'll try again the next iteration */
         if (!parsec_list_nolock_is_empty(&lci_progress_cb_fifo) &&
-             parsec_atomic_trylock(&lci_cb_fifo.atomic_lock)) {
+             parsec_atomic_trylock(&lci_shared_cb_fifo.atomic_lock)) {
             ring = parsec_list_nolock_unchain(&lci_progress_cb_fifo);
-            parsec_list_nolock_chain_back(&lci_cb_fifo, ring);
-            parsec_atomic_unlock(&lci_cb_fifo.atomic_lock);
+            parsec_list_nolock_chain_back(&lci_shared_cb_fifo, ring);
+            parsec_atomic_unlock(&lci_shared_cb_fifo.atomic_lock);
         }
 
         /* sleep for comm_yield_ns if:
@@ -886,8 +887,9 @@ lci_init(parsec_context_t *context)
     }
 
     /* create send callback queues */
+    PARSEC_OBJ_CONSTRUCT(&lci_shared_cb_fifo, parsec_list_t);
     PARSEC_OBJ_CONSTRUCT(&lci_progress_cb_fifo, parsec_list_t);
-    PARSEC_OBJ_CONSTRUCT(&lci_cb_fifo, parsec_list_t);
+    PARSEC_OBJ_CONSTRUCT(&lci_comm_cb_fifo, parsec_list_t);
 
     /* allocated hash tables for callbacks */
     PARSEC_OBJ_CONSTRUCT(&am_cb_hash_table, parsec_hash_table_t);
@@ -969,8 +971,9 @@ lci_fini(parsec_comm_engine_t *comm_engine)
     parsec_hash_table_fini(&am_cb_hash_table);
     PARSEC_OBJ_DESTRUCT(&am_cb_hash_table);
 
-    PARSEC_OBJ_DESTRUCT(&lci_cb_fifo);
+    PARSEC_OBJ_DESTRUCT(&lci_comm_cb_fifo);
     PARSEC_OBJ_DESTRUCT(&lci_progress_cb_fifo);
+    PARSEC_OBJ_DESTRUCT(&lci_shared_cb_fifo);
 
     parsec_mempool_destruct(&lci_dynmsg_mempool);
     parsec_mempool_destruct(&lci_req_mempool);
@@ -1250,18 +1253,16 @@ int
 lci_cb_progress(parsec_comm_engine_t *comm_engine)
 {
     int ret = 0;
-    parsec_list_t cb_fifo;
     parsec_list_item_t *ring = NULL;
     lci_req_handle_t *req_handle = NULL;
 
-    PARSEC_OBJ_CONSTRUCT(&cb_fifo, parsec_list_t);
-    if (NULL != (ring = parsec_list_unchain(&lci_cb_fifo))) {
-        parsec_list_nolock_chain_back(&cb_fifo, ring);
+    if (NULL != (ring = parsec_list_unchain(&lci_shared_cb_fifo))) {
+        parsec_list_nolock_chain_back(&lci_comm_cb_fifo, ring);
     }
 
-    for (parsec_list_item_t *item = parsec_list_nolock_pop_front(&cb_fifo);
+    for (parsec_list_item_t *item = parsec_list_nolock_pop_front(&lci_comm_cb_fifo);
                              item != NULL;
-                             item = parsec_list_nolock_pop_front(&cb_fifo)) {
+                             item = parsec_list_nolock_pop_front(&lci_comm_cb_fifo)) {
         lci_cb_handle_t *handle = container_of(item, lci_cb_handle_t, list_item);
         lci_handshake_t *handshake = NULL;
         lci_dynmsg_t    *dynmsg    = NULL;
@@ -1330,7 +1331,7 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
         ret++;
     }
 
-    PARSEC_OBJ_DESTRUCT(&cb_fifo);
+    return ret;
 }
 
 /* restarts progress thread, if paused */
