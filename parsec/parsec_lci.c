@@ -194,9 +194,12 @@ static parsec_mempool_t lci_cb_handle_mempool;
 typedef struct lci_am_reg_handle_s {
     byte_t                  *data;
     parsec_ce_am_callback_t cb;
+#ifdef PARSEC_LCI_CB_HASH_TABLE
     parsec_hash_table_item_t ht_item;
+#endif
 } lci_am_reg_handle_t;
 
+#ifdef PARSEC_LCI_CB_HASH_TABLE
 /* hash table for AM callbacks */
 static parsec_hash_table_t lci_am_cb_hash_table;
 static parsec_key_fn_t lci_am_key_fns = {
@@ -204,6 +207,10 @@ static parsec_key_fn_t lci_am_key_fns = {
     .key_print = parsec_hash_table_generic_64bits_key_print,
     .key_hash  = parsec_hash_table_generic_64bits_key_hash
 };
+#else /* PARSEC_LCI_CB_HASH_TABLE */
+#define LCI_AM_CB_TAG_MAX 16L
+static lci_am_reg_handle_t lci_am_cb_array[LCI_AM_CB_TAG_MAX];
+#endif /* PARSEC_LCI_CB_HASH_TABLE */
 
 /* LCI request handle (for pool) */
 typedef struct lci_req_handle_s {
@@ -460,7 +467,11 @@ static inline void lci_active_message_handler(lc_req *req)
                          tag, req->rank, ep_rank, req->buffer, req->size);
 
     /* find AM handle, based on active message tag */
+#ifdef PARSEC_LCI_CB_HASH_TABLE
     am_handle = parsec_hash_table_nolock_find(&lci_am_cb_hash_table, tag);
+#else
+    am_handle = &lci_am_cb_array[tag];
+#endif /* PARSEC_LCI_CB_HASH_TABLE */
 
     /* warn if not found  - in critical path, only with debug */
 #ifndef NDEBUG
@@ -902,11 +913,18 @@ lci_init(parsec_context_t *context)
     PARSEC_OBJ_CONSTRUCT(&lci_progress_cb_fifo, parsec_list_t);
     PARSEC_OBJ_CONSTRUCT(&lci_comm_cb_fifo, parsec_list_t);
 
+#ifdef PARSEC_LCI_CB_HASH_TABLE
     /* allocated hash tables for callbacks */
     PARSEC_OBJ_CONSTRUCT(&lci_am_cb_hash_table, parsec_hash_table_t);
     parsec_hash_table_init(&lci_am_cb_hash_table,
                            offsetof(lci_am_reg_handle_t, ht_item),
                            4, lci_am_key_fns, &lci_am_cb_hash_table);
+#else /* PARSEC_LCI_CB_HASH_TABLE */
+    for (size_t i = 0; i < LCI_AM_CB_TAG_MAX; i++) {
+        lci_am_cb_array[i].data = NULL;
+        lci_am_cb_array[i].cb = NULL;
+    }
+#endif /* PARSEC_LCI_CB_HASH_TABLE */
 
     /* init LCI */
     lc_opt opt = { .dev = 0 };
@@ -979,8 +997,10 @@ lci_fini(parsec_comm_engine_t *comm_engine)
         pthread_join(progress_thread_id, &progress_retval);
     }
 
+#ifdef PARSEC_LCI_CB_HASH_TABLE
     parsec_hash_table_fini(&lci_am_cb_hash_table);
     PARSEC_OBJ_DESTRUCT(&lci_am_cb_hash_table);
+#endif
 
     PARSEC_OBJ_DESTRUCT(&lci_comm_cb_fifo);
     PARSEC_OBJ_DESTRUCT(&lci_progress_cb_fifo);
@@ -999,6 +1019,7 @@ int lci_tag_register(parsec_ce_tag_t tag,
                      void *cb_data,
                      size_t msg_length)
 {
+#ifdef PARSEC_LCI_CB_HASH_TABLE
     parsec_key_t key = tag;
     /* allocate handle */
     lci_am_reg_handle_t *handle = malloc(sizeof(*handle));
@@ -1019,11 +1040,25 @@ int lci_tag_register(parsec_ce_tag_t tag,
     parsec_hash_table_nolock_insert(&lci_am_cb_hash_table, &handle->ht_item);
     parsec_hash_table_unlock_bucket(&lci_am_cb_hash_table, key);
     return PARSEC_SUCCESS;
+
+#else /* PARSEC_LCI_CB_HASH_TABLE */
+    assert(tag < AM_CB_TAG_MAX && "tag too large");
+    if (NULL != lci_am_cb_array[tag].cb) {
+        parsec_warning("LCI[%d]:\tActive Message %"PRIu64" already registered",
+                       ep_rank, tag);
+        return PARSEC_EXISTS;
+    }
+    lci_am_cb_array[tag].data = cb_data;
+    lci_am_cb_array[tag].cb   = cb;
+    return PARSEC_SUCCESS;
+
+#endif /* PARSEC_LCI_CB_HASH_TABLE */
 }
 
 int lci_tag_unregister(parsec_ce_tag_t tag)
 {
     lci_ce_debug_verbose("unregister Active Message %"PRIu64, tag);
+#ifdef PARSEC_LCI_CB_HASH_TABLE
     parsec_key_t key = tag;
     lci_am_reg_handle_t *handle = parsec_hash_table_remove(&lci_am_cb_hash_table, key);
     if (NULL == handle) {
@@ -1032,6 +1067,18 @@ int lci_tag_unregister(parsec_ce_tag_t tag)
     }
     free(handle);
     return 1;
+
+#else /* PARSEC_LCI_CB_HASH_TABLE */
+    assert(tag < AM_CB_TAG_MAX && "tag too large");
+    if (NULL == lci_am_cb_array[tag].cb) {
+        parsec_warning("LCI[%d]:\tActive Message %"PRIu64" not registered", ep_rank, tag);
+        return 0;
+    }
+    lci_am_cb_array[tag].data = NULL;
+    lci_am_cb_array[tag].cb   = NULL;
+    return 1;
+
+#endif /* PARSEC_LCI_CB_HASH_TABLE */
 }
 
 /* Register memory for use with LCI */

@@ -518,6 +518,7 @@ IF( BUILD_PARSEC )
     option(LCI_LINK_STATIC "Link to LCI static library" ON)
     option(PARSEC_LCI_RETRY_HISTOGRAM "debug: histogram of retry attempt counts" OFF)
     option(PARSEC_LCI_HANDLER_COUNT "debug: count handler execution thread" OFF)
+    option(PARSEC_LCI_CB_HASH_TABLE "LCI: use hash table for AM registrations" ON)
     # dependency on lc.h in parsec/runtime.h
     #include_directories(${LCI_INCLUDE_DIRS})
   endif(PARSEC_DIST_WITH_LCI)
