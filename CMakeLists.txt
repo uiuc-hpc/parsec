@@ -516,6 +516,7 @@ IF( BUILD_PARSEC )
     find_package(LCI REQUIRED)
     set(PARSEC_HAVE_LCI ${LCI_FOUND})
     option(LCI_LINK_STATIC "Link to LCI static library" ON)
+    option(PARSEC_LCI_RETRY_HISTOGRAM "debug: histogram of retry attempt counts" OFF)
     # dependency on lc.h in parsec/runtime.h
     #include_directories(${LCI_INCLUDE_DIRS})
   endif(PARSEC_DIST_WITH_LCI)

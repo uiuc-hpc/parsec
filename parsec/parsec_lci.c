@@ -61,6 +61,32 @@ typedef unsigned char byte_t;
     parsec_fatal("LCI[%d]:\t" FMT, ep_rank, ##__VA_ARGS__);                   \
   } while (0)
 
+#ifdef PARSEC_LCI_RETRY_HISTOGRAM
+static struct {
+    atomic_size_t zero;
+    atomic_size_t one;
+    atomic_size_t five;
+    atomic_size_t ten;
+    atomic_size_t twenty;
+    atomic_size_t fifty;
+    atomic_size_t one_hundred;
+    atomic_size_t greater;
+} lci_retry_histogram;
+#define RETRY(lci_call)                                                       \
+  do {                                                                        \
+      size_t count = 0;                                                       \
+      while (LC_OK != (lci_call))                                             \
+          count++;                                                            \
+      if      (count <= 0)   lci_retry_histogram.zero++;                      \
+      else if (count <= 1)   lci_retry_histogram.one++;                       \
+      else if (count <= 5)   lci_retry_histogram.five++;                      \
+      else if (count <= 10)  lci_retry_histogram.ten++;                       \
+      else if (count <= 20)  lci_retry_histogram.twenty++;                    \
+      else if (count <= 50)  lci_retry_histogram.fifty++;                     \
+      else if (count <= 100) lci_retry_histogram.one_hundred++;               \
+      else                   lci_retry_histogram.greater++;                   \
+  } while (0)
+#else /* PARSEC_LCI_RETRY_HISTOGRAM */
 #define NS_PER_S 1000000000L
 #define RETRY(lci_call) do { } while (LC_OK != (lci_call))
 #if 0
@@ -81,6 +107,7 @@ typedef unsigned char byte_t;
     }                                                                         \
   } while (0)
 #endif
+#endif /* PARSEC_LCI_RETRY_HISTOGRAM */
 
 /* LCI memory handle type
  * PaRSEC object, inherits from parsec_list_item_t

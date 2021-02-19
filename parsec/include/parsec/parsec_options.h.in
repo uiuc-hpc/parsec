@@ -117,6 +117,9 @@
 #cmakedefine PARSEC_HAVE_LCI
 #cmakedefine PARSEC_HAVE_AYUDAME
 
+/* LCI debug */
+#cmakedefine PARSEC_LCI_RETRY_HISTOGRAM
+
 #define PARSEC_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
 /* Default PATH to look for the CUDA .so files */
 #define PARSEC_LIB_CUDA_PREFIX ".;@CMAKE_BINARY_DIR@/dplasma/cores"
