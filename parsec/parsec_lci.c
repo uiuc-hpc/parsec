@@ -157,7 +157,6 @@ typedef enum lci_cb_handle_type_e {
 /* LCI callback hash table type - 128 bytes */
 typedef struct lci_cb_handle_s {
     alignas(128) parsec_list_item_t       list_item; /* pool/queue: 32 bytes */
-    alignas(32)  parsec_hash_table_item_t ht_item;   /* hash table: 24 bytes */
     alignas(8)   parsec_thread_mempool_t  *mempool_owner;        /*  8 bytes */
     alignas(64)  struct /* callback arguments */ {
         union {
@@ -186,14 +185,21 @@ typedef struct lci_cb_handle_s {
     } cb;                                                        /*  8 bytes */
 } lci_cb_handle_t;
 static PARSEC_OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
+static_assert(sizeof(lci_cb_handle_t) == 128, "lci_cb_handle_t size incorrect");
 
 /* memory pool for callbacks */
 static parsec_mempool_t lci_cb_handle_mempool;
 
-/* hash table for AM callbacks */
-static parsec_hash_table_t am_cb_hash_table;
+/* AM registration handle */
+typedef struct lci_am_reg_handle_s {
+    byte_t                  *data;
+    parsec_ce_am_callback_t cb;
+    parsec_hash_table_item_t ht_item;
+} lci_am_reg_handle_t;
 
-static parsec_key_fn_t key_fns = {
+/* hash table for AM callbacks */
+static parsec_hash_table_t lci_am_cb_hash_table;
+static parsec_key_fn_t lci_am_key_fns = {
     .key_equal = parsec_hash_table_generic_64bits_key_equal,
     .key_print = parsec_hash_table_generic_64bits_key_print,
     .key_hash  = parsec_hash_table_generic_64bits_key_hash
@@ -448,28 +454,33 @@ static inline void lci_abort_handler(lc_req *req)
  * only called from within lc_progress (i.e. on progress thread) */
 static inline void lci_active_message_handler(lc_req *req)
 {
-    parsec_key_t key = req->meta;
+    lci_am_reg_handle_t *am_handle = NULL;
+    parsec_ce_tag_t tag = req->meta;
     lci_ce_debug_verbose("Active Message %"PRIu64" recv:\t%d -> %d message %p size %zu",
-                         key, req->rank, ep_rank, req->buffer, req->size);
+                         tag, req->rank, ep_rank, req->buffer, req->size);
+
     /* find AM handle, based on active message tag */
-    lci_cb_handle_t *am_handle = parsec_hash_table_find(&am_cb_hash_table, key);
-    /* warn if not found */
-    if (NULL == am_handle) {
+    am_handle = parsec_hash_table_nolock_find(&lci_am_cb_hash_table, tag);
+
+    /* warn if not found  - in critical path, only with debug */
+#ifndef NDEBUG
+    if ((NULL == am_handle) || (NULL == am_handle->cb)) {
         parsec_warning("LCI[%d]:\tActive Message %"PRIu64" not registered",
-                       ep_rank, key);
+                       ep_rank, tag);
         return;
     }
+#endif /* NDEBUG */
 
     /* allocate callback handle & fill with info */
     lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
                                         lci_cb_handle_mempool.thread_mempools);
-    handle->args.tag    = am_handle->args.tag;
+    handle->args.tag    = req->meta;
     handle->args.msg    = req->buffer;
-    handle->args.data   = am_handle->args.data;
+    handle->args.data   = am_handle->data;
     handle->args.size   = req->size;
     handle->args.remote = req->rank;
     handle->args.type   = LCI_ACTIVE_MESSAGE;
-    handle->cb.am       = am_handle->cb.am;
+    handle->cb.am       = am_handle->cb;
 
     /* push to local callback fifo */
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
@@ -892,10 +903,10 @@ lci_init(parsec_context_t *context)
     PARSEC_OBJ_CONSTRUCT(&lci_comm_cb_fifo, parsec_list_t);
 
     /* allocated hash tables for callbacks */
-    PARSEC_OBJ_CONSTRUCT(&am_cb_hash_table, parsec_hash_table_t);
-    parsec_hash_table_init(&am_cb_hash_table,
-                           offsetof(lci_cb_handle_t, ht_item),
-                           4, key_fns, &am_cb_hash_table);
+    PARSEC_OBJ_CONSTRUCT(&lci_am_cb_hash_table, parsec_hash_table_t);
+    parsec_hash_table_init(&lci_am_cb_hash_table,
+                           offsetof(lci_am_reg_handle_t, ht_item),
+                           4, lci_am_key_fns, &lci_am_cb_hash_table);
 
     /* init LCI */
     lc_opt opt = { .dev = 0 };
@@ -968,8 +979,8 @@ lci_fini(parsec_comm_engine_t *comm_engine)
         pthread_join(progress_thread_id, &progress_retval);
     }
 
-    parsec_hash_table_fini(&am_cb_hash_table);
-    PARSEC_OBJ_DESTRUCT(&am_cb_hash_table);
+    parsec_hash_table_fini(&lci_am_cb_hash_table);
+    PARSEC_OBJ_DESTRUCT(&lci_am_cb_hash_table);
 
     PARSEC_OBJ_DESTRUCT(&lci_comm_cb_fifo);
     PARSEC_OBJ_DESTRUCT(&lci_progress_cb_fifo);
@@ -989,27 +1000,24 @@ int lci_tag_register(parsec_ce_tag_t tag,
                      size_t msg_length)
 {
     parsec_key_t key = tag;
-    /* allocate from mempool */
-    lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
-                                        lci_cb_handle_mempool.thread_mempools);
+    /* allocate handle */
+    lci_am_reg_handle_t *handle = malloc(sizeof(*handle));
     handle->ht_item.key = key;
-    handle->args.tag    = tag;
-    handle->args.data   = cb_data;
-    handle->args.type   = LCI_ACTIVE_MESSAGE;
-    handle->cb.am       = cb;
+    handle->data = cb_data;
+    handle->cb   = cb;
 
     lci_ce_debug_verbose("register Active Message %"PRIu64" data %p size %zu",
                          tag, cb_data, msg_length);
-    parsec_hash_table_lock_bucket(&am_cb_hash_table, key);
-    if (NULL != parsec_hash_table_nolock_find(&am_cb_hash_table, key)) {
+    parsec_hash_table_lock_bucket(&lci_am_cb_hash_table, key);
+    if (NULL != parsec_hash_table_nolock_find(&lci_am_cb_hash_table, key)) {
         parsec_warning("LCI[%d]:\tActive Message %"PRIu64" already registered",
                        ep_rank, tag);
-        parsec_hash_table_unlock_bucket(&am_cb_hash_table, key);
+        parsec_hash_table_unlock_bucket(&lci_am_cb_hash_table, key);
         return PARSEC_EXISTS;
     }
 
-    parsec_hash_table_nolock_insert(&am_cb_hash_table, &handle->ht_item);
-    parsec_hash_table_unlock_bucket(&am_cb_hash_table, key);
+    parsec_hash_table_nolock_insert(&lci_am_cb_hash_table, &handle->ht_item);
+    parsec_hash_table_unlock_bucket(&lci_am_cb_hash_table, key);
     return PARSEC_SUCCESS;
 }
 
@@ -1017,12 +1025,12 @@ int lci_tag_unregister(parsec_ce_tag_t tag)
 {
     lci_ce_debug_verbose("unregister Active Message %"PRIu64, tag);
     parsec_key_t key = tag;
-    lci_cb_handle_t *handle = parsec_hash_table_remove(&am_cb_hash_table, key);
+    lci_am_reg_handle_t *handle = parsec_hash_table_remove(&lci_am_cb_hash_table, key);
     if (NULL == handle) {
         parsec_warning("LCI[%d]:\tActive Message %"PRIu64" not registered", ep_rank, tag);
         return 0;
     }
-    parsec_mempool_free(&lci_cb_handle_mempool, handle);
+    free(handle);
     return 1;
 }
 
