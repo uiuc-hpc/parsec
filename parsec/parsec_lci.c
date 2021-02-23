@@ -453,6 +453,7 @@ static inline void lci_abort_handler(lc_req *req)
     handle->args.type   = LCI_ABORT;
     lci_ce_debug_verbose("Abort %d recv:\t%d -> %d",
                          (int)handle->args.tag, handle->args.remote, ep_rank);
+    LCI_HANDLER_PROGRESS(LCI_ABORT);
     /* push to front of local callback fifo */
     parsec_list_nolock_push_front(&lci_progress_cb_fifo, &handle->list_item);
 }
@@ -493,6 +494,7 @@ static inline void lci_active_message_handler(lc_req *req)
     handle->args.type   = LCI_ACTIVE_MESSAGE;
     handle->cb.am       = am_handle->cb;
 
+    LCI_HANDLER_PROGRESS(LCI_ACTIVE_MESSAGE);
     /* push to local callback fifo */
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
 }
@@ -545,6 +547,7 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag, (void *)handle->args.data);
 
+    LCI_HANDLER_PROGRESS(LCI_PUT_TARGET_HANDSHAKE);
     /* push to callback fifo - receive will be started by comm thread */
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
 }
@@ -629,6 +632,7 @@ static inline void lci_get_target_handshake_handler(lc_req *req)
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag, (void *)handle->args.data);
 
+    LCI_HANDLER_PROGRESS(LCI_GET_TARGET_HANDSHAKE);
     /* push to callback fifo - send will be started by comm thread */
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
 }
