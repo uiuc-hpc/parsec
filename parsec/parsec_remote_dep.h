@@ -59,6 +59,15 @@ typedef struct remote_dep_wire_get_s {
     parsec_ce_mem_reg_handle_t remote_memory_handle;
 } remote_dep_wire_get_t;
 
+typedef struct remote_dep_cb_data_s {
+    parsec_list_item_t        super;
+    parsec_thread_mempool_t *mempool_owner;
+    parsec_remote_deps_t *deps; /* always local */
+    parsec_ce_mem_reg_handle_t memory_handle;
+    int k;
+} remote_dep_cb_data_t;
+PARSEC_DECLSPEC PARSEC_OBJ_CLASS_DECLARATION(remote_dep_cb_data_t);
+
 /**
  * This structure holds the key information for any data mouvement. It contains the arena
  * where the data is allocated from, or will be allocated from. It also contains the

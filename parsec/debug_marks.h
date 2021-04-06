@@ -31,14 +31,13 @@ void debug_mark_ctl_msg_get_sent(int to, const void *b, const struct remote_dep_
 void debug_mark_ctl_msg_get_recv(int from, const void *b, const struct remote_dep_wire_get_s *m);
 #define DEBUG_MARK_CTL_MSG_GET_RECV(from, buffer, message) debug_mark_ctl_msg_get_recv(from, buffer, message)
 
-void debug_mark_dta_msg_start_send(int to, const void *b, int tag);
-#define DEBUG_MARK_DTA_MSG_START_SEND(to, buffer, tag) debug_mark_dta_msg_start_send(to, buffer, tag)
-void debug_mark_dta_msg_start_recv(int from, const void *b, int tag);
-#define DEBUG_MARK_DTA_MSG_START_RECV(from, buffer, tag) debug_mark_dta_msg_start_recv(from, buffer, tag)
-void debug_mark_dta_msg_end_send(int tag);
-#define DEBUG_MARK_DTA_MSG_END_SEND(tag) debug_mark_dta_msg_end_send(tag)
-void debug_mark_dta_msg_end_recv(int tag);
-#define DEBUG_MARK_DTA_MSG_END_RECV(tag) debug_mark_dta_msg_end_recv(tag)
+struct remote_dep_cb_data_s;
+void debug_mark_dta_put_start(int to, const struct remote_dep_cb_data_s *cb_data, uintptr_t r_cb_data);
+#define DEBUG_MARK_DTA_PUT_START(to, cb_data, r_cb_data) debug_mark_dta_put_start(to, cb_data, r_cb_data)
+void debug_mark_dta_put_end(int to, const struct remote_dep_cb_data_s *cb_data);
+#define DEBUG_MARK_DTA_PUT_END(to, cb_data) debug_mark_dta_put_end(to, cb_data)
+void debug_mark_dta_put_recv(int from, const struct remote_dep_cb_data_s *cb_data);
+#define DEBUG_MARK_DTA_PUT_RECV(from, cb_data) debug_mark_dta_put_recv(from, cb_data)
 
 
 #else /* PARSEC_DEBUG_HISTORY */
@@ -48,10 +47,9 @@ void debug_mark_dta_msg_end_recv(int tag);
 #define DEBUG_MARK_CTL_MSG_ACTIVATE_RECV(from, buffer, message)
 #define DEBUG_MARK_CTL_MSG_GET_SENT(to, buffer, message)
 #define DEBUG_MARK_CTL_MSG_GET_RECV(from, buffer, message)
-#define DEBUG_MARK_DTA_MSG_START_SEND(to, buffer, tag)
-#define DEBUG_MARK_DTA_MSG_START_RECV(from, buffer, tag)
-#define DEBUG_MARK_DTA_MSG_END_SEND(tag)
-#define DEBUG_MARK_DTA_MSG_END_RECV(tag)
+#define DEBUG_MARK_DTA_PUT_START(to, cb_data, r_cb_data)
+#define DEBUG_MARK_DTA_PUT_END(to, cb_data)
+#define DEBUG_MARK_DTA_PUT_RECV(from, cb_data)
 
 #endif /* PARSEC_DEBUG_HISTORY */
 

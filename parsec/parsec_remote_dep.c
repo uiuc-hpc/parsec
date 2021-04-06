@@ -53,16 +53,6 @@ int parsec_param_enable_mpi_overtake = 1;
 
 parsec_mempool_t *parsec_remote_dep_cb_data_mempool;
 
-typedef struct remote_dep_cb_data_s {
-    parsec_list_item_t        super;
-    parsec_thread_mempool_t *mempool_owner;
-    parsec_remote_deps_t *deps; /* always local */
-    parsec_ce_mem_reg_handle_t memory_handle;
-    int k;
-} remote_dep_cb_data_t;
-
-PARSEC_DECLSPEC PARSEC_OBJ_CLASS_DECLARATION(remote_dep_cb_data_t);
-
 PARSEC_OBJ_CLASS_INSTANCE(remote_dep_cb_data_t, parsec_list_item_t,
                    NULL, NULL);
 
@@ -692,6 +682,7 @@ remote_dep_mpi_save_activate_cb(parsec_comm_engine_t *ce, parsec_ce_tag_t tag,
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "MPI:\tFROM\t%d\tActivate\t% -8s\tk=%d\twith datakey %lx\tparams %lx",
                src, remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN),
                0, deps->msg.deps, deps->msg.output_mask);
+        DEBUG_MARK_CTL_MSG_ACTIVATE_RECV(src, msg, &deps->msg);
         /* Import the activation message and prepare for the reception */
         remote_dep_mpi_recv_activate(es, deps, msg,
                                      position + deps->msg.length, &position);
@@ -746,6 +737,8 @@ remote_dep_mpi_save_put_cb(parsec_comm_engine_t *ce,
     PARSEC_DEBUG_VERBOSE(6, parsec_debug_output, "MPI: Put cb_received for %s from %d tag %u which 0x%x (deps %p)",
                 remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN), item->cmd.activate.peer,
                 -1, task->output_mask, (void*)deps);
+
+    DEBUG_MARK_CTL_MSG_GET_RECV(src, msg, task);
 
     /* Get the highest priority PUT operation */
     parsec_list_nolock_push_sorted(&dep_put_fifo, (parsec_list_item_t*)item, dep_cmd_prio);
@@ -1186,6 +1179,7 @@ remote_dep_mpi_put_end_cb(parsec_comm_engine_t *ce,
     PARSEC_DEBUG_VERBOSE(6, parsec_debug_output, "MPI:\tTO\tna\tPut END  \tunknown \tk=%d\twith deps %p\tparams bla\t(tag=bla) data ptr bla",
             ((remote_dep_cb_data_t *)cb_data)->k, deps);
 
+    DEBUG_MARK_DTA_PUT_END(remote, cb_data);
 
     TAKE_TIME(MPIsnd_prof, MPI_Data_plds_ek, ((remote_dep_cb_data_t *)cb_data)->k);
 
@@ -1216,7 +1210,6 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
 #endif
 
     (void)es;
-    DEBUG_MARK_CTL_MSG_GET_RECV(item->cmd.activate.peer, (void*)task, task);
 
 #if !defined(PARSEC_PROF_DRY_DEP)
     assert(task->output_mask);
@@ -1275,6 +1268,8 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
         TAKE_TIME_WITH_INFO(MPIsnd_prof, MPI_Data_plds_sk, k,
                             es->virtual_process->parsec_context->my_rank,
                             item->cmd.activate.peer, deps->msg);
+
+        DEBUG_MARK_DTA_PUT_START(item->cmd.activate.peer, cb_data, task->remote_callback_data);
 
         /* the remote side should send us 8 bytes as the callback data to be passed back to them */
         parsec_ce.put(&parsec_ce, source_memory_handle, 0,
@@ -1385,7 +1380,6 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
         if( ((1U<<k) & deps->incoming_mask) ) count++;
 
     (void)es;
-    DEBUG_MARK_CTL_MSG_ACTIVATE_RECV(from, (void*)task, task);
 
     msg.source_deps = task->deps; /* the deps copied from activate message from source */
     msg.callback_fn = (uintptr_t)remote_dep_mpi_get_end_cb; /* We let the source know to call this
@@ -1482,6 +1476,8 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
         TAKE_TIME_WITH_INFO(MPIrcv_prof, MPI_Data_pldr_sk, k, from,
                             es->virtual_process->parsec_context->my_rank, deps->msg);
 
+        DEBUG_MARK_CTL_MSG_GET_SENT(from, buf, &msg);
+
         free(buf);
 
         parsec_comm_gets++;
@@ -1522,6 +1518,7 @@ remote_dep_mpi_get_end_cb(parsec_comm_engine_t *ce,
             src, remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN),
             callback_data->k, deps->incoming_mask, src);
 
+    DEBUG_MARK_DTA_PUT_RECV(src, callback_data);
 
     TAKE_TIME(MPIrcv_prof, MPI_Data_pldr_ek, callback_data->k);
     remote_dep_mpi_get_end(es, callback_data->k, deps);

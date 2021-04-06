@@ -73,7 +73,7 @@ void debug_mark_ctl_msg_activate_recv(int from, const void *b, const struct remo
     }
     pos += snprintf(msg+pos, len-pos, "\toutput_mask = 0x%08x\n",
                     (uint32_t)m->output_mask);
-    pos += snprintf(msg+pos, len-pos, "\t      deps = 0x%X\n",
+    pos += snprintf(msg+pos, len-pos, "\t      deps = %p\n",
                     (uint32_t)m->deps);
 
     /* Do not use set_my_mark: msg is a stack-allocated buffer */
@@ -84,9 +84,9 @@ void debug_mark_ctl_msg_get_sent(int to, const void *b, const struct remote_dep_
 {
     parsec_debug_history_add("Mark: emission of a Get control message to %d\n"
                             "\t      Using buffer %p for emission\n"
-                            "\t      deps requested = 0x%X\n"
+                            "\t      deps requested = %p\n"
                             "\t      which requested = 0x%08x\n"
-                            "\t      remote_callback_data = 0x%X\n",
+                            "\t      remote_callback_data = %p\n",
                             to, b, m->source_deps, (uint32_t)m->output_mask, m->remote_callback_data);
 }
 
@@ -94,36 +94,35 @@ void debug_mark_ctl_msg_get_recv(int from, const void *b, const struct remote_de
 {
     parsec_debug_history_add("Mark: reception of a Get control message from %d\n"
                             "\t      Using buffer %p for reception\n"
-                            "\t      deps requested = 0x%X\n"
+                            "\t      deps requested = %p\n"
                             "\t      which requested = 0x%08x\n"
-                            "\t      remote_callback_data = 0x%X\n",
+                            "\t      remote_callback_data = %p\n",
                             from, b, m->source_deps, (uint32_t)m->output_mask, m->remote_callback_data);
 }
 
-void debug_mark_dta_msg_start_send(int to, const void *b, int tag)
+void debug_mark_dta_put_start(int to, const struct remote_dep_cb_data_s *cb_data, uintptr_t r_cb_data)
 {
     parsec_debug_history_add("Mark: Start emitting data to %d\n"
-                            "\t      Using buffer %p for emission\n"
-                            "\t      tag for the emission of data = %d\n",
-                            to, b, tag);
+                            "\t      deps = %p\n"
+                            "\t      which = 0x%08x\n"
+                            "\t      remote_callback_data = %p\n",
+                            to, cb_data->deps, (uint32_t)(1U << cb_data->k), r_cb_data);
 }
 
-void debug_mark_dta_msg_end_send(int tag)
+void debug_mark_dta_put_end(int to, const struct remote_dep_cb_data_s *cb_data)
 {
-    parsec_debug_history_add("Mark: Done sending data of tag %d\n", tag);
+    parsec_debug_history_add("Mark: Done emitting data to %d\n"
+                             "\t      deps = %p\n"
+                             "\t      which = 0x%08x\n",
+                             to, cb_data->deps, (uint32_t)(1U << cb_data->k));
 }
 
-void debug_mark_dta_msg_start_recv(int from, const void *b, int tag)
+void debug_mark_dta_put_recv(int from, const struct remote_dep_cb_data_s *cb_data)
 {
-    parsec_debug_history_add("Mark: Start receiving data from %d\n"
-                            "\t      Using buffer %p for reception\n"
-                            "\t      tag for the reception of data = %d\n",
-                            from, b, tag);
-}
-
-void debug_mark_dta_msg_end_recv(int tag)
-{
-    parsec_debug_history_add("Mark: Done receiving data with tag %d\n", tag);
+    parsec_debug_history_add("Mark: Done receiving data from %d\n"
+                            "\t      deps = %p\n"
+                            "\t      which = 0x%08x\n",
+                            from, cb_data->deps, (uint32_t)(1U << cb_data->k));
 }
 
 #endif /* defined(PARSEC_DEBUG_HISTORY) */
