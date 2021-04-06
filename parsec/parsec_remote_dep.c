@@ -282,6 +282,8 @@ void
 remote_dep_mpi_initialize_execution_stream(parsec_context_t *context)
 {
     memcpy(&parsec_comm_es, context->virtual_processes[0]->execution_streams[0], sizeof(parsec_execution_stream_t));
+    /* we just overwrote parsec_comm_es, must reset this */
+    parsec_comm_es.es_profile = MPIctl_prof;
 }
 
 int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp)
@@ -1745,7 +1747,7 @@ remote_dep_nothread_send(parsec_execution_stream_t* es,
     peer = item->cmd.activate.peer;  /* this doesn't change */
     deps = (parsec_remote_deps_t*)item->cmd.activate.task.source_deps;
 
-    TAKE_TIME_WITH_INFO(MPIctl_prof, MPI_Activate_sk, event_id,
+    TAKE_TIME_WITH_INFO(es->es_profile, MPI_Activate_sk, event_id,
                         es->virtual_process->parsec_context->my_rank, peer, deps->msg);
 
   pack_more:
@@ -1771,7 +1773,7 @@ remote_dep_nothread_send(parsec_execution_stream_t* es,
 
     parsec_ce.send_am(&parsec_ce, REMOTE_DEP_ACTIVATE_TAG, peer, packed_buffer, position);
 
-    TAKE_TIME(MPIctl_prof, MPI_Activate_ek, event_id);
+    TAKE_TIME(es->es_profile, MPI_Activate_ek, event_id);
     DEBUG_MARK_CTL_MSG_ACTIVATE_SENT(peer, (void*)&deps->msg, &deps->msg);
 
     do {
