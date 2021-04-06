@@ -573,14 +573,12 @@ static inline void lci_put_target_handler(lc_req *req)
 {
     /* get callback handle from request context */
     lci_cb_handle_t *handle = req->ctx;
-    assert(handle->args.type == LCI_PUT_TARGET_HANDSHAKE && "wrong handle type");
+    assert(handle->args.type == LCI_PUT_TARGET && "wrong handle type");
     lci_ce_debug_verbose("Put Target end:\t%d -> %d(%p) size %zu with tag %d",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
 
-    /* prepare handle for put target callback */
-    handle->args.type = LCI_PUT_TARGET;
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_PUT_TARGET);
         /* recv was posted prior to send arrival, so we are on progress thread
@@ -657,13 +655,11 @@ static inline void lci_get_target_handler(void *ctx)
 {
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
-    assert(handle->args.type == LCI_GET_TARGET_HANDSHAKE && "wrong handle type");
+    assert(handle->args.type == LCI_GET_TARGET && "wrong handle type");
     lci_ce_debug_verbose("Get Target end:\t%d <- %d(%p) size %zu with tag %d",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
-    /* prepare handle for get target callback */
-    handle->args.type = LCI_GET_TARGET;
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_GET_TARGET);
         /* send was large, so we are on progress thread
@@ -754,7 +750,7 @@ static void progress_thread_bind(parsec_context_t *context, int binding)
 }
 
 /* progress thread main function */
-void * lci_progress_thread(void *arg)
+static void * lci_progress_thread(void *arg)
 {
     parsec_list_item_t *ring = NULL;
 
@@ -1075,7 +1071,8 @@ int lci_tag_register(parsec_ce_tag_t tag,
 #endif /* PARSEC_LCI_CB_HASH_TABLE */
 }
 
-int lci_tag_unregister(parsec_ce_tag_t tag)
+int
+lci_tag_unregister(parsec_ce_tag_t tag)
 {
     lci_ce_debug_verbose("unregister Active Message %"PRIu64, tag);
 #ifdef PARSEC_LCI_CB_HASH_TABLE
@@ -1374,7 +1371,8 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
             break;
 
         case LCI_PUT_TARGET_HANDSHAKE:
-            /* start receive on target for put */
+            /* change handle type; we are now starting to put target call */
+            handle->args.type = LCI_PUT_TARGET;
             /* get request from pool and set context to callback handle */
             req_handle = parsec_thread_mempool_allocate(
                                               lci_req_mempool.thread_mempools);
@@ -1400,6 +1398,8 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
             break;
 
         case LCI_GET_TARGET_HANDSHAKE:
+            /* change handle type; we are now starting to get target call */
+            handle->args.type = LCI_GET_TARGET;
             /* start send on target for get */
             lci_ce_debug_verbose("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
                                  handle->args.remote, ep_rank,
