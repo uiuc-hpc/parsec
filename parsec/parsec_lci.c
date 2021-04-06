@@ -305,9 +305,16 @@ static struct {
 } lci_handler_thread[LCI_CB_HANDLE_TYPE_MAX];
 static inline void LCI_HANDLER_PROGRESS(lci_cb_handle_type_t type) { lci_handler_thread[type].progress++; }
 static inline void LCI_HANDLER_OTHER(lci_cb_handle_type_t type) { lci_handler_thread[type].other++; }
+atomic_size_t lci_call_count[3];
+static inline void LCI_CALL_AM()  { lci_call_count[0]++; }
+static inline void LCI_CALL_PUT() { lci_call_count[1]++; }
+static inline void LCI_CALL_GET() { lci_call_count[2]++; }
 #else /* PARSEC_LCI_HANDLER_COUNT */
 #define LCI_HANDLER_PROGRESS(CB_HANDLE_TYPE)
 #define LCI_HANDLER_OTHER(CB_HANDLE_TYPE)
+#define LCI_CALL_AM()
+#define LCI_CALL_PUT()
+#define LCI_CALL_GET()
 #endif /* PARSEC_LCI_HANDLER_COUNT */
 
 
@@ -1207,6 +1214,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
     RETRY(lc_send(lbuf, ldata->size, remote, tag, put_ep, lci_put_origin_handler, handle));
+    LCI_CALL_PUT();
     return 1;
 }
 
@@ -1274,6 +1282,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
     RETRY(lc_recv(lbuf, ldata->size, remote, tag, get_ep, &req_handle->req));
+    LCI_CALL_GET();
     return 1;
 }
 
@@ -1287,6 +1296,7 @@ lci_send_am(parsec_comm_engine_t *comm_engine,
     lci_ce_debug_verbose("Active Message %"PRIu64" send:\t%d -> %d with message %p size %zu",
                          tag, ep_rank, remote, addr, size);
     RETRY(lc_sendm(addr, size, remote, tag, am_ep));
+    LCI_CALL_AM();
     return 1;
 }
 
