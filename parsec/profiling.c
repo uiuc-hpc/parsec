@@ -188,7 +188,7 @@ static parsec_profiling_buffer_t *do_allocate_new_buffer(void)
         file_backend_extendable = 0;
         close(file_backend_fd);
         file_backend_fd = -1;
-        fprintf(stderr, "### Profiling: Unable to allocate / map segment in backend file (%s)n", strerror(errno));
+        fprintf(stderr, "### Profiling: Unable to allocate / map segment in backend file (%s)\n", strerror(errno));
         return NULL;
     }
 
@@ -921,6 +921,8 @@ static int switch_event_buffer( parsec_thread_profiling_t *context )
     off_t off;
 
     new_buffer = allocate_empty_buffer((tl_freelist_t*)context->tls_storage, &off, PROFILING_BUFFER_TYPE_EVENTS);
+    if( NULL == new_buffer )
+        return -1;
 
     old_buffer = context->current_events_buffer;
     if( NULL == old_buffer ) {
