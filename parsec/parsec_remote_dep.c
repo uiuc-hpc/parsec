@@ -978,6 +978,9 @@ remote_dep_ce_init(parsec_context_t* context)
                              1);
 
     remote_dep_mpi_profiling_init();
+
+    /* wait for all nodes to finish init */
+    parsec_ce.sync(&parsec_ce);
     return 0;
 }
 
