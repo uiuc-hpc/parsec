@@ -12,38 +12,70 @@ class Parsec(CMakePackage):
     """PaRSEC: the Parallel Runtime Scheduler and Execution Controller for micro-tasks on distributed heterogeneous systems"""
 
     homepage = "https://bitbucket.org/icldistcomp/parsec"
+    git      = "https://bitbucket.org/icldistcomp/parsec.git"
     url      = "https://bitbucket.org/icldistcomp/parsec/get/v1.1.0.tar.bz2"
 
-    version('devel', git='https://bitbucket.org/icldistcomp/parsec/git', branch='master')
+    version('devel', branch='master')
+    version('devel-profiling', commit='9097f88')
+    patch('profile2h5.patch', when='@devel-profiling')
     version('1.1.0', '6c8b2b8d6408004bdb4c6d9134da74a4')
 
-    # We always need MPI for now.
-    #variant('mpi', default=True, description='Use MPI for dependency transport between nodes')
+    variant('transport', default='mpi', values=('mpi', 'lci'), multi=False,
+            description='Inter-node dependency transport backend')
+    variant('lci-static', default=False, description='Static link to LCI')
+    variant('debug-lci', default=False, description='Enable LCI CE debug')
+    variant('lci-cbtable', default=False, description='Use callback hashtable')
     variant('cuda', default=True, description='Use CUDA for GPU acceleration')
     variant('profile', default=False, description='Generate profiling data')
+    variant('profile-with-mmap', default=True, description='Use mmap for profiling')
+    variant('profile-tools', default=True, description='Install profiling tools')
     variant('debug', default=False, description='Debug version (incurs performance overhead!)')
+    variant('debug-history', default=False, description='Debug history (for GDB dumping)')
     #variant('xcompile', default=False, description='Cross compile')
+    variant('visualization', default=False, description='Visualization support')
+    variant('graph', default=False, description='Graphing support')
+
+    conflicts('+lci-static', when='transport=mpi')
+    conflicts('+debug-lci', when='transport=mpi')
+    conflicts('+lci-cbtable', when='transport=mpi')
+    conflicts('transport=mpi', when='^lci')
+    conflicts('transport=lci', when='^mpi')
 
     depends_on('cmake@3.16.0:', type='build')
+    depends_on('bison', type='build')
+    depends_on('flex', type='build')
     depends_on('hwloc')
-    depends_on('mpi')
-    #depends_on('mpi', when='+mpi')
+    depends_on('mpi', when='transport=mpi')
+    depends_on('lci', when='transport=lci')
     depends_on('cuda', when='+cuda')
     depends_on('papi', when='+profile')
+    depends_on('libxml2', when='+visualization')
+    depends_on('graphviz', when='+graph')
+    depends_on('libgd', when='+graph')
 
-    def configure_args(self):
-        spec = self.spec
+    # profiling tools install python modules and have several python deps
+    extends('python',           when='+profile-tools')
+    depends_on('python',        when='+profile-tools', type=('build', 'run'))
+    depends_on('py-cython',     when='+profile-tools', type='build')
+    depends_on('py-numpy',      when='+profile-tools', type=('build', 'run'))
+    depends_on('py-pandas',     when='+profile-tools', type=('build', 'run'))
+    depends_on('py-matplotlib', when='+profile-tools', type=('build', 'run'))
+    depends_on('py-networkx',   when='+profile-tools', type=('build', 'run'))
+    # py-pandas HDF5 support
+    depends_on('py-tables',     when='+profile-tools', type='run')
+
+    def cmake_args(self):
         return [
-            '-DCMAKE_BUILD_TYPE=%s' % ('Debug' if '+debug' in spec else 'RelWithDebInfo'),
-            '-DPARSEC_DEBUG_HISTORY=%s' % ('YES' if '+debug' in spec else 'NO'),
-            '-DPARSEC_DEBUG_PARANOID=%s' % ('YES' if '+debug' in spec else 'NO'),
-            '-DPARSEC_DEBUG_NOISIER=%s' % ('YES' if '+debug' in spec else 'NO'),
-            '-DPARSEC_GPU_WITH_CUDA=%s' % ('YES' if '+cuda' in spec else 'NO'),
-#            '-DCUDA_TOOLKIT_ROOT_DIR=%s' %
-#            '-DPARSEC_DIST_WITH_MPI=%s' % ('YES' if '-mpi' in spec else 'NO'),
-            '-DPARSEC_PROF_TRACE=%s' % ('YES' if '+profile' in spec else 'NO'),
-#            '-DMPI_C_COMPILER=%s'
-#            '-DMPI_CXX_COMPILER=%s'
-#            '-DMPI_Fortran_COMPILER=%s'
+            self.define_from_variant('PARSEC_DEBUG_HISTORY', 'debug-history'),
+            self.define_from_variant('PARSEC_DEBUG_PARANOID', 'debug'),
+            self.define_from_variant('PARSEC_DEBUG_NOISIER', 'debug'),
+            self.define_from_variant('PARSEC_GPU_WITH_CUDA', 'cuda'),
+            self.define_from_variant('PARSEC_PROF_TRACE', 'profile'),
+            self.define_from_variant('PARSEC_PROFILING_USE_MMAP', 'profile-with-mmap'),
+            self.define('PARSEC_DIST_WITH_MPI', self.spec.variants['transport'].value == 'mpi'),
+            self.define('PARSEC_DIST_WITH_LCI', self.spec.variants['transport'].value == 'lci'),
+            self.define_from_variant('LCI_LINK_STATIC', 'lci-static'),
+            self.define_from_variant('PARSEC_LCI_RETRY_HISTOGRAM', 'debug-lci'),
+            self.define_from_variant('PARSEC_LCI_HANDLER_COUNT', 'debug-lci'),
+            self.define_from_variant('PARSEC_LCI_CB_HASH_TABLE', 'lci-cbtable'),
         ]
-
