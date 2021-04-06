@@ -1336,7 +1336,15 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
     parsec_list_item_t *ring = NULL;
     lci_req_handle_t *req_handle = NULL;
 
-    if (NULL != (ring = parsec_list_unchain(&lci_shared_cb_fifo))) {
+    /* push back to private callback fifo if we got lock and list nonempty */
+    /* unchain list if we get lock */
+    if (parsec_atomic_trylock(&lci_shared_cb_fifo.atomic_lock)) {
+        ring = parsec_list_nolock_unchain(&lci_shared_cb_fifo);
+        parsec_atomic_unlock(&lci_shared_cb_fifo.atomic_lock);
+    }
+
+    /* chain back if ring not NULL i.e. got lock AND shared fifo not empty */
+    if (NULL != ring) {
         parsec_list_nolock_chain_back(&lci_comm_cb_fifo, ring);
     }
 
