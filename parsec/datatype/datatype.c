@@ -10,10 +10,9 @@
 #include <stdlib.h>
 
 typedef struct parsec_internal_datatype_s {
-    parsec_datatype_t element;
+    size_t size;
     ptrdiff_t lb;
     ptrdiff_t extent;
-    size_t size;
 } parsec_internal_datatype_t;
 
 /**
@@ -133,13 +132,12 @@ int parsec_type_create_contiguous( int count,
         *newtype = PARSEC_DATATYPE_NULL;
         return PARSEC_ERR_BAD_PARAM;
     }
-    parsec_type_size(oldtype, &size);
     parsec_internal_datatype_t *rtype = malloc(sizeof(*rtype));
-    rtype->element = oldtype;
-    rtype->lb = 0;
-    rtype->extent = count * size;
-    rtype->size = count * size;
-    *newtype = (intptr_t)rtype;
+    parsec_type_size(oldtype, &size);
+    rtype->size = size * count;
+    parsec_type_extent(oldtype, &rtype->lb, &rtype->extent);
+    rtype->extent *= count;
+    *newtype = (parsec_datatype_t)rtype;
     return PARSEC_SUCCESS;
 }
 
