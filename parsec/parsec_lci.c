@@ -528,12 +528,15 @@ static inline void lci_put_origin_handler(void *ctx)
                          handle->args.size);
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_PUT_ORIGIN);
-        /* we are on progress thread, push to back of progress cb fifo */
+        /* send was large, so we are on progress thread
+         * push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
         LCI_HANDLER_OTHER(LCI_PUT_ORIGIN);
-        /* we aren't on progress thread, just call the callback */
-        lci_put_origin_callback(handle, &parsec_ce);
+        /* send was small or medium, so we are on caller thread
+         * assume this is communication thread for now
+         * push to back of comm cb fifo */
+        parsec_list_nolock_push_back(&lci_comm_cb_fifo,  &handle->list_item);
     }
 }
 
@@ -580,12 +583,14 @@ static inline void lci_put_target_handler(lc_req *req)
     handle->args.type = LCI_PUT_TARGET;
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_PUT_TARGET);
-        /* we are on progress thread, push to back of progress cb fifo */
+        /* recv was posted prior to send arrival, so we are on progress thread
+         * push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
         LCI_HANDLER_OTHER(LCI_PUT_TARGET);
-        /* we aren't on progress thread, just call the callback */
-        lci_put_target_callback(handle, &parsec_ce);
+        /* recv matched with unexpected send, so we are on communication thread
+         * push to back of comm cb fifo */
+        parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
     }
 }
 
@@ -607,12 +612,15 @@ static inline void lci_get_origin_handler(lc_req *req)
 
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_GET_ORIGIN);
-        /* we are on progress thread, push to back of progress cb fifo */
+        /* recv was posted prior to send arrival, so we are on progress thread
+         * push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
         LCI_HANDLER_OTHER(LCI_GET_ORIGIN);
-        /* we aren't on progress thread, just call the callback */
-        lci_get_origin_callback(handle, &parsec_ce);
+        /* recv matched with unexpected send, so we are on caller thread
+         * assume this is communication thread for now
+         * push to back of comm cb fifo */
+        parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
     }
 }
 
@@ -658,12 +666,14 @@ static inline void lci_get_target_handler(void *ctx)
     handle->args.type = LCI_GET_TARGET;
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_GET_TARGET);
-        /* we are on progress thread, push to back of progress cb fifo */
+        /* send was large, so we are on progress thread
+         * push to back of progress cb fifo */
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
     } else {
         LCI_HANDLER_OTHER(LCI_GET_TARGET);
-        /* we aren't on progress thread, just call the callback */
-        lci_get_target_callback(handle, &parsec_ce);
+        /* send was small or medium, so we are on communication thread
+         * push to back of comm cb fifo */
+        parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
     }
 }
 
