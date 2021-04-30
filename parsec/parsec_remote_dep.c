@@ -1812,6 +1812,12 @@ remote_dep_mpi_progress(parsec_execution_stream_t* es)
     return ret;
 }
 
+/**
+ * Progress the network pushing as many of the pending commands as possible.
+ * First, extract actions from the cmd queue, and rearrange them (priority and
+ * target) before draining the network and pushing out the highest priority
+ * actions.
+ */
 int
 remote_dep_dequeue_nothread_progress(parsec_execution_stream_t* es,
                                      int cycles)
@@ -1880,15 +1886,12 @@ remote_dep_dequeue_nothread_progress(parsec_execution_stream_t* es,
     }
     /* Extract the head of the list and point the array to the correct value */
     if(NULL == (item = (dep_cmd_item_t*)parsec_list_nolock_pop_front(&dep_cmd_fifo)) ) {
-        do {
-            ret = remote_dep_mpi_progress(es);
-        } while(ret);
-
-        if( !ret
-         && ((comm_yield == 2)
-          || (comm_yield == 1
-           && !parsec_list_nolock_is_empty(&dep_activates_fifo)
-           && !parsec_list_nolock_is_empty(&dep_put_fifo))) ) {
+        ret = remote_dep_mpi_progress(es);
+        if( 0 == ret
+            && ((comm_yield == 2)
+                || (comm_yield == 1  /* communication list is full, we need to forcefully drain the network */
+                    && parsec_list_nolock_is_empty(&dep_activates_fifo)
+                    && parsec_list_nolock_is_empty(&dep_put_fifo))) ) {
             struct timespec ts;
             ts.tv_sec = 0; ts.tv_nsec = comm_yield_ns;
             nanosleep(&ts, NULL);
