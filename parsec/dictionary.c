@@ -19,6 +19,7 @@
 
 #include "parsec/dictionary.h"
 
+parsec_profiling_dictionary_t *parsec_profiling_dictionary;
 #define dict parsec_profiling_dictionary
 #define PROFILING_HASH_SIZE 4096
 
