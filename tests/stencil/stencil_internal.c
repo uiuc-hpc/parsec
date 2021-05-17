@@ -5,6 +5,9 @@
  */
 #include "stencil_internal.h"
 
+/* Global array of weight - definition */
+DTYPE * restrict weight_1D;
+
 /**
  * @brief stencil_1D init operator
  *

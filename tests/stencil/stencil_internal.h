@@ -44,8 +44,8 @@
             for(i = 0; i < m; i++)                                   \
                 D[(D_j+j)*(D_lda)+D_i+i] = S[(S_j+j)*(S_lda)+S_i+i]; 
 
-/* Global array of weight */
-DTYPE * restrict weight_1D;
+/* Global array of weight - declaration */
+extern DTYPE * restrict weight_1D;
 
 /* Print matrix: size mb * nb from displacement (disi, disj) */
 static inline void PRINT_MATRIX(DTYPE *A, int mb, int nb, int disi, int disj, int lda){
