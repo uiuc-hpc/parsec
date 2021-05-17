@@ -74,7 +74,7 @@ void debug_mark_ctl_msg_activate_recv(int from, const void *b, const struct remo
     pos += snprintf(msg+pos, len-pos, "\toutput_mask = 0x%08x\n",
                     (uint32_t)m->output_mask);
     pos += snprintf(msg+pos, len-pos, "\t      deps = %p\n",
-                    (uint32_t)m->deps);
+                    m->deps);
 
     /* Do not use set_my_mark: msg is a stack-allocated buffer */
     parsec_debug_history_add("%s", msg);
