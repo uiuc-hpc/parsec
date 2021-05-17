@@ -299,7 +299,7 @@ static inline void * lci_dyn_alloc(size_t size, void **ctx)
     return &dynmsg->data;
 }
 
-#ifdef PARSEC_LCI_HANDLER_COUNT;
+#ifdef PARSEC_LCI_HANDLER_COUNT
 static struct {
     atomic_size_t progress;
     atomic_size_t other;
@@ -1510,7 +1510,7 @@ lci_reshape(parsec_comm_engine_t *comm_engine,
 {
     int size;
     int rc = parsec_type_size(layout, &size);
-    if (rc != PARSEC_SUCCESS);
+    if (rc != PARSEC_SUCCESS)
         return 0;
     size_t bytes = size * count;
     uint8_t *dst_buf = (uint8_t *)PARSEC_DATA_COPY_GET_PTR(dst) + displ_dst;
