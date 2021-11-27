@@ -12,12 +12,15 @@
 #include "parsec/mca/device/device.h"
 #include "parsec/data_dist/matrix/matrix.h"
 
+typedef struct parsec_recursive_cb_data_s parsec_recursive_cb_data_t;
+typedef void (*parsec_recursive_callback)(parsec_taskpool_t*, const parsec_recursive_cb_data_t* );
+
 typedef struct parsec_recursive_cb_data_s {
     parsec_execution_stream_t    *es;
-    parsec_task_t *context;
-    void (*destruct)( parsec_taskpool_t * );
+    parsec_task_t                *task;
+    parsec_recursive_callback     callback;
     int nbdesc;
-    parsec_data_collection_t *desc[1];
+    parsec_data_collection_t      *desc[1];
 } parsec_recursive_cb_data_t;
 
 static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_data)
@@ -25,14 +28,14 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
     int i, rc = 0;
     parsec_recursive_cb_data_t* data = (parsec_recursive_cb_data_t*)cb_data;
 
-    rc = __parsec_complete_execution(data->es, data->context);
+    rc = __parsec_complete_execution(data->es, data->task);
 
-    for(i=0; i<data->nbdesc; i++){
+    for( i = 0; i < data->nbdesc; i++ ) {
         parsec_tiled_matrix_dc_destroy( (parsec_tiled_matrix_dc_t*)(data->desc[i]) );
         free( data->desc[i] );
     }
 
-    data->destruct( tp );
+    data->callback( tp, data );
     free(data);
 
     return rc;
@@ -40,14 +43,13 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
 
 static inline int
 parsec_recursivecall( parsec_execution_stream_t    *es,
-                      parsec_task_t *context,
+                      parsec_task_t                *task,
                       parsec_taskpool_t            *tp,
-                      void (*taskpool_destroy)(parsec_taskpool_t *),
+                      parsec_recursive_callback     callback,
                       int nbdesc,
                       ... )
 {
     parsec_recursive_cb_data_t *cbdata = NULL;
-    int i;
     va_list ap;
 
     /* Set mask to be used only on CPU */
@@ -56,13 +58,13 @@ parsec_recursivecall( parsec_execution_stream_t    *es,
     /* Callback */
     cbdata = (parsec_recursive_cb_data_t *) malloc( sizeof(parsec_recursive_cb_data_t) + (nbdesc-1)*sizeof(parsec_data_collection_t*));
     cbdata->es       = es;
-    cbdata->context  = context;
-    cbdata->destruct = taskpool_destroy;
+    cbdata->task     = task;
+    cbdata->callback = callback;
     cbdata->nbdesc   = nbdesc;
 
     /* Get descriptors */
     va_start(ap, nbdesc);
-    for(i=0; i<nbdesc; i++){
+    for(int i = 0; i < nbdesc; i++ ) {
         cbdata->desc[i] = va_arg(ap, parsec_data_collection_t *);
     }
     va_end(ap);
