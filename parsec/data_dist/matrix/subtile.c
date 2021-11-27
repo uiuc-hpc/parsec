@@ -16,12 +16,12 @@ static int32_t       subtile_vpid_of_key(parsec_data_collection_t* dc, parsec_da
 static parsec_data_t* subtile_data_of_key(parsec_data_collection_t* dc, parsec_data_key_t key);
 
 subtile_desc_t *subtile_desc_create( const parsec_tiled_matrix_dc_t *tdesc,
-                                     int mt, int nt,   /* Tile in tdesc */
+                                     int mt, int nt,   /* row and column index of the tile in tdesc */
                                      int mb, int nb,   /* sub-tiles size  */
                                      int i,  int j,    /* Starting point in the tile */
                                      int m,  int n)    /* Submatrix size (the one concerned by the computation) */
 {
-    subtile_desc_t *sdesc = malloc( sizeof(subtile_desc_t) );
+    subtile_desc_t *sdesc = (subtile_desc_t*)malloc( sizeof(subtile_desc_t) );
     parsec_data_collection_t *o = &(sdesc->super.super);
     (void)mt; (void)nt;
 
