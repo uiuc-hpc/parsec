@@ -320,7 +320,7 @@ static inline void * lci_dyn_alloc(size_t size, void **ctx)
     }
 
     lci_dynmsg_t *dynmsg = parsec_thread_mempool_allocate(
-                                             lci_dynmsg_mempool.thread_mempools);
+                                           lci_dynmsg_mempool.thread_mempools);
     return &dynmsg->data;
 }
 
@@ -1172,7 +1172,7 @@ lci_mem_register(void *mem, parsec_mem_type_t mem_type,
 
     /* allocate from mempool */
     lci_mem_reg_handle_t *handle = parsec_thread_mempool_allocate(
-                                 lci_mem_reg_handle_mempool.thread_mempools);
+                                   lci_mem_reg_handle_mempool.thread_mempools);
     /* set mem handle info */
     handle->mem      = mem;
     handle->size     = mem_size;
