@@ -42,12 +42,27 @@
 
 typedef unsigned char byte_t;
 
-#define lci_ce_debug_verbose(FMT, ...)                                        \
+#define lci_ce_output_verbose_lvl(LVL, FMT, ...)                              \
+  do {                                                                        \
+    parsec_output_verbose(LVL, parsec_comm_output_stream,                     \
+                         "LCI[%d]:\t" FMT,                                    \
+                         ep_rank, ##__VA_ARGS__);                             \
+  } while (0)
+
+#if 1
+#define LCI_CE_DEBUG_VERBOSE(FMT, ...)                                        \
   do {                                                                        \
     PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream,                       \
                          "LCI[%d]:\t" FMT,                                    \
                          ep_rank, ##__VA_ARGS__);                             \
   } while (0)
+#else
+#define LCI_CE_DEBUG_VERBOSE(FMT, ...)                                        \
+  do {                                                                        \
+    parsec_debug_history_add("Mark LCI[%d]:\t" FMT "\n",                      \
+                             ep_rank, ##__VA_ARGS__);                         \
+  } while (0)
+#endif
 
 #define lci_ce_debug_verbose_lvl(LVL, FMT, ...)                               \
   do {                                                                        \
@@ -95,7 +110,7 @@ static struct {
     struct timespec _ts = { .tv_sec = 0, .tv_nsec = 1 };                      \
     lc_status _status = LC_OK;                                                \
     for (long _ns = 0; _ns < NS_PER_S; _ns += _ts.tv_nsec) {                  \
-        lci_ce_debug_verbose(#lci_call);                                      \
+        LCI_CE_DEBUG_VERBOSE(#lci_call);                                      \
         _status = (lci_call);                                                 \
         if (LC_OK == _status)                                                 \
             break;                                                            \
@@ -329,7 +344,7 @@ static inline void
 lci_active_message_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
 {
     assert(handle->args.type == LCI_ACTIVE_MESSAGE && "wrong handle type");
-    lci_ce_debug_verbose("Active Message %"PRIu64" cb:\t%d -> %d message %p size %zu",
+    LCI_CE_DEBUG_VERBOSE("Active Message %"PRIu64" cb:\t%d -> %d message %p size %zu",
                          handle->args.tag, handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size);
     handle->cb.am(comm_engine, handle->args.tag,
@@ -349,7 +364,7 @@ static inline void
 lci_put_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
 {
     assert(handle->args.type == LCI_PUT_ORIGIN && "wrong handle type");
-    lci_ce_debug_verbose("Put Origin cb:\t%d(%p+%td) -> %d(%p+%td) size %zu data %p",
+    LCI_CE_DEBUG_VERBOSE("Put Origin cb:\t%d(%p+%td) -> %d(%p+%td) size %zu data %p",
                          ep_rank,
                          (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
@@ -371,10 +386,10 @@ static inline void
 lci_put_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
 {
     assert(handle->args.type == LCI_PUT_TARGET && "wrong handle type");
-    lci_ce_debug_verbose("Put Target cb:\t%d -> %d(%p) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Put Target cb:\t%d -> %d(%p) size %zu data %p with tag %d",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
-                         handle->args.tag);
+                         (void *)handle->args.data, handle->args.tag);
 #if 0
     handle->cb.put_target(comm_engine,         handle->args.tag,
                           handle->args.msg,    handle->args.size,
@@ -401,7 +416,7 @@ static inline void
 lci_get_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
 {
     assert(handle->args.type == LCI_GET_ORIGIN && "wrong handle type");
-    lci_ce_debug_verbose("Get Origin cb:\t%d(%p+%td) <- %d(%p+%td) size %zu data %p",
+    LCI_CE_DEBUG_VERBOSE("Get Origin cb:\t%d(%p+%td) <- %d(%p+%td) size %zu data %p",
                          ep_rank,
                          (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
@@ -425,7 +440,7 @@ static inline void
 lci_get_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
 {
     assert(handle->args.type == LCI_GET_TARGET && "wrong handle type");
-    lci_ce_debug_verbose("Get Target cb:\t%d <- %d(%p) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Get Target cb:\t%d <- %d(%p) size %zu with tag %d",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
@@ -463,7 +478,7 @@ static inline void lci_abort_handler(lc_req *req)
     handle->args.tag    = req->meta;
     handle->args.remote = req->rank;
     handle->args.type   = LCI_ABORT;
-    lci_ce_debug_verbose("Abort %d recv:\t%d -> %d",
+    LCI_CE_DEBUG_VERBOSE("Abort %d recv:\t%d -> %d",
                          (int)handle->args.tag, handle->args.remote, ep_rank);
     LCI_HANDLER_PROGRESS(LCI_ABORT);
     /* push to front of local callback fifo */
@@ -476,7 +491,7 @@ static inline void lci_active_message_handler(lc_req *req)
 {
     lci_am_reg_handle_t *am_handle = NULL;
     parsec_ce_tag_t tag = req->meta;
-    lci_ce_debug_verbose("Active Message %"PRIu64" recv:\t%d -> %d message %p size %zu",
+    LCI_CE_DEBUG_VERBOSE("Active Message %"PRIu64" recv:\t%d -> %d message %p size %zu",
                          tag, req->rank, ep_rank, req->buffer, req->size);
 
     /* find AM handle, based on active message tag */
@@ -518,7 +533,7 @@ static inline void lci_put_origin_handler(void *ctx)
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
     assert(handle->args.type == LCI_PUT_ORIGIN && "wrong handle type");
-    lci_ce_debug_verbose("Put Origin end:\t%d(%p+%td) -> %d(%p+%td) size %zu",
+    LCI_CE_DEBUG_VERBOSE("Put Origin end:\t%d(%p+%td) -> %d(%p+%td) size %zu",
                          ep_rank,
                          (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
@@ -557,7 +572,8 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
     handle->args.type        = LCI_PUT_TARGET_HANDSHAKE;
     handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->cb;
 
-    lci_ce_debug_verbose("Put Target handshake:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
+    LCI_CE_DEBUG_VERBOSE("Put Target handshake %s:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
+                         send_eager ? "eager" : "rendezvous",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag, (void *)handle->args.data);
@@ -574,7 +590,7 @@ static inline void lci_put_target_handler(lc_req *req)
     /* get callback handle from request context */
     lci_cb_handle_t *handle = req->ctx;
     assert(handle->args.type == LCI_PUT_TARGET && "wrong handle type");
-    lci_ce_debug_verbose("Put Target end:\t%d -> %d(%p) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Put Target end:\t%d -> %d(%p) size %zu with tag %d",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
@@ -599,7 +615,7 @@ static inline void lci_get_origin_handler(lc_req *req)
     /* get callback handle from request context */
     lci_cb_handle_t *handle = req->ctx;
     assert(handle->args.type == LCI_GET_ORIGIN && "wrong handle type");
-    lci_ce_debug_verbose("Get Origin end:\t%d(%p) <- %d(%p) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Get Origin end:\t%d(%p) <- %d(%p) size %zu with tag %d",
                          ep_rank,
                          (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
@@ -639,7 +655,7 @@ static inline void lci_get_target_handshake_handler(lc_req *req)
     handle->args.type        = LCI_GET_TARGET_HANDSHAKE;
     handle->cb.get_target    = (parsec_ce_am_callback_t)handshake->cb;
 
-    lci_ce_debug_verbose("Get Target handshake:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
+    LCI_CE_DEBUG_VERBOSE("Get Target handshake:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag, (void *)handle->args.data);
@@ -656,7 +672,7 @@ static inline void lci_get_target_handler(void *ctx)
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
     assert(handle->args.type == LCI_GET_TARGET && "wrong handle type");
-    lci_ce_debug_verbose("Get Target end:\t%d <- %d(%p) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Get Target end:\t%d <- %d(%p) size %zu with tag %d",
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
@@ -754,7 +770,7 @@ static void * lci_progress_thread(void *arg)
 {
     parsec_list_item_t *ring = NULL;
 
-    lci_ce_debug_verbose("progress thread start");
+    LCI_CE_DEBUG_VERBOSE("progress thread start");
     PARSEC_PAPI_SDE_THREAD_INIT();
 
     /* bind thread */
@@ -828,7 +844,7 @@ static void * lci_progress_thread(void *arg)
 #endif
 
     PARSEC_PAPI_SDE_THREAD_FINI();
-    lci_ce_debug_verbose("progress thread stop");
+    LCI_CE_DEBUG_VERBOSE("progress thread stop");
     return NULL;
 }
 
@@ -849,7 +865,7 @@ lci_init(parsec_context_t *context)
 
     default_ep = (lc_ep *)context->comm_ctx;
 
-    lci_ce_debug_verbose("init");
+    LCI_CE_DEBUG_VERBOSE("init");
 
     parsec_mca_param_reg_int_name("lci", "thread_bind",
                                   "Bind LCI progress thread to core",
@@ -975,7 +991,7 @@ lci_init(parsec_context_t *context)
 
     /* start progress thread if multiple nodes */
     if (ep_size > 1) {
-        lci_ce_debug_verbose("starting progress thread");
+        LCI_CE_DEBUG_VERBOSE("starting progress thread");
         /* lock mutex before starting thread */
         pthread_mutex_lock(&progress_start.mutex);
         /* ensure progress_thread_stop == false */
@@ -996,13 +1012,13 @@ lci_init(parsec_context_t *context)
 int
 lci_fini(parsec_comm_engine_t *comm_engine)
 {
-    lci_ce_debug_verbose("fini");
+    LCI_CE_DEBUG_VERBOSE("fini");
     lci_sync(comm_engine);
     void *progress_retval = NULL;
 
     /* stop progress thread if multiple nodes */
     if (ep_size > 1) {
-        lci_ce_debug_verbose("stopping progress thread");
+        LCI_CE_DEBUG_VERBOSE("stopping progress thread");
         atomic_store_explicit(&progress_thread_stop, true, memory_order_release);
 #if 0
         pthread_mutex_lock(&progress_continue.mutex);
@@ -1043,7 +1059,7 @@ int lci_tag_register(parsec_ce_tag_t tag,
     handle->data = cb_data;
     handle->cb   = cb;
 
-    lci_ce_debug_verbose("register Active Message %"PRIu64" data %p size %zu",
+    LCI_CE_DEBUG_VERBOSE("register Active Message %"PRIu64" data %p size %zu",
                          tag, cb_data, msg_length);
     parsec_hash_table_lock_bucket(&lci_am_cb_hash_table, key);
     if (NULL != parsec_hash_table_nolock_find(&lci_am_cb_hash_table, key)) {
@@ -1074,7 +1090,7 @@ int lci_tag_register(parsec_ce_tag_t tag,
 int
 lci_tag_unregister(parsec_ce_tag_t tag)
 {
-    lci_ce_debug_verbose("unregister Active Message %"PRIu64, tag);
+    LCI_CE_DEBUG_VERBOSE("unregister Active Message %"PRIu64, tag);
 #ifdef PARSEC_LCI_CB_HASH_TABLE
     parsec_key_t key = tag;
     lci_am_reg_handle_t *handle = parsec_hash_table_remove(&lci_am_cb_hash_table, key);
@@ -1109,7 +1125,7 @@ lci_mem_register(void *mem, parsec_mem_type_t mem_type,
     /* LCI only supports contiguous types */
     assert(mem_type == PARSEC_MEM_TYPE_CONTIGUOUS && "only supports contiguous memory");
 
-    lci_ce_debug_verbose("register memory %p size %zu", mem, mem_size);
+    LCI_CE_DEBUG_VERBOSE("register memory %p size %zu", mem, mem_size);
 
     /* allocate from mempool */
     lci_mem_reg_handle_t *handle = parsec_thread_mempool_allocate(
@@ -1133,7 +1149,7 @@ int
 lci_mem_unregister(parsec_ce_mem_reg_handle_t *lreg)
 {
     lci_mem_reg_handle_t *handle = (lci_mem_reg_handle_t *) *lreg;
-    lci_ce_debug_verbose("unregister memory %p size %zu",
+    LCI_CE_DEBUG_VERBOSE("unregister memory %p size %zu",
                          (void *)handle->mem, handle->size);
     //LCI_unregister(handle->mem);
     parsec_mempool_free(&lci_mem_reg_handle_mempool, handle);
@@ -1156,7 +1172,7 @@ lci_mem_retrieve(parsec_ce_mem_reg_handle_t lreg,
     *mem      = handle->mem;
     *count    = handle->count;
     *datatype = handle->datatype;
-    lci_ce_debug_verbose("retrieve memory %p size %zu",
+    LCI_CE_DEBUG_VERBOSE("retrieve memory %p size %zu",
                          (void *)handle->mem, handle->size);
     return 1;
 }
@@ -1195,7 +1211,8 @@ lci_put(parsec_comm_engine_t *comm_engine,
     memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
-    lci_ce_debug_verbose("Put Origin handshake:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Put Origin handshake %s:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
+                         send_eager ? "eager" : "rendezvous",
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
@@ -1215,7 +1232,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
     handle->cb.put_origin    = l_cb;
 
     /* start send to remote with tag */
-    lci_ce_debug_verbose("Put Origin start:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Put Origin start:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
@@ -1258,7 +1275,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
     memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
-    lci_ce_debug_verbose("Get Origin handshake:\t%d(%p+%td) <- %d(%p+%td) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Get Origin handshake:\t%d(%p+%td) <- %d(%p+%td) size %zu with tag %d",
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
@@ -1285,7 +1302,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
     handle->req_handle = req_handle;
 
     /* start recieve from remote with tag */
-    lci_ce_debug_verbose("Get Origin start:\t%d(%p+%td) <- %d(%p+%td) size %zu with tag %d",
+    LCI_CE_DEBUG_VERBOSE("Get Origin start:\t%d(%p+%td) <- %d(%p+%td) size %zu with tag %d",
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
@@ -1301,7 +1318,7 @@ lci_send_am(parsec_comm_engine_t *comm_engine,
             void *addr, size_t size)
 {
     assert(size <= lc_max_medium(0) && "active message data too long");
-    lci_ce_debug_verbose("Active Message %"PRIu64" send:\t%d -> %d with message %p size %zu",
+    LCI_CE_DEBUG_VERBOSE("Active Message %"PRIu64" send:\t%d -> %d with message %p size %zu",
                          tag, ep_rank, remote, addr, size);
     RETRY(lc_sendm(addr, size, remote, tag, am_ep));
     LCI_CALL_AM();
@@ -1311,15 +1328,15 @@ lci_send_am(parsec_comm_engine_t *comm_engine,
 _Noreturn void
 lci_abort(int exit_code)
 {
-    lci_ce_debug_verbose("Abort %d", exit_code);
+    LCI_CE_DEBUG_VERBOSE("Abort %d", exit_code);
     for (int i = 0; i < ep_size; i++) {
         if (i != ep_rank) {
             /* send abort message to all other processes */
-            lci_ce_debug_verbose("Abort %d send:\t%d -> %d", exit_code, ep_rank, i);
+            LCI_CE_DEBUG_VERBOSE("Abort %d send:\t%d -> %d", exit_code, ep_rank, i);
             RETRY(lc_sends(NULL, 0, i, exit_code, abort_ep));
         }
     }
-    lci_ce_debug_verbose("Abort %d barrier:\t%d ->", exit_code, ep_rank);
+    LCI_CE_DEBUG_VERBOSE("Abort %d barrier:\t%d ->", exit_code, ep_rank);
     /* wait for all processes to ack the abort */
     lc_barrier(collective_ep);
     /* exit without cleaning up */
@@ -1354,7 +1371,7 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
 
         switch (handle->args.type) {
         case LCI_ABORT:
-            lci_ce_debug_verbose("Abort %d barrier:\t%d ->",
+            LCI_CE_DEBUG_VERBOSE("Abort %d barrier:\t%d ->",
                                  (int)handle->args.tag, handle->args.remote);
             /* wait for all processes to ack the abort */
             lc_barrier(collective_ep);
@@ -1380,7 +1397,7 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
             /* set back-reference to request handle */
             handle->req_handle = req_handle;
             /* start receive on target for put */
-            lci_ce_debug_verbose("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
+            LCI_CE_DEBUG_VERBOSE("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
                                  handle->args.remote, ep_rank,
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
@@ -1401,7 +1418,7 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
             /* change handle type; we are now starting to get target call */
             handle->args.type = LCI_GET_TARGET;
             /* start send on target for get */
-            lci_ce_debug_verbose("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
+            LCI_CE_DEBUG_VERBOSE("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
                                  handle->args.remote, ep_rank,
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
@@ -1465,7 +1482,7 @@ lci_pack(parsec_comm_engine_t *comm_engine,
          void *outbuf, int outsize,
          int *position)
 {
-    lci_ce_debug_verbose("pack %p(%d) into %p(%d) + %d",
+    LCI_CE_DEBUG_VERBOSE("pack %p(%d) into %p(%d) + %d",
                          inbuf, incount, outbuf, outsize, *position);
     /* what's the behavior when outbuf overflows? MPI_Pack doesn't say lol */
     assert(*position + incount <= outsize && "pack overflow");
@@ -1484,7 +1501,7 @@ lci_unpack(parsec_comm_engine_t *comm_engine,
            void *inbuf, int insize, int *position,
            void *outbuf, int outcount)
 {
-    lci_ce_debug_verbose("unpack %p(%d) + %d into %p(%d)",
+    LCI_CE_DEBUG_VERBOSE("unpack %p(%d) + %d into %p(%d)",
                          inbuf, insize, *position, outbuf, outcount);
     /* what happens if we try to unpack more than is available? */
     assert(*position + outcount <= insize && "unpack overflow");
@@ -1515,7 +1532,7 @@ lci_reshape(parsec_comm_engine_t *comm_engine,
     size_t bytes = size * count;
     uint8_t *dst_buf = (uint8_t *)PARSEC_DATA_COPY_GET_PTR(dst) + displ_dst;
     uint8_t *src_buf = (uint8_t *)PARSEC_DATA_COPY_GET_PTR(src) + displ_src;
-    lci_ce_debug_verbose("reshape %p into %p: %"PRIu64" x datatype(%p)",
+    LCI_CE_DEBUG_VERBOSE("reshape %p into %p: %"PRIu64" x datatype(%p)",
                          src_buf, dst_buf, count, (void *)layout);
     memcpy(dst_buf, src_buf, bytes);
     return 1;
@@ -1524,7 +1541,7 @@ lci_reshape(parsec_comm_engine_t *comm_engine,
 int
 lci_sync(parsec_comm_engine_t *comm_engine)
 {
-    lci_ce_debug_verbose("sync");
+    LCI_CE_DEBUG_VERBOSE("sync");
     lc_barrier(collective_ep);
     return 1;
 }
