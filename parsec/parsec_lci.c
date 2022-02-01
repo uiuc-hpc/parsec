@@ -271,7 +271,8 @@ typedef struct lci_handshake_s {
 /* max size of handshake buffer on stack */
 #define HANDSHAKE_STACK_BUFFER_SIZE (128UL)
 
-static atomic_int current_tag = 0;
+typedef _Atomic(uint16_t) atomic_uint16_t;
+static atomic_uint16_t current_tag = 0;
 
 /* global endpoint */
 lc_ep *lci_global_ep = NULL;
