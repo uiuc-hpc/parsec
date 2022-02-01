@@ -254,13 +254,22 @@ static parsec_list_t lci_shared_cb_fifo;
 static parsec_list_t lci_progress_cb_fifo;
 static parsec_list_t lci_comm_cb_fifo;
 
-/* LCI one-sided activate message handshake type */
-typedef struct lci_handshake_s {
+/* LCI one-sided activate message handshake header type */
+typedef struct lci_handshake_header_s {
     byte_t            *buffer;
     size_t            size;
+    size_t            cb_size;
     parsec_ce_tag_t   cb;
-    alignas(8) byte_t cb_data[];
+} lci_handshake_header_t;
+
+/* LCI one-sided activate message handshake type */
+typedef struct lci_handshake_s {
+    alignas(64) lci_handshake_header_t header;
+    alignas(8) byte_t data[];
 } lci_handshake_t;
+
+/* max size of handshake buffer on stack */
+#define HANDSHAKE_STACK_BUFFER_SIZE (128UL)
 
 static atomic_int current_tag = 0;
 
@@ -400,13 +409,15 @@ lci_put_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
                           handle->args.data,   handle->args.size,
                           handle->args.remote, NULL);
     /* return memory from AM */
-    /* handle->args.data points to the cb_data field of the handshake info
+    /* handle->args.data points to the data field of the handshake info
      * which is the data field of the dynmsg object */
-    lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
+    lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, data);
     lci_dynmsg_t    *dynmsg    = container_of(handshake, lci_dynmsg_t, data);
     parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
-    /* return request to mempool */
-    parsec_mempool_free(&lci_req_mempool, handle->req_handle);
+    /* if this wasn't eager, we allocated a request from the mempool */
+    if (handle->req_handle) {
+        parsec_mempool_free(&lci_req_mempool, handle->req_handle);
+    }
     /* return handle to mempool */
     parsec_mempool_free(&lci_cb_handle_mempool, handle);
 }
@@ -454,9 +465,9 @@ lci_get_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
                           handle->args.data,   handle->args.size,
                           handle->args.remote, NULL);
     /* return memory from AM */
-    /* handle->args.data points to the cb_data field of the handshake info
+    /* handle->args.data points to the data field of the handshake info
      * which is the data field of the dynmsg object */
-    lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, cb_data);
+    lci_handshake_t *handshake = container_of(handle->args.data, lci_handshake_t, data);
     lci_dynmsg_t    *dynmsg    = container_of(handshake, lci_dynmsg_t, data);
     parsec_mempool_free(&lci_dynmsg_mempool, dynmsg);
     /* return handle to mempool */
@@ -527,7 +538,7 @@ static inline void lci_active_message_handler(lc_req *req)
 }
 
 /* handler for put on origin
- * can be called anywhere - deal with progress thread vs. elsewhere */
+ * using rendezvous recv, should only be called on progress thread */
 static inline void lci_put_origin_handler(void *ctx)
 {
     /* ctx is pointer to lci_cb_handle_t */
@@ -541,6 +552,11 @@ static inline void lci_put_origin_handler(void *ctx)
                          (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
                          handle->args.rdispl,
                          handle->args.size);
+    /* send is always large, so this is always called on progress thread
+     * push to back of progress cb fifo */
+    LCI_HANDLER_PROGRESS(LCI_PUT_ORIGIN);
+    parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#if 0
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_PUT_ORIGIN);
         /* send was large, so we are on progress thread
@@ -553,6 +569,7 @@ static inline void lci_put_origin_handler(void *ctx)
          * push to back of comm cb fifo */
         parsec_list_nolock_push_back(&lci_comm_cb_fifo,  &handle->list_item);
     }
+#endif
 }
 
 /* handler for put handshake on target
@@ -561,16 +578,23 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
 {
     lci_handshake_t *handshake = req->buffer;
 
+    size_t buffer_size = sizeof(lci_handshake_t) + handshake->header.cb_size;
+    size_t buffer_size_eager = buffer_size + handshake->header.size;
+    bool send_eager = (buffer_size_eager <= lc_max_medium(0));
+
+    if (send_eager) {
+        buffer_size = buffer_size_eager;
+    }
+
     lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
                                         lci_cb_handle_mempool.thread_mempools);
     handle->args.tag         = req->meta;
-    handle->args.msg         = handshake->buffer;
-    /* array to pointer decay for handshake->cb_data */
-    handle->args.data        = handshake->cb_data;
-    handle->args.size        = handshake->size;
+    handle->args.msg         = handshake->header.buffer;
+    /* array to pointer decay for handshake->data */
+    handle->args.data        = handshake->data;
+    handle->args.size        = handshake->header.size;
     handle->args.remote      = req->rank;
-    handle->args.type        = LCI_PUT_TARGET_HANDSHAKE;
-    handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->cb;
+    handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->header.cb;
 
     LCI_CE_DEBUG_VERBOSE("Put Target handshake %s:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
                          send_eager ? "eager" : "rendezvous",
@@ -579,12 +603,24 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
                          handle->args.tag, (void *)handle->args.data);
 
     LCI_HANDLER_PROGRESS(LCI_PUT_TARGET_HANDSHAKE);
-    /* push to callback fifo - receive will be started by comm thread */
+
+    /* copy message to dest if it was sent eagerly */
+    if (send_eager) {
+        byte_t *msg = handshake->data + handshake->header.cb_size;
+        memcpy(handshake->header.buffer, msg, handshake->header.size);
+        handle->req_handle = NULL;
+        handle->args.type = LCI_PUT_TARGET;
+    } else {
+        handle->args.type = LCI_PUT_TARGET_HANDSHAKE;
+    }
+    /* push to callback fifo
+     * if eager, comm thread will call callback
+     * if not, comm thread will start receive */
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
 }
 
 /* handler for put on target
- * can be called anywhere - deal with progress thread vs. elsewhere */
+ * using rendezvous recv, should only be called on progress thread */
 static inline void lci_put_target_handler(lc_req *req)
 {
     /* get callback handle from request context */
@@ -595,6 +631,11 @@ static inline void lci_put_target_handler(lc_req *req)
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
 
+    /* recv is always large, so this is always called on progress thread
+     * push to back of progress cb fifo */
+    LCI_HANDLER_PROGRESS(LCI_PUT_TARGET);
+    parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#if 0
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_PUT_TARGET);
         /* recv was posted prior to send arrival, so we are on progress thread
@@ -606,6 +647,7 @@ static inline void lci_put_target_handler(lc_req *req)
          * push to back of comm cb fifo */
         parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
     }
+#endif
 }
 
 /* handler for get on origin
@@ -647,13 +689,13 @@ static inline void lci_get_target_handshake_handler(lc_req *req)
     lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
                                         lci_cb_handle_mempool.thread_mempools);
     handle->args.tag         = req->meta;
-    handle->args.msg         = handshake->buffer;
-    /* array to pointer decay for handshake->cb_data */
-    handle->args.data        = handshake->cb_data;
-    handle->args.size        = handshake->size;
+    handle->args.msg         = handshake->header.buffer;
+    /* array to pointer decay for handshake->data */
+    handle->args.data        = handshake->data;
+    handle->args.size        = handshake->header.size;
     handle->args.remote      = req->rank;
     handle->args.type        = LCI_GET_TARGET_HANDSHAKE;
-    handle->cb.get_target    = (parsec_ce_am_callback_t)handshake->cb;
+    handle->cb.get_target    = (parsec_ce_am_callback_t)handshake->header.cb;
 
     LCI_CE_DEBUG_VERBOSE("Get Target handshake:\t%d <- %d(%p) size %zu with tag %d, cb data %p",
                          handle->args.remote, ep_rank,
@@ -1188,27 +1230,50 @@ lci_put(parsec_comm_engine_t *comm_engine,
         parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
         parsec_ce_tag_t r_tag, void *r_cb_data, size_t r_cb_data_size)
 {
+    lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
+    lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
+    assert(ldata->size <= rdata->size && "put origin buffer larger than target");
+
     size_t buffer_size = sizeof(lci_handshake_t) + r_cb_data_size;
+    size_t buffer_size_eager = buffer_size + ldata->size;
     assert(buffer_size <= lc_max_medium(0) && "active message data too long");
-    alignas(lci_handshake_t) byte_t buffer[buffer_size];
-    lci_handshake_t *handshake = (lci_handshake_t *)&buffer;
+
+    bool send_eager = (buffer_size_eager <= lc_max_medium(0));
+    if (send_eager) {
+        buffer_size = buffer_size_eager;
+    }
+
+    bool send_short = (buffer_size <= lc_max_short(0));
+    bool use_stack = (buffer_size <= HANDSHAKE_STACK_BUFFER_SIZE);
+
+    alignas(lci_handshake_t) byte_t stack_buffer[HANDSHAKE_STACK_BUFFER_SIZE];
+    lci_dynmsg_t *dyn_buffer = NULL;
+
+    lci_handshake_t *handshake = (lci_handshake_t *)&stack_buffer;
+    if (!use_stack) {
+        dyn_buffer = parsec_thread_mempool_allocate(
+                                           lci_dynmsg_mempool.thread_mempools);
+        handshake = (lci_handshake_t *)&dyn_buffer->data;
+    }
 
     /* get next tag */
     int tag = atomic_fetch_add_explicit(&current_tag, 1, memory_order_relaxed);
-
-    lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
-    lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
     void *lbuf = ldata->mem + ldispl;
     void *rbuf = rdata->mem + rdispl;
 
     // NOTE: size is always passed as 0, use ldata->size and rdata->size
+    // NOTE: just use ldata->size, we can send a buffer short than destination
 
     /* set handshake info */
-    handshake->buffer = rbuf;
-    handshake->size   = rdata->size;
-    handshake->cb     = r_tag;
-    memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
+    handshake->header.buffer  = rbuf;
+    handshake->header.size    = ldata->size;
+    handshake->header.cb_size = r_cb_data_size;
+    handshake->header.cb      = r_tag;
+    memcpy(handshake->data, r_cb_data, r_cb_data_size);
+    if (send_eager) {
+        memcpy(handshake->data + r_cb_data_size, lbuf, ldata->size);
+    }
 
     /* send handshake to remote, will be retrieved from queue */
     LCI_CE_DEBUG_VERBOSE("Put Origin handshake %s:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
@@ -1216,7 +1281,17 @@ lci_put(parsec_comm_engine_t *comm_engine,
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
-    RETRY(lc_sendm(handshake, buffer_size, remote, tag, put_am_ep));
+    /* use short send if small enough (true most of the time) */
+    if (send_short) {
+        RETRY(lc_sends(handshake, buffer_size, remote, tag, put_am_ep));
+    } else {
+        RETRY(lc_sendm(handshake, buffer_size, remote, tag, put_am_ep));
+    }
+
+    /* return dynamic memory to mempool */
+    if (!use_stack) {
+        parsec_mempool_free(&lci_dynmsg_mempool, dyn_buffer);
+    }
 
     /* allocate from mempool */
     lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
@@ -1231,12 +1306,19 @@ lci_put(parsec_comm_engine_t *comm_engine,
     handle->args.type        = LCI_PUT_ORIGIN;
     handle->cb.put_origin    = l_cb;
 
-    /* start send to remote with tag */
-    LCI_CE_DEBUG_VERBOSE("Put Origin start:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
-                         ep_rank, (void *)ldata->mem, ldispl,
-                         remote,  (void *)rdata->mem, rdispl,
-                         ldata->size, tag);
-    RETRY(lc_send(lbuf, ldata->size, remote, tag, put_ep, lci_put_origin_handler, handle));
+    if (send_eager) {
+        /* data sent eagerly in handshake, push to comm cb fifo
+         * assume this is communication thread for now */
+        parsec_list_nolock_push_back(&lci_comm_cb_fifo,  &handle->list_item);
+    } else {
+        LCI_CE_DEBUG_VERBOSE("Put Origin start:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
+                             ep_rank, (void *)ldata->mem, ldispl,
+                             remote,  (void *)rdata->mem, rdispl,
+                             ldata->size, tag);
+        /* start rendezvous send to remote with tag */
+        RETRY(lc_sendl(lbuf, ldata->size, remote, tag, put_ep,
+                      lci_put_origin_handler, handle));
+    }
     LCI_CALL_PUT();
     return 1;
 }
@@ -1252,16 +1334,20 @@ lci_get(parsec_comm_engine_t *comm_engine,
         parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
         parsec_ce_tag_t r_tag, void *r_cb_data, size_t r_cb_data_size)
 {
+    lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
+    lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
+
     size_t buffer_size = sizeof(lci_handshake_t) + r_cb_data_size;
     assert(buffer_size <= lc_max_medium(0) && "active message data too long");
-    byte_t buffer[buffer_size];
+    assert(buffer_size <= HANDSHAKE_STACK_BUFFER_SIZE && "active message data too long");
+
+    alignas(lci_handshake_t) byte_t buffer[HANDSHAKE_STACK_BUFFER_SIZE];
     lci_handshake_t *handshake = (lci_handshake_t *)&buffer;
+
+    bool send_short = (buffer_size <= lc_max_short(0));
 
     /* get next tag */
     int tag = atomic_fetch_add_explicit(&current_tag, 1, memory_order_relaxed);
-
-    lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
-    lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
 
     void *lbuf = ldata->mem + ldispl;
     void *rbuf = rdata->mem + rdispl;
@@ -1269,17 +1355,23 @@ lci_get(parsec_comm_engine_t *comm_engine,
     // NOTE: size is always passed as 0, use ldata->size and rdata->size
 
     /* set handshake info */
-    handshake->buffer = rbuf;
-    handshake->size   = rdata->size;
-    handshake->cb     = r_tag;
-    memcpy(handshake->cb_data, r_cb_data, r_cb_data_size);
+    handshake->header.buffer  = rbuf;
+    handshake->header.size    = rdata->size;
+    handshake->header.cb_size = r_cb_data_size;
+    handshake->header.cb      = r_tag;
+    memcpy(handshake->data, r_cb_data, r_cb_data_size);
 
     /* send handshake to remote, will be retrieved from queue */
     LCI_CE_DEBUG_VERBOSE("Get Origin handshake:\t%d(%p+%td) <- %d(%p+%td) size %zu with tag %d",
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
-    RETRY(lc_sendm(handshake, buffer_size, remote, tag, get_am_ep));
+    /* use short send if small enough (true most of the time) */
+    if (send_short) {
+        RETRY(lc_sends(handshake, buffer_size, remote, tag, get_am_ep));
+    } else {
+        RETRY(lc_sendm(handshake, buffer_size, remote, tag, get_am_ep));
+    }
 
     /* allocate from mempool */
     lci_cb_handle_t *handle = parsec_thread_mempool_allocate(
@@ -1366,8 +1458,6 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
                              item != NULL;
                              item = parsec_list_nolock_pop_front(&lci_comm_cb_fifo)) {
         lci_cb_handle_t *handle = container_of(item, lci_cb_handle_t, list_item);
-        lci_handshake_t *handshake = NULL;
-        lci_dynmsg_t    *dynmsg    = NULL;
 
         switch (handle->args.type) {
         case LCI_ABORT:
@@ -1396,14 +1486,14 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
             req_handle->req.ctx = handle;
             /* set back-reference to request handle */
             handle->req_handle = req_handle;
-            /* start receive on target for put */
+            /* start rendezvous receive on target for put */
             LCI_CE_DEBUG_VERBOSE("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
                                  handle->args.remote, ep_rank,
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
-            RETRY(lc_recv(handle->args.msg, handle->args.size,
-                          handle->args.remote, handle->args.tag,
-                          put_ep, &req_handle->req));
+            RETRY(lc_recvl(handle->args.msg, handle->args.size,
+                           handle->args.remote, handle->args.tag,
+                           put_ep, &req_handle->req));
             break;
 
         case LCI_PUT_TARGET:
