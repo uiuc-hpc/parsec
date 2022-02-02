@@ -1513,6 +1513,8 @@ remote_dep_mpi_get_end_cb(parsec_comm_engine_t *ce,
     uintptr_t *retrieve_pointer_to_callback = (uintptr_t *)msg;
     remote_dep_cb_data_t *callback_data = (remote_dep_cb_data_t *)*retrieve_pointer_to_callback;
     parsec_remote_deps_t *deps = (parsec_remote_deps_t *)callback_data->deps;
+    parsec_datatype_t dtt;
+    int dtt_size;
 
 #if defined(PARSEC_DEBUG_NOISIER)
     char tmp[MAX_TASK_STRLEN];
@@ -1525,6 +1527,10 @@ remote_dep_mpi_get_end_cb(parsec_comm_engine_t *ce,
     DEBUG_MARK_DTA_PUT_RECV(src, callback_data);
 
     TAKE_TIME(MPIrcv_prof, MPI_Data_pldr_ek, callback_data->k);
+
+    dtt = deps->output[callback_data->k].data.layout;
+    parsec_type_size(dtt, &dtt_size);
+    deps->output[callback_data->k].data.count = msg_size / dtt_size;
     remote_dep_mpi_get_end(es, callback_data->k, deps);
 
     parsec_ce.mem_unregister(&callback_data->memory_handle);

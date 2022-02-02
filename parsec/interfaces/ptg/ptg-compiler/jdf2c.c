@@ -5084,18 +5084,20 @@ static void jdf_generate_code_call_final_write(const jdf_t *jdf,
                                                const char *spaces,
                                                const jdf_dataflow_t *flow)
 {
-    string_arena_t *sa, *sa2, *sa3, *sa4;
+    string_arena_t *sa, *sa_temp, *sa_type, *sa_layout, *sa_count, *sa_displ;
     expr_info_t info = EMPTY_EXPR_INFO;
 
     (void)jdf;
 
     sa = string_arena_new(64);
-    sa2 = string_arena_new(64);
-    sa3 = string_arena_new(64);
-    sa4 = string_arena_new(64);
+    sa_temp = string_arena_new(64);
+    sa_type = string_arena_new(64);
+    sa_layout = string_arena_new(64);
+    sa_count = string_arena_new(64);
+    sa_displ = string_arena_new(64);
 
     if( call->var == NULL ) {
-        info.sa = sa2;
+        info.sa = sa_temp;
         info.prefix = "";
         info.suffix = "";
         info.assignments = "&this_task->locals";
@@ -5103,17 +5105,20 @@ static void jdf_generate_code_call_final_write(const jdf_t *jdf,
         UTIL_DUMP_LIST(sa, call->parameters, next,
                        dump_expr, (void*)&info, "", "", ", ", "");
 
-        string_arena_init(sa2);
-        string_arena_add_string(sa3, "%s", dump_expr((void**)datatype.count, &info));
-        string_arena_add_string(sa4, "%s", dump_expr((void**)datatype.displ, &info));
+        jdf_generate_arena_string_from_datatype(sa_type, datatype);
+        if( NULL == datatype.layout ) { /* no specific layout */
+            string_arena_add_string(sa_layout, "%s.opaque_dtt", string_arena_get_string(sa_type));
+        } else {
+            string_arena_add_string(sa_layout, "%s", dump_expr((void**)datatype.layout, &info));
+        }
+        string_arena_add_string(sa_count, "%s", dump_expr((void**)datatype.count, &info));
+        string_arena_add_string(sa_displ, "%s", dump_expr((void**)datatype.displ, &info));
 
-        string_arena_init(sa2);
-        jdf_generate_arena_string_from_datatype(sa2, datatype);
         coutput("%s  if( (NULL != this_task->data._f_%s.data_out) && (this_task->data._f_%s.data_out->original != data_of_%s(%s)) ) {\n"
                 "%s    parsec_dep_data_description_t data;\n"
                 "%s    data.data   = this_task->data._f_%s.data_out;\n"
                 "%s    data.arena  = %s.arena;\n"
-                "%s    data.layout = %s.opaque_dtt;\n"
+                "%s    data.layout = %s;\n"
                 "%s    data.count  = %s;\n"
                 "%s    data.displ  = %s;\n"
                 "%s    assert( data.count > 0 );\n"
@@ -5125,10 +5130,10 @@ static void jdf_generate_code_call_final_write(const jdf_t *jdf,
                 spaces, flow->varname, flow->varname, call->func_or_mem, string_arena_get_string(sa),
                 spaces,
                 spaces, flow->varname,
-                spaces, string_arena_get_string(sa2),
-                spaces, string_arena_get_string(sa2),
-                spaces, string_arena_get_string(sa3),
-                spaces, string_arena_get_string(sa4),
+                spaces, string_arena_get_string(sa_type),
+                spaces, string_arena_get_string(sa_layout),
+                spaces, string_arena_get_string(sa_count),
+                spaces, string_arena_get_string(sa_displ),
                 spaces,
                 spaces,
                 spaces,
@@ -5143,9 +5148,11 @@ static void jdf_generate_code_call_final_write(const jdf_t *jdf,
     }
 
     string_arena_free(sa);
-    string_arena_free(sa2);
-    string_arena_free(sa3);
-    string_arena_free(sa4);
+    string_arena_free(sa_temp);
+    string_arena_free(sa_type);
+    string_arena_free(sa_layout);
+    string_arena_free(sa_count);
+    string_arena_free(sa_displ);
 }
 
 static void

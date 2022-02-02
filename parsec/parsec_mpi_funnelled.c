@@ -1137,7 +1137,12 @@ mpi_no_thread_progress(parsec_comm_engine_t *ce)
             cb = &array_of_callbacks[array_of_indices[idx]];
             status = &(array_of_statuses[idx]);
 
-            MPI_Get_count(status, MPI_PACKED, &length);
+            if (MPI_FUNNELLED_TYPE_AM == cb->type)
+                MPI_Get_count(status, MPI_PACKED, &length);
+            else if (MPI_FUNNELLED_TYPE_ONESIDED_MIMIC_AM == cb->type)
+                MPI_Get_count(status, MPI_BYTE, &length);
+            else
+                length = 0; /* unused */
 
             /* Serve the callback and comeback */
             mpi_no_thread_serve_cb(ce, cb, status->MPI_TAG,

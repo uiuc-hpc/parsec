@@ -183,6 +183,9 @@ parsec_data_copy_t *parsec_arena_get_copy(parsec_arena_t *arena, size_t count, i
     parsec_data_copy_t *copy;
     size_t size;
 
+    /* quick fix, override to always allocate arena size */
+    count = 1;
+
     if( count == 1 ) {
         size = PARSEC_ALIGN(arena->elem_size + arena->alignment + sizeof(parsec_arena_chunk_t),
                            arena->alignment, size_t);
