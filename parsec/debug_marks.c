@@ -82,12 +82,16 @@ void debug_mark_ctl_msg_activate_recv(int from, const void *b, const struct remo
 
 void debug_mark_ctl_msg_get_sent(int to, const void *b, const struct remote_dep_wire_get_s *m)
 {
+    const struct remote_dep_cb_data_s *cb_data = (void *)m->remote_callback_data;
     parsec_debug_history_add("Mark: emission of a Get control message to %d\n"
                             "\t      Using buffer %p for emission\n"
                             "\t      deps requested = %p\n"
                             "\t      which requested = 0x%08x\n"
-                            "\t      remote_callback_data = %p\n",
-                            to, b, m->source_deps, (uint32_t)m->output_mask, m->remote_callback_data);
+                            "\t      remote_callback_data = %p\n"
+                            "\t      deps = %p\n"
+                            "\t      which = 0x%08x\n",
+                            to, b, m->source_deps, (uint32_t)m->output_mask,
+                            cb_data, cb_data->deps, (uint32_t)(1U << cb_data->k));
 }
 
 void debug_mark_ctl_msg_get_recv(int from, const void *b, const struct remote_dep_wire_get_s *m)
@@ -120,9 +124,10 @@ void debug_mark_dta_put_end(int to, const struct remote_dep_cb_data_s *cb_data)
 void debug_mark_dta_put_recv(int from, const struct remote_dep_cb_data_s *cb_data)
 {
     parsec_debug_history_add("Mark: Done receiving data from %d\n"
+                            "\t      remote_callback_data = %p\n"
                             "\t      deps = %p\n"
                             "\t      which = 0x%08x\n",
-                            from, cb_data->deps, (uint32_t)(1U << cb_data->k));
+                            from, cb_data, cb_data->deps, (uint32_t)(1U << cb_data->k));
 }
 
 #endif /* defined(PARSEC_DEBUG_HISTORY) */
