@@ -6,3 +6,5 @@ target_ptg_sources(rtt PRIVATE "rtt.jdf")
 parsec_addtest(C bw_test)
 target_ptg_sources(bw_test PRIVATE "bandwidth.jdf")
 
+parsec_addtest(C bw_overlap_test)
+target_ptg_sources(bw_overlap_test PRIVATE "bandwidth_overlap.jdf")
