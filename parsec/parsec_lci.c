@@ -324,6 +324,11 @@ static inline void * lci_dyn_alloc(size_t size, void **ctx)
     return &dynmsg->data;
 }
 
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+static size_t lci_max_message = SIZE_MAX;
+static atomic_size_t lci_message_count = 0;
+#endif
+
 #ifdef PARSEC_LCI_HANDLER_COUNT
 static struct {
     atomic_size_t progress;
@@ -542,6 +547,9 @@ static inline void lci_active_message_handler(lc_req *req)
  * using rendezvous recv, should only be called on progress thread */
 static inline void lci_put_origin_handler(void *ctx)
 {
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+    atomic_fetch_sub_explicit(&lci_message_count, 1, memory_order_relaxed);
+#endif
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
     assert(handle->args.type == LCI_PUT_ORIGIN && "wrong handle type");
@@ -712,6 +720,9 @@ static inline void lci_get_target_handshake_handler(lc_req *req)
  * can be called anywhere - deal with progress thread vs. elsewhere */
 static inline void lci_get_target_handler(void *ctx)
 {
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+    atomic_fetch_sub_explicit(&lci_message_count, 1, memory_order_relaxed);
+#endif
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
     assert(handle->args.type == LCI_GET_TARGET && "wrong handle type");
@@ -915,6 +926,13 @@ lci_init(parsec_context_t *context)
                                   false, false,
                                   -1, &progress_thread_binding);
     lci_comm_yield = comm_yield;
+
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+    parsec_mca_param_reg_sizet_name("lci", "max_message",
+                                    "Maximum number of concurrent messages to send",
+                                    false, false,
+                                    SIZE_MAX, &lci_max_message);
+#endif
 
     /* Make all the fn pointers point to this component's functions */
     parsec_ce.tag_register        = lci_tag_register;
@@ -1316,6 +1334,9 @@ lci_put(parsec_comm_engine_t *comm_engine,
                              ep_rank, (void *)ldata->mem, ldispl,
                              remote,  (void *)rdata->mem, rdispl,
                              ldata->size, tag);
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+        atomic_fetch_add_explicit(&lci_message_count, 1, memory_order_relaxed);
+#endif
         /* start rendezvous send to remote with tag */
         RETRY(lc_sendl(lbuf, ldata->size, remote, tag, put_ep,
                       lci_put_origin_handler, handle));
@@ -1513,6 +1534,9 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
                                  handle->args.remote, ep_rank,
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+            atomic_fetch_add_explicit(&lci_message_count, 1, memory_order_relaxed);
+#endif
             RETRY(lc_send(handle->args.msg, handle->args.size,
                           handle->args.remote, handle->args.tag,
                           get_ep, lci_get_target_handler, handle));
@@ -1640,5 +1664,10 @@ lci_sync(parsec_comm_engine_t *comm_engine)
 int
 lci_can_push_more(parsec_comm_engine_t *comm_engine)
 {
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+    size_t message_count = atomic_load_explicit(&lci_message_count, memory_order_relaxed);
+    return message_count < lci_max_message;
+#else
     return 1;
+#endif
 }

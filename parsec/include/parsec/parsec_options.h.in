@@ -122,6 +122,7 @@
 #cmakedefine PARSEC_LCI_HANDLER_COUNT
 /* LCI options */
 #cmakedefine PARSEC_LCI_CB_HASH_TABLE
+#cmakedefine PARSEC_LCI_MESSAGE_LIMIT
 
 #define PARSEC_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
 /* Default PATH to look for the CUDA .so files */
