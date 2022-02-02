@@ -73,7 +73,7 @@ endif( MPI_C_FOUND )
 # Should fail is PaRSEC is compiled without support for more than 20
 # output dependencies.
 #
-parsec_addtest(C must_fail_too_many_in_deps)
+parsec_addtest(C must_fail_too_many_in_deps NO_INSTALL)
 target_ptg_sources(must_fail_too_many_in_deps PRIVATE "too_many_in_deps.jdf")
 # Avoid building these targets normally
 set_target_properties(must_fail_too_many_in_deps PROPERTIES
@@ -84,7 +84,7 @@ add_test( NAME must_fail_too_many_in_deps_shm
           WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(must_fail_too_many_in_deps_shm PROPERTIES WILL_FAIL TRUE)
 
-parsec_addtest(C must_fail_too_many_out_deps)
+parsec_addtest(C must_fail_too_many_out_deps NO_INSTALL)
 target_ptg_sources(must_fail_too_many_out_deps PRIVATE "too_many_out_deps.jdf")
 # Avoid building these targets normally
 set_target_properties(must_fail_too_many_out_deps PROPERTIES
@@ -95,7 +95,7 @@ add_test( NAME must_fail_too_many_out_deps_shm
           WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(must_fail_too_many_out_deps_shm PROPERTIES WILL_FAIL TRUE)
 
-parsec_addtest(C must_fail_too_many_read_flows)
+parsec_addtest(C must_fail_too_many_read_flows NO_INSTALL)
 target_ptg_sources(must_fail_too_many_read_flows PRIVATE "too_many_read_flows.jdf")
 # Avoid building these targets normally
 set_target_properties(must_fail_too_many_read_flows PROPERTIES
@@ -106,7 +106,7 @@ add_test( NAME must_fail_too_many_read_flows_shm
           WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
         set_tests_properties(must_fail_too_many_read_flows_shm PROPERTIES WILL_FAIL TRUE)
 
-parsec_addtest(C must_fail_too_many_write_flows)
+parsec_addtest(C must_fail_too_many_write_flows NO_INSTALL)
 target_ptg_sources(must_fail_too_many_write_flows PRIVATE "too_many_write_flows.jdf")
 # Avoid building these targets normally
 set_target_properties(must_fail_too_many_write_flows PROPERTIES
@@ -117,7 +117,7 @@ add_test( NAME must_fail_too_many_write_flows_shm
           WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(must_fail_too_many_write_flows_shm PROPERTIES WILL_FAIL TRUE)
 
-parsec_addtest(C must_fail_too_many_local_vars)
+parsec_addtest(C must_fail_too_many_local_vars NO_INSTALL)
 target_ptg_sources(must_fail_too_many_local_vars PRIVATE "too_many_local_vars.jdf")
 # Avoid building these targets normally
 set_target_properties(must_fail_too_many_local_vars PROPERTIES

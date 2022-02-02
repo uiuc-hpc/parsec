@@ -1,11 +1,21 @@
 function(parsec_addtest lang target)
-  add_executable(${target} ${ARGN})
+  cmake_parse_arguments(${target} "NO_INSTALL" "" "" ${ARGN})
+  add_executable(${target} ${${target}_UNPARSED_ARGUMENTS})
   set_target_properties(${target} PROPERTIES
     LINKER_LANGUAGE ${lang})
   target_link_libraries(${target}
     PRIVATE
       parsec
       $<$<STREQUAL:Fortran,${lang}>:parsec_fortran>)
+  file(RELATIVE_PATH ${target}_dir ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+  if(${target}_dir)
+    set(${target}_install_dir "${PARSEC_INSTALL_LIBEXECDIR}/tests/${${target}_dir}")
+  else()
+    set(${target}_install_dir "${PARSEC_INSTALL_LIBEXECDIR}/tests")
+  endif()
+  if(NOT ${target}_NO_INSTALL)
+    install(TARGETS ${target} RUNTIME DESTINATION ${${target}_install_dir})
+  endif()
 endfunction(parsec_addtest)
 
 add_Subdirectory(unit)
