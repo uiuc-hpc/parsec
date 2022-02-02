@@ -1229,7 +1229,6 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
         dataptr = PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data);
         dtt     = deps->output[k].data.layout;
         nbdtt   = deps->output[k].data.count;
-        (void) nbdtt;
 
         task->output_mask ^= (1U<<k);
 
@@ -1247,7 +1246,7 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
             parsec_type_size(dtt, &dtt_size);
             parsec_ce.mem_register(dataptr, PARSEC_MEM_TYPE_CONTIGUOUS,
                                    -1, PARSEC_DATATYPE_NULL,
-                                   dtt_size,
+                                   dtt_size * nbdtt,
                                    &source_memory_handle, &source_memory_handle_size);
 
         }
@@ -1447,7 +1446,7 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
             parsec_type_size(dtt, &dtt_size);
             parsec_ce.mem_register(PARSEC_DATA_COPY_GET_PTR(deps->output[k].data.data), PARSEC_MEM_TYPE_CONTIGUOUS,
                                    -1, PARSEC_DATATYPE_NULL,
-                                   dtt_size,
+                                   dtt_size * nbdtt,
                                    &receiver_memory_handle, &receiver_memory_handle_size);
 
         }
