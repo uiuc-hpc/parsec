@@ -6640,17 +6640,17 @@ static void jdf_check_relatives( jdf_function_entry_t *f, jdf_dep_flags_t flow_t
     if( strlen(string_arena_get_string((SA_DEPS))) ) {                  \
         if( strlen(string_arena_get_string((SA_DATATYPE))) ) {          \
             string_arena_add_string(sa_coutput,                         \
-                                    "  %s",                             \
+                                    "%s",                               \
                                     string_arena_get_string((SA_DATATYPE))); \
         }                                                               \
         if( (JDF_DEP_FLOW_OUT & flow_type) && fl->flow_dep_mask_out == (MASK) ) { \
             string_arena_add_string(sa_coutput,                         \
-                                    "  %s",                             \
+                                    "%s",                               \
                                     string_arena_get_string((SA_DEPS))); \
         } else {                                                        \
             string_arena_add_string(sa_coutput,                         \
                                     "  if( action_mask & 0x%x ) {\n"    \
-                                    "    %s"                            \
+                                    "%s"                                \
                                     "  }\n",                            \
                                     MASK, string_arena_get_string((SA_DEPS))); \
         }                                                               \
