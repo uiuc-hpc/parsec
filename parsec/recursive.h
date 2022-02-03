@@ -28,14 +28,14 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
     int i, rc = 0;
     parsec_recursive_cb_data_t* data = (parsec_recursive_cb_data_t*)cb_data;
 
+    /* call user callback *before* we complete and release the task */
+    data->callback( tp, data );
     rc = __parsec_complete_execution(data->es, data->task);
 
     for( i = 0; i < data->nbdesc; i++ ) {
         parsec_tiled_matrix_dc_destroy( (parsec_tiled_matrix_dc_t*)(data->desc[i]) );
         free( data->desc[i] );
     }
-
-    data->callback( tp, data );
     free(data);
 
     return rc;
