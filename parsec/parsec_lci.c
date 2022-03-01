@@ -1112,6 +1112,13 @@ int lci_tag_register(parsec_ce_tag_t tag,
                      void *cb_data,
                      size_t msg_length)
 {
+    LCI_CE_DEBUG_VERBOSE("register Active Message %"PRIu64" data %p size %zu",
+                         tag, cb_data, msg_length);
+    if (msg_length > lc_max_medium(0)) {
+        parsec_warning("LCI[%d]:\tActive Message %"PRIu64": size %zu >  max %zu",
+                       ep_rank, tag, msg_length, lc_max_medium(0));
+        return PARSEC_ERROR;
+    }
 #ifdef PARSEC_LCI_CB_HASH_TABLE
     parsec_key_t key = tag;
     /* allocate handle */
@@ -1120,8 +1127,6 @@ int lci_tag_register(parsec_ce_tag_t tag,
     handle->data = cb_data;
     handle->cb   = cb;
 
-    LCI_CE_DEBUG_VERBOSE("register Active Message %"PRIu64" data %p size %zu",
-                         tag, cb_data, msg_length);
     parsec_hash_table_lock_bucket(&lci_am_cb_hash_table, key);
     if (NULL != parsec_hash_table_nolock_find(&lci_am_cb_hash_table, key)) {
         parsec_warning("LCI[%d]:\tActive Message %"PRIu64" already registered",
