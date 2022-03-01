@@ -142,14 +142,22 @@ typedef struct lci_mem_reg_handle_s {
     parsec_thread_mempool_t *mempool_owner;
 } lci_mem_reg_handle_t;
 #endif
-typedef struct lci_mem_reg_handle_s {
-    alignas(64) parsec_list_item_t list_item; /* for mempool */
-    parsec_thread_mempool_t        *mempool_owner;
+typedef struct lci_mem_reg_handle_data_s {
     byte_t                         *mem;
-    //byte_t                         *packed; /* pack buffer for noncontigiguous dt */
+//  byte_t                         *packed; /* pack buffer for noncontigiguous dt */
     size_t                         size;
     size_t                         count;
     parsec_datatype_t              datatype;
+} lci_mem_reg_handle_data_t;
+
+typedef struct lci_mem_reg_handle_s {
+    alignas(64) struct {
+        union {
+            parsec_list_item_t        list_item; /* for mempool */
+            lci_mem_reg_handle_data_t reg;
+        };
+        parsec_thread_mempool_t *mempool_owner;
+    };
 } lci_mem_reg_handle_t;
 static PARSEC_OBJ_CLASS_INSTANCE(lci_mem_reg_handle_t, parsec_list_item_t, NULL, NULL);
 
@@ -381,10 +389,10 @@ lci_put_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
     assert(handle->args.type == LCI_PUT_ORIGIN && "wrong handle type");
     LCI_CE_DEBUG_VERBOSE("Put Origin cb:\t%d(%p+%td) -> %d(%p+%td) size %zu data %p",
                          ep_rank,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
                          handle->args.remote,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.rreg)->mem,
                          handle->args.rdispl,
                          handle->args.size, handle->args.data);
     handle->cb.put_origin(comm_engine,
@@ -435,10 +443,10 @@ lci_get_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
     assert(handle->args.type == LCI_GET_ORIGIN && "wrong handle type");
     LCI_CE_DEBUG_VERBOSE("Get Origin cb:\t%d(%p+%td) <- %d(%p+%td) size %zu data %p",
                          ep_rank,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
                          handle->args.remote,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.rreg)->mem,
                          handle->args.rdispl,
                          handle->args.size, handle->args.data);
     handle->cb.get_origin(comm_engine,
@@ -555,10 +563,10 @@ static inline void lci_put_origin_handler(void *ctx)
     assert(handle->args.type == LCI_PUT_ORIGIN && "wrong handle type");
     LCI_CE_DEBUG_VERBOSE("Put Origin end:\t%d(%p+%td) -> %d(%p+%td) size %zu",
                          ep_rank,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
                          handle->args.remote,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.rreg)->mem,
                          handle->args.rdispl,
                          handle->args.size);
     /* send is always large, so this is always called on progress thread
@@ -668,10 +676,10 @@ static inline void lci_get_origin_handler(lc_req *req)
     assert(handle->args.type == LCI_GET_ORIGIN && "wrong handle type");
     LCI_CE_DEBUG_VERBOSE("Get Origin end:\t%d(%p) <- %d(%p) size %zu with tag %d",
                          ep_rank,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.lreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.lreg)->mem,
                          handle->args.ldispl,
                          handle->args.remote,
-                         (void *)((lci_mem_reg_handle_t *)handle->args.rreg)->mem,
+                         (void *)((lci_mem_reg_handle_data_t *)handle->args.rreg)->mem,
                          handle->args.rdispl,
                          handle->args.size, req->meta);
 
@@ -1197,27 +1205,30 @@ lci_mem_register(void *mem, parsec_mem_type_t mem_type,
     lci_mem_reg_handle_t *handle = parsec_thread_mempool_allocate(
                                    lci_mem_reg_handle_mempool.thread_mempools);
     /* set mem handle info */
-    handle->mem      = mem;
-    handle->size     = mem_size;
-    handle->count    = count;
-    handle->datatype = datatype;
+    handle->reg.mem      = mem;
+    handle->reg.size     = mem_size;
+    handle->reg.count    = count;
+    handle->reg.datatype = datatype;
 
     /* register memory with LCI for put/get */
     //LCI_register(mem, mem_size);
 
-    /* return the pointer to the handle and its size */
-    *lreg = (parsec_ce_mem_reg_handle_t)handle;
-    *lreg_size = sizeof(*handle);
+    /* return the pointer to the handle data and its size */
+    *lreg = (parsec_ce_mem_reg_handle_t)&handle->reg;
+    *lreg_size = sizeof(lci_mem_reg_handle_data_t);
     return 1;
 }
 
 int
 lci_mem_unregister(parsec_ce_mem_reg_handle_t *lreg)
 {
-    lci_mem_reg_handle_t *handle = (lci_mem_reg_handle_t *) *lreg;
+    /* *lreg points to lci_mem_reg_handle_t::reg */
+    lci_mem_reg_handle_t *handle = container_of(*lreg, lci_mem_reg_handle_t, reg);
     LCI_CE_DEBUG_VERBOSE("unregister memory %p size %zu",
-                         (void *)handle->mem, handle->size);
+                         (void *)handle->reg.mem, handle->reg.size);
     //LCI_unregister(handle->mem);
+    /* we clobber the class system object fields due to union, fix it! */
+    PARSEC_OBJ_CONSTRUCT(handle, lci_mem_reg_handle_t);
     parsec_mempool_free(&lci_mem_reg_handle_mempool, handle);
     *lreg = NULL;
     return 1;
@@ -1227,19 +1238,19 @@ lci_mem_unregister(parsec_ce_mem_reg_handle_t *lreg)
 int
 lci_get_mem_reg_handle_size(void)
 {
-    return sizeof(lci_mem_reg_handle_t);
+    return sizeof(lci_mem_reg_handle_data_t);
 }
 
 int
 lci_mem_retrieve(parsec_ce_mem_reg_handle_t lreg,
                  void **mem, parsec_datatype_t *datatype, int *count)
 {
-    lci_mem_reg_handle_t *handle = (lci_mem_reg_handle_t *)lreg;
-    *mem      = handle->mem;
-    *count    = handle->count;
-    *datatype = handle->datatype;
+    lci_mem_reg_handle_data_t *handle_data = (lci_mem_reg_handle_data_t *)lreg;
+    *mem      = handle_data->mem;
+    *count    = handle_data->count;
+    *datatype = handle_data->datatype;
     LCI_CE_DEBUG_VERBOSE("retrieve memory %p size %zu",
-                         (void *)handle->mem, handle->size);
+                         (void *)handle_data->mem, handle_data->size);
     return 1;
 }
 
@@ -1254,8 +1265,8 @@ lci_put(parsec_comm_engine_t *comm_engine,
         parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
         parsec_ce_tag_t r_tag, void *r_cb_data, size_t r_cb_data_size)
 {
-    lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
-    lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
+    lci_mem_reg_handle_data_t *ldata = (lci_mem_reg_handle_data_t *)lreg;
+    lci_mem_reg_handle_data_t *rdata = (lci_mem_reg_handle_data_t *)rreg;
     assert(ldata->size <= rdata->size && "put origin buffer larger than target");
 
     size_t buffer_size = sizeof(lci_handshake_t) + r_cb_data_size;
@@ -1361,8 +1372,8 @@ lci_get(parsec_comm_engine_t *comm_engine,
         parsec_ce_onesided_callback_t l_cb, void *l_cb_data,
         parsec_ce_tag_t r_tag, void *r_cb_data, size_t r_cb_data_size)
 {
-    lci_mem_reg_handle_t *ldata = (lci_mem_reg_handle_t *)lreg;
-    lci_mem_reg_handle_t *rdata = (lci_mem_reg_handle_t *)rreg;
+    lci_mem_reg_handle_data_t *ldata = (lci_mem_reg_handle_data_t *)lreg;
+    lci_mem_reg_handle_data_t *rdata = (lci_mem_reg_handle_data_t *)rreg;
 
     size_t buffer_size = sizeof(lci_handshake_t) + r_cb_data_size;
     assert(buffer_size <= lc_max_medium(0) && "active message data too long");
