@@ -135,8 +135,6 @@ extern int parsec_comm_verbose;
 extern parsec_execution_stream_t parsec_comm_es;
 extern int parsec_param_comm_thread_multiple;
 
-#ifdef DISTRIBUTED
-
 typedef struct {
     parsec_lifo_t freelist;
     uint32_t     max_dep_count;
@@ -145,6 +143,8 @@ typedef struct {
 } parsec_remote_dep_context_t;
 
 extern parsec_remote_dep_context_t parsec_remote_dep_context;
+
+#ifdef DISTRIBUTED
 
 void remote_deps_allocation_init(int np, int max_deps);
 void remote_deps_allocation_fini(void);

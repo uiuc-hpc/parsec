@@ -28,6 +28,8 @@ int parsec_communication_engine_up = -1;
 int parsec_comm_output_stream = 0;
 int parsec_comm_verbose = 0;
 
+parsec_remote_dep_context_t parsec_remote_dep_context;
+
 #ifdef DISTRIBUTED
 
 /* comm_yield mode: see valid values in the corresponding mca_register */
@@ -551,8 +553,7 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
     return 0;
 }
 
-parsec_remote_dep_context_t parsec_remote_dep_context;
-int parsec_remote_dep_inited = 0;
+static int parsec_remote_dep_inited = 0;
 
 /* THIS FUNCTION MUST NOT BE CALLED WHILE REMOTE DEP IS ON.
  * NOT THREAD SAFE (AND SHOULD NOT BE) */
