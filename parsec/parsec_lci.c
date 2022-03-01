@@ -1439,7 +1439,12 @@ lci_send_am(parsec_comm_engine_t *comm_engine,
     assert(size <= lc_max_medium(0) && "active message data too long");
     LCI_CE_DEBUG_VERBOSE("Active Message %"PRIu64" send:\t%d -> %d with message %p size %zu",
                          tag, ep_rank, remote, addr, size);
-    RETRY(lc_sendm(addr, size, remote, tag, am_ep));
+    bool send_short = (size <= lc_max_short(0));
+    if (send_short) {
+        RETRY(lc_sends(addr, size, remote, tag, am_ep));
+    } else {
+        RETRY(lc_sendm(addr, size, remote, tag, am_ep));
+    }
     LCI_CALL_AM();
     return 1;
 }
