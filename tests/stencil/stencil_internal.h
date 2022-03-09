@@ -11,6 +11,7 @@
 #include "parsec/profiling.h"
 #include "parsec/execution_stream.h"
 #include "parsec/utils/mca_param.h"
+#include "parsec/utils/parsec_environ.h"
 
 /* system and io */
 #include <math.h>
