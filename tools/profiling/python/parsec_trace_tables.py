@@ -230,7 +230,7 @@ def alias_info_on_load(trace):
         info['__original_keys__'].append(key)
 
     try:
-        if info.exe.endswith('potrf'):
+        if info['exe'].endswith('potrf'):
             info['POTRF_PRI_CHANGE']
     except KeyError as ke:
         info['POTRF_PRI_CHANGE'] = 0
