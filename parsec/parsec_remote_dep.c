@@ -201,10 +201,12 @@ static void remote_dep_mpi_profiling_init(void)
                                             parsec_profile_remote_dep_mpi_info_to_string,
                                             &put_cb_trace_sk, &put_cb_trace_ek);
 
+#if defined(PARSEC_PROF_TRACE)
     /* remote_dep_mpi_initialize_execution_stream overwrites parsec_comm_es,
      * so save es_profile outside of it! */
     es_profile = parsec_profiling_stream_init( 2*1024*1024, "MPI thread");
     parsec_comm_es.es_profile = es_profile;
+#endif
 }
 
 static void remote_dep_mpi_profiling_fini(void)
@@ -277,8 +279,10 @@ void
 remote_dep_mpi_initialize_execution_stream(parsec_context_t *context)
 {
     memcpy(&parsec_comm_es, context->virtual_processes[0]->execution_streams[0], sizeof(parsec_execution_stream_t));
+#if defined(PARSEC_PROF_TRACE)
     /* we just overwrote parsec_comm_es, must reset this */
     parsec_comm_es.es_profile = es_profile;
+#endif
 }
 
 int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp)
