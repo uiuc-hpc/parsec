@@ -96,7 +96,6 @@ set(SOURCES
   private_mempool.c
   remote_dep.c
   parsec_comm_engine.c
-  parsec_remote_dep.c
   scheduling.c
   compound.c
   vpmap.c
@@ -108,9 +107,9 @@ set(SOURCES
 )
 
 if( PARSEC_HAVE_MPI )
-  list(APPEND SOURCES datatype/datatype_mpi.c parsec_mpi_funnelled.c)
+  list(APPEND SOURCES datatype/datatype_mpi.c parsec_mpi_funnelled.c parsec_remote_dep.c)
 elseif( PARSEC_HAVE_LCI )
-  list(APPEND SOURCES datatype/datatype.c parsec_lci.c)
+  list(APPEND SOURCES datatype/datatype.c parsec_lci.c parsec_remote_dep.c)
 else( PARSEC_HAVE_MPI )
   list(APPEND SOURCES datatype/datatype.c)
 endif( PARSEC_HAVE_MPI )
