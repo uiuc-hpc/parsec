@@ -1734,13 +1734,14 @@ parsec_release_dep_fct(parsec_execution_stream_t *es,
 
         if( arg->action_mask & PARSEC_ACTION_SEND_INIT_REMOTE_DEPS ){
             struct remote_dep_output_param_s* output;
-            int _array_pos, _array_mask;
+            uint32_t _array_mask;
+            int _array_pos, _bit_pos;
 
 #if !defined(PARSEC_DIST_COLLECTIVES)
             assert(src_rank == es->virtual_process->parsec_context->my_rank);
 #endif
-            _array_pos = dst_rank / (8 * sizeof(uint32_t));
-            _array_mask = 1 << (dst_rank % (8 * sizeof(uint32_t)));
+            remote_dep_rank_to_bit(dst_rank, src_rank, es->virtual_process->parsec_context->nb_nodes, &_array_pos, &_bit_pos);
+            _array_mask = ((uint32_t)1) << _bit_pos;
             PARSEC_ALLOCATE_REMOTE_DEPS_IF_NULL(arg->remote_deps, oldcontext, MAX_PARAM_COUNT);
             output = &arg->remote_deps->output[dep->dep_datatype_index];
             assert( (-1 == arg->remote_deps->root) || (arg->remote_deps->root == src_rank) );

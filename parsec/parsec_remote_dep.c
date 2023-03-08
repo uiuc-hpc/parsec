@@ -1663,7 +1663,8 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
  * @returns 1 if the message can't be packed due to lack of space, or 0
  * otherwise.
  */
-static int remote_dep_mpi_pack_dep(int peer,
+static int remote_dep_mpi_pack_dep(parsec_execution_stream_t* es,
+                                   int peer,
                                    dep_cmd_item_t* item,
                                    char* packed_buffer,
                                    int length,
@@ -1672,14 +1673,15 @@ static int remote_dep_mpi_pack_dep(int peer,
     parsec_remote_deps_t *deps = (parsec_remote_deps_t*)item->cmd.activate.task.source_deps;
     remote_dep_wire_activate_t* msg = &deps->msg;
     int k, dsize, saved_position = *position;
-    uint32_t peer_bank, peer_mask, expected = 0;
+    uint32_t peer_mask, expected = 0;
+    int peer_bank, peer_bit;
 #if defined(PARSEC_DEBUG) || defined(PARSEC_DEBUG_NOISIER)
     char tmp[MAX_TASK_STRLEN];
     remote_dep_cmd_to_string(&deps->msg, tmp, 128);
 #endif
 
-    peer_bank = peer / (sizeof(uint32_t) * 8);
-    peer_mask = 1U << (peer % (sizeof(uint32_t) * 8));
+    remote_dep_rank_to_bit(peer, deps->root, es->virtual_process->parsec_context->nb_nodes, &peer_bank, &peer_bit);
+    peer_mask = ((uint32_t)1) << peer_bit;
 
     //MPI_Pack_size(dep_count, dep_dtt, dep_comm, &dsize);
     dsize = dep_count;
@@ -1762,7 +1764,7 @@ remote_dep_nothread_send(parsec_execution_stream_t* es,
     deps = (parsec_remote_deps_t*)item->cmd.activate.task.source_deps;
 
     parsec_list_item_singleton((parsec_list_item_t*)item);
-    if( 0 == remote_dep_mpi_pack_dep(peer, item, packed_buffer,
+    if( 0 == remote_dep_mpi_pack_dep(es, peer, item, packed_buffer,
                                      DEP_EAGER_BUFFER_SIZE, &position) ) {
         /* space left on the buffer. Move to the next item with the same destination */
         dep_cmd_item_t* next = (dep_cmd_item_t*)parsec_list_item_ring_chop(&item->pos_list);

@@ -379,4 +379,30 @@ extern int parsec_comm_puts;
 extern int parsec_param_enable_mpi_overtake;
 #endif
 
+#define PARSEC_BCAST_ROTATE_ROOT 0
+static inline void
+remote_dep_rank_to_bit(int rank, int root, int nb_nodes, int *bank, int *bit)
+{
+    int _rank;
+
+#if       PARSEC_BCAST_ROTATE_ROOT
+    _rank = (rank + nb_nodes - root) % nb_nodes;
+#else  /* PARSEC_BCAST_ROTATE_ROOT */
+    _rank = rank;
+#endif /* PARSEC_BCAST_ROTATE_ROOT */
+    *bank = _rank / (8 * sizeof(uint32_t));
+    *bit =  _rank % (8 * sizeof(uint32_t));
+}
+
+static inline void
+remote_dep_bit_to_rank(int bank, int bit, int root, int nb_nodes, int *rank)
+{
+    int _rank = bank * (8 * sizeof(uint32_t)) + bit;
+#if       PARSEC_BCAST_ROTATE_ROOT
+    *rank = (_rank + root) % nb_nodes;
+#else  /* PARSEC_BCAST_ROTATE_ROOT */
+    *rank = _rank;
+#endif /* PARSEC_BCAST_ROTATE_ROOT */
+}
+
 #endif /* __USE_PARSEC_REMOTE_DEP_H__ */
