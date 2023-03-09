@@ -173,13 +173,13 @@ int __parsec_execute( parsec_execution_stream_t* es,
         rc = hook( es, task );
 #if defined(PARSEC_PROF_TRACE)
         task->prof_info.task_return_code = rc;
-        PARSEC_PINS(es, EXEC_END, task);
 #endif
         if( PARSEC_HOOK_RETURN_NEXT != rc ) {
             if( PARSEC_HOOK_RETURN_ASYNC != rc ) {
                 /* Let's assume everything goes just fine */
                 task->status = PARSEC_TASK_STATUS_COMPLETE;
             }
+            PARSEC_PINS(es, EXEC_END, task);
             return rc;
         }
     next_chore:
