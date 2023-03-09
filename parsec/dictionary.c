@@ -171,8 +171,10 @@ static parsec_profiling_tree_t *parsec_profiling_init_tree(int depth)
 
 static parsec_hash_table_item_t *create_pr_bucket(char *pr)
 {
-    char *str = (char*)calloc(strlen(pr)+1, sizeof(char));
-    sprintf(str, "%s", pr);
+    size_t len = strlen(pr);
+    char *str = malloc(len+1);
+    memcpy(str, pr, len);
+    str[len] = '\0';
     parsec_profiling_property_t *bucket = calloc(1, sizeof(parsec_profiling_property_t));
     bucket->super.key = (parsec_key_t)str;
     bucket->state = PROPERTY_NO_STATE;
@@ -182,8 +184,10 @@ static parsec_hash_table_item_t *create_pr_bucket(char *pr)
 
 static parsec_hash_table_item_t *create_tc_bucket(char *tc)
 {
-    char *str = (char*)calloc(strlen(tc)+1, sizeof(char));
-    sprintf(str, "%s", tc);
+    size_t len = strlen(tc);
+    char *str = malloc(len+1);
+    memcpy(str, tc, len);
+    str[len] = '\0';
     parsec_profiling_task_class_t *bucket = calloc(1, sizeof(parsec_profiling_task_class_t));
     bucket->super.key = (parsec_key_t)str;
     parsec_hash_table_init(&bucket->properties, 0, 8, dict_key_fns, NULL);
@@ -192,8 +196,10 @@ static parsec_hash_table_item_t *create_tc_bucket(char *tc)
 
 static parsec_hash_table_item_t *create_ns_bucket(char *ns)
 {
-    char *str = (char*)calloc(strlen(ns)+1, sizeof(char));
-    sprintf(str, "%s", ns);
+    size_t len = strlen(ns);
+    char *str = malloc(len+1);
+    memcpy(str, ns, len);
+    str[len] = '\0';
     parsec_profiling_namespace_t *bucket = calloc(1, sizeof(parsec_profiling_namespace_t));
     bucket->super.key = (parsec_key_t)str;
     parsec_hash_table_init(&bucket->task_classes, 0, 8, dict_key_fns, NULL);
