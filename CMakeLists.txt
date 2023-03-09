@@ -151,10 +151,10 @@ option(PARSEC_DIST_PRIORITIES
   "Favor the communications that unlock the most prioritary tasks" ON)
 option(PARSEC_DIST_COLLECTIVES
   "Use optimized asynchronous operations where collective communication pattern is detected" ON)
-set   (PARSEC_DIST_SHORT_LIMIT 1 CACHE STRING
-  "Use the short protocol (no flow control) for messages smaller than the limit in KB")
-set   (PARSEC_DIST_EAGER_LIMIT 12 CACHE STRING
-  "Use the eager protocol (no flow control) for messages smaller than the limit in KB")
+set   (PARSEC_DIST_SHORT_LIMIT 1024 CACHE STRING
+  "Use the short protocol (no flow control) for messages smaller than the limit in bytes")
+set   (PARSEC_DIST_EAGER_LIMIT 12228 CACHE STRING
+  "Use the eager protocol (no flow control) for messages smaller than the limit in bytes")
 
 ### GPU engine parameters
 option(PARSEC_GPU_WITH_CUDA
@@ -493,7 +493,7 @@ IF( BUILD_PARSEC )
     set(PARSEC_HAVE_MPI ${MPI_C_FOUND})
     if (NOT MPI_C_FOUND)
       # Force MPI: if no compiler, do not proceed further
-      MESSAGE(ERROR "MPI is required but was not found. Please provide an MPI compiler")
+      MESSAGE(FATAL_ERROR "MPI is required but was not found. Please provide an MPI compiler")
     endif (NOT MPI_C_FOUND)
   endif (PARSEC_DIST_WITH_MPI)
   #

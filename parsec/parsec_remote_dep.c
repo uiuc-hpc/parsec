@@ -76,7 +76,7 @@ remote_dep_cmd_to_string(remote_dep_wire_activate_t* origin,
 #define dep_dtt MPI_BYTE
 #define dep_count sizeof(remote_dep_wire_activate_t)
 #define dep_extent dep_count
-#define DEP_EAGER_BUFFER_SIZE (dep_extent+RDEP_MSG_EAGER_LIMIT)
+#define DEP_EAGER_BUFFER_SIZE ((RDEP_MSG_EAGER_LIMIT < dep_extent) ? dep_extent : RDEP_MSG_EAGER_LIMIT)
 #define datakey_dtt MPI_LONG
 #define datakey_count 3
 
