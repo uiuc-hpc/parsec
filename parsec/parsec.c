@@ -2711,3 +2711,8 @@ parsec_execution_stream_t *parsec_my_execution_stream(void)
 {
     return (parsec_execution_stream_t*)PARSEC_TLS_GET_SPECIFIC(parsec_tls_execution_stream);
 }
+
+void parsec_set_execution_stream(parsec_execution_stream_t *es)
+{
+    PARSEC_TLS_SET_SPECIFIC(parsec_tls_execution_stream, es);
+}

@@ -283,6 +283,7 @@ remote_dep_mpi_initialize_execution_stream(parsec_context_t *context)
     /* we just overwrote parsec_comm_es, must reset this */
     parsec_comm_es.es_profile = es_profile;
 #endif
+    parsec_set_execution_stream(&parsec_comm_es);
 }
 
 int remote_dep_dequeue_new_taskpool(parsec_taskpool_t* tp)

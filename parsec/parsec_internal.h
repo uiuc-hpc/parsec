@@ -561,6 +561,9 @@ parsec_release_local_OUT_dependencies(parsec_execution_stream_t* es,
 int parsec_getsimulationdate( parsec_context_t *parsec_context );
 #endif
 
+/* set TLS variable parsec_tls_execution_stream to es, needed by comm thread */
+void parsec_set_execution_stream(parsec_execution_stream_t *es);
+
 /** @} */
 
 END_C_DECLS
