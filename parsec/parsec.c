@@ -960,6 +960,8 @@ int parsec_version_ex( size_t len, char* version_string) {
 #if defined(PARSEC_DIST_THREAD)
         "+thread_multiple"
 #endif
+#elif defined(PARSEC_HAVE_LCI)
+        "lci"
 #else  /* defined(PARSEC_HAVE_MPI) */
         "single process only"
 #endif
