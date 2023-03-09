@@ -64,6 +64,9 @@ typedef struct remote_dep_cb_data_s {
     parsec_thread_mempool_t *mempool_owner;
     parsec_remote_deps_t *deps; /* always local */
     parsec_ce_mem_reg_handle_t memory_handle;
+#ifdef PARSEC_PROF_TRACE
+    uint64_t eid;
+#endif /* PARSEC_PROF_TRACE */
     int k;
 } remote_dep_cb_data_t;
 PARSEC_DECLSPEC PARSEC_OBJ_CLASS_DECLARATION(remote_dep_cb_data_t);
@@ -337,30 +340,59 @@ typedef struct {
     int rank_src;  // 0
     int rank_dst;  // 4
     uint64_t tid;  // 8
-    uint32_t tpid;  // 16
-    uint32_t tcid;  // 20
-} parsec_profile_remote_dep_mpi_info_t; // 24 bytes
+    uint32_t tpid; // 16
+    uint32_t tcid; // 20
+} parsec_profile_comm_activate_info_t; // 24 bytes
+
+typedef struct {
+    int rank_src;  // 0
+    int rank_dst;  // 4
+    uint64_t tid;  // 8
+    uint32_t tpid; // 16
+    uint32_t tcid; // 20
+    int      k;    // 24
+} parsec_profile_comm_data_info_t; // 32 bytes
 
 #ifdef PARSEC_PROF_TRACE
-#define TAKE_TIME_WITH_INFO(PROF, KEY, I, src, dst, rdw)                \
+#define SET_PROF_INFO(info, src, dst, rdw)                        \
+  do {                                                            \
+    parsec_taskpool_t *__tp = parsec_taskpool_lookup( (rdw).taskpool_id ); \
+    const parsec_task_class_t *__tc = __tp->task_classes_array[(rdw).task_class_id ]; \
+    info.rank_src = (src);                                        \
+    info.rank_dst = (dst);                                        \
+    info.tpid = __tp->taskpool_id;                                \
+    info.tcid = (rdw).task_class_id;                              \
+    info.tid  = __tc->key_functions->key_hash(                    \
+                       __tc->make_key(__tp, (rdw).locals), NULL); \
+  } while (0)
+
+#define TAKE_TIME_ACTIVATE(PROF, KEY, I, src, dst, rdw)                 \
+  do {                                                                  \
     if( parsec_profile_enabled ) {                                      \
-        parsec_profile_remote_dep_mpi_info_t __info;                    \
-        parsec_taskpool_t *__tp = parsec_taskpool_lookup( (rdw).taskpool_id ); \
-        const parsec_task_class_t *__tc = __tp->task_classes_array[(rdw).task_class_id ]; \
-        __info.rank_src = (src);                                        \
-        __info.rank_dst = (dst);                                        \
-        __info.tpid = __tp->taskpool_id;                                \
-        __info.tcid = (rdw).task_class_id;                              \
-        __info.tid  = __tc->key_functions->key_hash(                    \
-                             __tc->make_key(__tp, (rdw).locals), NULL); \
+        parsec_profile_comm_activate_info_t __info;                     \
+        SET_PROF_INFO(__info, src, dst, rdw);                           \
         PARSEC_PROFILING_TRACE((PROF), (KEY), (I),                      \
                                PROFILE_OBJECT_ID_NULL, &__info);        \
-    }
+    }                                                                   \
+  } while (0)
+
+#define TAKE_TIME_DATA(PROF, KEY, I, k, src, dst, rdw)                  \
+  do {                                                                  \
+    if( parsec_profile_enabled ) {                                      \
+        parsec_profile_comm_data_info_t __info;                         \
+        SET_PROF_INFO(__info, src, dst, rdw);                           \
+        __info.k = (k);                                                 \
+        PARSEC_PROFILING_TRACE((PROF), (KEY), (I),                      \
+                               PROFILE_OBJECT_ID_NULL, &__info);        \
+    }                                                                   \
+  } while (0)
 
 #define TAKE_TIME(PROF, KEY, I) PARSEC_PROFILING_TRACE((PROF), (KEY), (I), PROFILE_OBJECT_ID_NULL, NULL)
 
 #else
-#define TAKE_TIME_WITH_INFO(PROF, KEY, I, src, dst, rdw) do {} while(0)
+#define SET_PROF_INFO(info, src, dst, rdw) do {} while(0)
+#define TAKE_TIME_ACTIVATE(PROF, KEY, I, src, dst, rdw) do {} while(0)
+#define TAKE_TIME_DATA(PROF, KEY, I, k, src, dst, rdw) do {} while(0)
 #define TAKE_TIME(PROF, KEY, I) do {} while(0)
 #endif  /* PARSEC_PROF_TRACE */
 
