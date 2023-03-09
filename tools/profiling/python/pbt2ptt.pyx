@@ -44,7 +44,7 @@ import traceback
 from parsec_trace_tables import * # the pure Python classes
 from common_utils import *
 
-multiprocess_io_cap = 9 # this seems to be a good default on ICL machines
+multiprocess_io_cap = 128 # this seems to be a good default on ICL machines
 microsleep = 0.05
 
 logging.basicConfig(level=10, format='%(message)s')
@@ -62,7 +62,7 @@ cpdef tostring(val):
     return ret
 
 cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=False,
-           add_info=dict()):
+           add_info=dict(), version=1):
     """ Given binary trace filenames, returns a PaRSEC Trace Table (PTT) object
 
     Defaults in parentheses
@@ -93,6 +93,9 @@ cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=F
     if dbp == NULL:
         print("None of the following files can be opened {0}".format(filenames))
         return None
+
+    if not version in [1, 2]:
+        raise ValueError("version must be 1 or 2")
 
     # determine amount of multiprocessing
     if isinstance(multiprocess, bool):
@@ -178,12 +181,13 @@ cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=F
     with Timer() as t:
         if multiprocess > 1:
             node_thread_chunks = chunk(node_streams, multiprocess)
-            for nt_chunk in node_thread_chunks:
+            for i, nt_chunk in enumerate(node_thread_chunks):
                 my_end, their_end = Pipe()
                 process_pipes.append(my_end)
                 p = Process(target=construct_stream_in_process, args=
                             (their_end, builder, filenames,
-                            nt_chunk, skeleton_only, report_progress))
+                            nt_chunk, skeleton_only, report_progress, version),
+                            name='chunk({})'.format(i))
                 processes.append(p)
                 p.start()
             while process_pipes:
@@ -193,11 +197,12 @@ cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=F
                         if not pipe.poll():
                             continue
                         something_was_read = True
-                        events, errors, streams = pipe.recv()
+                        events, infos, errors, streams = pipe.recv()
                         for node_id, stream in streams.iteritems():
                             builder.unordered_streams_by_node[node_id].update(stream)
                         builder.events.append(events)
                         builder.errors.append(errors)
+                        builder.infos.append(infos)
                         cond_print('<', report_progress, end='') # print comms progress
                         sys.stdout.flush()
                         process_pipes.remove(pipe)
@@ -207,9 +212,11 @@ cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=F
                     time.sleep(microsleep) # tiny sleep so as not to hog CPU
             for p in processes:
                 p.join() # cleanup spawned processes
+                if p.exitcode:
+                    print('Warning: \'{}\' returned {}!'.format(p.name, p.exitcode))
         else:
             construct_stream_in_process(None, builder, filenames,
-                                        node_streams, skeleton_only, report_progress)
+                                        node_streams, skeleton_only, report_progress, version)
     # report progress
     cond_print('\nParsing the PBT files took ' + str(t.interval) + ' seconds' ,
                report_progress, end='')
@@ -245,13 +252,37 @@ cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=F
         for key, val in add_info.iteritems():
             add_kv(builder.information, tostring(key), tostring(val))
 
+    event_infos = dict()
     if isinstance(builder.events, pd.DataFrame):
         events = builder.events
     else:
         if len(builder.events) > 0:
             cond_print('Then we concatenate the event DataFrames....', report_progress)
             with Timer() as t:
-                events = pd.concat(builder.events)
+                # we always concatenate the main DataFrames
+                events = pd.concat(builder.events, ignore_index=True)
+                if version == 1:
+                    # in v1 event infos are in the main DataFrame, do nothing
+                    pass
+                elif version == 2:
+                    # builder.infos is a list of dicts of DataFrames
+                    # Each dict maps event type -> info DataFrame for that event
+                    # We want to transform this into a dict of these DataFrames
+                    # Since concat() retains order in each DataFrame and between
+                    # DataFrames, we can find the new indices by selecting events
+                    # with that same event type
+
+                    # Start by transforming this into a dict of lists of DataFrames
+                    for process in builder.infos:
+                        for type, df in process.items():
+                            event_infos.setdefault(type, list()).append(df)
+                    # Group events by type, .groups is a dict of type -> label (i.e. index)
+                    type_index = events.groupby('type').groups
+                    # Not all types are in event_infos OR in events (and therefore type_index)
+                    event_infos = { type: pd.concat(
+                                        event_infos.get(type, [pd.DataFrame()])
+                                    ).set_axis(type_index.get(type, []))
+                                for type in range(nb_dict_entries) }
             cond_print('   events DataFrame concatenation time: ' + str(t.interval), report_progress)
         else:
             events = pd.DataFrame()
@@ -279,14 +310,15 @@ cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=F
             errors = builder.errors
         else:
             if len(builder.errors) > 0:
-                errors = pd.concat(builder.errors)
+                errors = pd.concat(builder.errors, ignore_index=True)
             else:
                 errors = pd.DataFrame()
 
     cond_print('Constructed additional structures in {0} seconds.'.format(t.interval),
                report_progress)
 
-    trace = ParsecTraceTables(events, event_types, event_names, event_attributes, event_convertors,
+    trace = ParsecTraceTables(events, event_infos, event_types, event_names,
+                              event_attributes, event_convertors,
                               nodes, streams, information, errors)
 
     dbp_reader_close_files(dbp) # does nothing as of 2013-04-21
@@ -299,7 +331,8 @@ cpdef read(filenames, report_progress=False, skeleton_only=False, multiprocess=F
 cpdef convert(filenames, out=None, unlink=False, multiprocess=True,
               force_reconvert=False, validate_existing=False,
               table=False, append=False, report_progress=False,
-              add_info=dict(), compress=('blosc', 0), skeleton_only=False):
+              add_info=dict(), compress=('blosc', 0), skeleton_only=False,
+              version=1):
     ''' Given [filenames] that comprise a single binary trace, returns the filename of the converted trace.
 
     filenames -- a list-like of strings
@@ -360,7 +393,8 @@ cpdef convert(filenames, out=None, unlink=False, multiprocess=True,
     # convert
     cond_print('Converting {0}'.format(filenames), report_progress)
     trace = read(filenames, report_progress=report_progress,
-                 multiprocess=multiprocess, add_info=add_info, skeleton_only=skeleton_only)
+                 multiprocess=multiprocess, add_info=add_info,
+                 skeleton_only=skeleton_only, version=version)
 
     if out == None: # create out filename
         out_dir = os.path.dirname(filenames[0])
@@ -453,8 +487,98 @@ cdef char** string_list_to_c_strings(strings):
     return c_argv
 
 
+cpdef construct_dataframe_v1(builder):
+    ''' Construct a v1 DataFrame from a list of event dictionaries
+
+    version 1: single events DataFrame returned; missing keys are None
+    '''
+    # At this time, builder.events is a list of dictionaries with variable keys
+    # We are going to make a pd.DataFrame out of it.
+    # However, when pandas does not have a value for a column, it puts NaN in it by
+    # default, if that column can be converted to a numerical value.
+    # This creates problems, as NaN is a floating point value: some columns with
+    # integer information gets converted to floating point, just because some rows
+    # don't have this information.
+    # The solution is to force pandas to use 'object' as the type of this column.
+    # 'object' types can still be added, substracted, etc. if they can be cast dynamically
+    # to a numeric value, so it is portable to get all the columns of the dataframe
+    # to use the type 'object'.
+    # Unfortunately, we use from_records to build the dataframe (which is faster than
+    # appending the rows one by one to the dataframe), and from_records cannot take
+    # a default column type: we need to provide the column type of each record.
+    # That means that first we need to cleanup builder.events: we need to extract
+    # the values as list( tuple ), and thus we need to ensure that each dict of the
+    # original list has the same keys.
+#   # First, we compute the keys:
+#   allkeys = frozenset().union(*builder.events)
+    # Add missing keys to each event, if necessary
+    for event in builder.events:
+        for k in builder.keys:
+            event.setdefault(k, None)
+    # Build a DataFrame with dtype object
+    builder.events = pd.DataFrame(builder.events, dtype=object)
+#   # Build a DataFrame, adding missing keys to each row if necessary
+#   return pd.DataFrame({k: pd.Series([e[k] if k in e else None for e in builder.events],
+#                                     dtype=object)
+#                           for k in allkeys})
+
+
+cpdef construct_dataframe_v2(builder):
+    ''' Construct a v2 DataFrame from a list of event dicts
+
+    version 2: main DataFrame with core event info
+               and dict of per-type DataFrames with supplementary event info
+    returned as a tuple
+    '''
+    # At this time, builder.events is a list of dictionaries with variable keys
+    # We are going to make a pd.DataFrame out of it.
+#   # First, we compute the keys:
+#   allkeys = frozenset().union(*builder.events)
+    # Set of base keys common to all events
+    basekeys = frozenset({'node_id', 'stream_id', 'taskpool_id', 'type',
+                          'begin', 'end', 'flags', 'id'})
+    event_infos = dict()
+    for event in builder.events:
+        # Remove non-base (i.e. event-specific) keys from main dict
+        info = dict()
+        for k in list(event.keys()):
+            if k not in basekeys:
+                info[k] = event.pop(k)
+        # Append dict of event info to list for that event type
+        event_infos.setdefault(event['type'], list()).append(info)
+
+    # Build a DataFrame, inferring the correct dtypes
+    builder.events = pd.DataFrame(builder.events)
+    # Group events by type, .groups is a dict of type -> label (i.e. index)
+    type_index = builder.events.groupby('type').groups
+    # Build a dict of event-type -> DataFrame of the event infos, inferring dtypes
+    # Since types in event_infos is a subset of those in builder.events, it is
+    # guaranteed that type_index[type] does not return KeyError
+    builder.infos = { type: pd.DataFrame(infos, index=type_index[type])
+                            for type, infos in event_infos.items() }
+#   infokeys = allkeys.difference(basekeys)
+#   # Compute set of event types; we could technically get this from builder
+#   event_types = frozenset([e['type'] for e in builder.events])
+#   # Compute keys for each type, dict of type -> set of keys
+#   type_keys = { event_type: frozenset([k for e in builder.events for k in e
+#                                        if e['type'] == event_type and k not in basekeys])
+#                             for event_type in event_types }
+#   # Build DataFrame with base keys
+#   event_base = pd.DataFrame({k: pd.Series([e[k] for e in builder.events]) for k in basekeys})
+#   # Construct a dict of type -> DataFrame,
+#   # where each DataFrame has the extra info keys for events of that type,
+#   # indexed by the event's index in the base DataFrame
+#   event_info = { event_type: pd.DataFrame(
+#           { k: pd.Series([e[k] for e in builder.events if e['type'] == event_type],
+#                          index=event_base[event_base['type'] == event_type].index)
+#                          for k in type_keys[event_type] }
+#           ) for event_type in event_types }
+#
+#   return (event_base, event_info)
+
+
 cpdef construct_stream_in_process(pipe, builder, filenames, node_streams,
-                                  skeleton_only, report_progress):
+                                  skeleton_only, report_progress, version):
     ''' Target function for the map/reduce threading functionality '''
     cdef dbp_file_t * cfile
     cdef char ** c_filenames = string_list_to_c_strings(filenames)
@@ -473,41 +597,13 @@ cpdef construct_stream_in_process(pipe, builder, filenames, node_streams,
 
     # now we must send the constructed objects back to the spawning process
     if len(builder.events) > 0:
-        # At this time, builder.events is a list of dictionaries with variable keys
-        # We are going to make a pd.DataFrame out of it.
-        # However, when pandas does not have a value for a column, it puts NaN in it by
-        # default, if that column can be converted to a numerical value.
-        # This creates problems, as NaN is a floating point value: some columns with
-        # integer information gets converted to floating point, just because some rows
-        # don't have this information.
-        # The solution is to force pandas to use 'object' as the type of this column.
-        # 'object' types can still be added, substracted, etc. if they can be cast dynamically
-        # to a numeric value, so it is portable to get all the columns of the dataframe
-        # to use the type 'object'.
-        # Unfortunately, we use from_records to build the dataframe (which is faster than
-        # appending the rows one by one to the dataframe), and from_records cannot take
-        # a default column type: we need to provide the column type of each record.
-        # That means that first we need to cleanup builder.events: we need to extract
-        # the values as list( tuple ), and thus we need to ensure that each dict of the
-        # original list has the same keys.
         with Timer() as t:
-            # First, we compute the keys:
-            allkeys = frozenset().union(*builder.events)
-            # Then, we add the missing keys to each row, with the value 'None' in it
-            for e in builder.events:
-                for missing in allkeys.difference(e):
-                    e[missing] = None
-            # Then, we build a dict of typed Series, for each key of builder.events
-            record = dict()
-            for k in allkeys:
-                # val is the list of values for that key
-                val = []
-                for d in builder.events:
-                    val.append(d[k])
-                record[k] = pd.Series(val, dtype=np.dtype(object))
+            if version == 1:
+                construct_dataframe_v1(builder)
+            elif version == 2:
+                construct_dataframe_v2(builder)
         cond_print('\nSanitizing the events took ' + str(t.interval) + ' seconds' ,
                     report_progress, end='')
-        builder.events = pd.DataFrame(record)
     else:
         builder.events = pd.DataFrame()
     if len(builder.errors) > 0:
@@ -516,7 +612,7 @@ cpdef construct_stream_in_process(pipe, builder, filenames, node_streams,
     else:
         builder.errors = pd.DataFrame()
     if None != pipe:
-        pipe.send((builder.events, builder.errors, builder.unordered_streams_by_node))
+        pipe.send((builder.events, builder.infos, builder.errors, builder.unordered_streams_by_node))
 
 
 thread_id_in_descrip = re.compile('.*thread\s+(\d+).*', re.IGNORECASE)
@@ -613,7 +709,7 @@ cdef construct_stream(builder, skeleton_only, dbp_multifile_reader_t * dbp, dbp_
                             traceback.print_exc()
                             print('Failed to extract info from the start event (taskpool_id {0} event_id {1})'.format(taskpool_id, event_id))
 
-                it_e = dbp_iterator_find_matching_event_all_threads(it_s, 0)
+                it_e = dbp_iterator_find_matching_event_all_threads(it_s)
                 if it_e != NULL:
 
                     event_e = dbp_iterator_current(it_e)
@@ -646,6 +742,7 @@ cdef construct_stream(builder, skeleton_only, dbp_multifile_reader_t * dbp, dbp_
                         if end >= begin and (end - begin) <= th_duration:
                             # VALID EVENT FOUND
                             builder.events.append(event)
+                            builder.keys.update(event.keys())
                             if th_end < end:
                                 th_end = end
                         else: # the event is 'not sane'
@@ -694,6 +791,7 @@ class ProfileBuilder(object):
         self.event_convertors = dict()
         self.unordered_streams_by_node = dict()
         self.node_order = dict()
+        self.keys = set()
 
 
 # NOTE:
