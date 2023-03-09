@@ -376,6 +376,24 @@ void parsec_remote_dep_memcpy(parsec_execution_stream_t* es,
     parsec_dequeue_push_back(&dep_cmd_queue, (parsec_list_item_t*) item);
 }
 
+/* force each page in the allocated data to be physically allocated */
+#define PAGE_SIZE (1UL << 12)
+static inline __attribute__((always_inline)) void
+remote_dep_touch_data(parsec_data_copy_t *dc, parsec_datatype_t dtt, size_t count)
+{
+    int size;
+    unsigned char *cur;
+    unsigned char *end;
+
+    parsec_type_size(dtt, &size);
+    cur = dc->device_private;
+    end = cur + (size * count);
+    while (cur < end) {
+        *cur = 0xFF;
+        cur += PAGE_SIZE;
+    }
+}
+
 static inline parsec_data_copy_t*
 remote_dep_copy_allocate(parsec_dep_data_description_t* data)
 {
@@ -384,7 +402,10 @@ remote_dep_copy_allocate(parsec_dep_data_description_t* data)
         assert(0 == data->count);
         return NULL;
     }
+
     dc = parsec_arena_get_copy(data->arena, data->count, 0);
+    remote_dep_touch_data(dc, data->layout, data->count);
+
     dc->coherency_state = PARSEC_DATA_COHERENCY_EXCLUSIVE;
     PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI:\tMalloc new remote tile %p size %" PRIu64 " count = %" PRIu64 " displ = %" PRIi64 "",
             dc, data->arena->elem_size, data->count, data->displ);
