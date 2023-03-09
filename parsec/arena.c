@@ -52,8 +52,12 @@ extern int arena_memory_used_key, arena_memory_unused_key;
 
 #define PARSEC_ARENA_MIN_ALIGNMENT(align) ((ptrdiff_t)(align*((sizeof(parsec_arena_chunk_t)-1)/align+1)))
 
+static inline parsec_arena_chunk_t* parsec_arena_alloc_chunk( parsec_arena_t *arena, size_t count );
+static inline void parsec_arena_init_chunk( parsec_arena_t *arena, parsec_arena_chunk_t *chunk, size_t count );
+
 size_t parsec_arena_max_allocated_memory = SIZE_MAX;  /* unlimited */
 size_t parsec_arena_max_cached_memory    = 256*1024*1024; /* limited to 256MB */
+
 
 
 int parsec_arena_construct_ex(parsec_arena_t* arena,
@@ -120,35 +124,66 @@ static void parsec_arena_destructor(parsec_arena_t* arena)
 
 PARSEC_OBJ_CLASS_INSTANCE(parsec_arena_t, parsec_object_t, NULL, parsec_arena_destructor);
 
-static inline parsec_list_item_t*
-parsec_arena_get_chunk( parsec_arena_t *arena, size_t size, parsec_data_allocate_t alloc )
+
+static inline parsec_arena_chunk_t*
+parsec_arena_alloc_chunk( parsec_arena_t *arena, size_t count )
+{
+    size_t size;
+    parsec_arena_chunk_t *chunk;
+
+    if(arena->max_used != INT32_MAX) {
+        int32_t current = parsec_atomic_fetch_add_int32(&arena->used, count) + count;
+        if(current > arena->max_used) {
+            (void)parsec_atomic_fetch_sub_int32(&arena->used, count);
+            return NULL;
+        }
+    }
+    size = PARSEC_ALIGN(arena->elem_size * count + arena->alignment + sizeof(parsec_arena_chunk_t),
+                        arena->alignment, size_t);
+    chunk = (parsec_arena_chunk_t*)arena->data_malloc(size);
+    assert(NULL != chunk);
+    TRACE_MALLOC(arena_memory_alloc_key, size, chunk);
+    PARSEC_OBJ_CONSTRUCT(&chunk->item, parsec_list_item_t);
+    return chunk;
+}
+
+static inline void
+parsec_arena_init_chunk( parsec_arena_t *arena, parsec_arena_chunk_t *chunk, size_t count )
+{
+#if defined(PARSEC_DEBUG_PARANOID)
+    PARSEC_LIST_ITEM_SINGLETON( &chunk->item );
+#endif
+    chunk->origin = arena;
+    chunk->count  = count;
+    chunk->data   = PARSEC_ALIGN_PTR( ((ptrdiff_t)chunk + sizeof(parsec_arena_chunk_t)),
+                                      arena->alignment, void* );
+}
+
+static inline parsec_arena_chunk_t*
+parsec_arena_get_chunk( parsec_arena_t *arena, size_t count )
 {
     parsec_lifo_t *list = &arena->area_lifo;
-    parsec_list_item_t *item;
-    item = parsec_lifo_pop(list);
-    if( NULL != item ) {
-        if( arena->max_released != INT32_MAX )
-            (void)parsec_atomic_fetch_dec_int32(&arena->released);
-    }
-    else {
-        if(arena->max_used != INT32_MAX) {
-            int32_t current = parsec_atomic_fetch_inc_int32(&arena->used) + 1;
-            if(current > arena->max_used) {
-                (void)parsec_atomic_fetch_dec_int32(&arena->used);
-                return NULL;
-            }
+    parsec_arena_chunk_t *chunk;
+
+    if( count == 1 ) {
+        chunk = (parsec_arena_chunk_t*)parsec_lifo_try_pop(list);
+        if( NULL != chunk ) {
+            if( arena->max_released != INT32_MAX )
+                (void)parsec_atomic_fetch_dec_int32(&arena->released);
+            goto got_chunk;
         }
-        if( size < sizeof( parsec_list_item_t ) )
-            size = sizeof( parsec_list_item_t );
-        item = (parsec_list_item_t *)alloc( size );
-        TRACE_MALLOC(arena_memory_alloc_key, size, item);
-        PARSEC_OBJ_CONSTRUCT(item, parsec_list_item_t);
-        assert(NULL != item);
     }
+    chunk = parsec_arena_alloc_chunk( arena, count );
+
+    if( NULL == chunk )
+        return NULL;
+
+got_chunk:
+    parsec_arena_init_chunk( arena, chunk, count );
     PARSEC_DEBUG_VERBOSE(10, parsec_debug_output, "Arena:\tpop a data of size %zu from arena %p, aligned by %zu, base ptr %p, data ptr %p, sizeof prefix %zu(%zd)",
-                arena->elem_size, arena, arena->alignment, item, ((parsec_arena_chunk_t*)item)->data, sizeof(parsec_arena_chunk_t),
+                arena->elem_size, arena, arena->alignment, chunk, chunk->data, sizeof(parsec_arena_chunk_t),
                 PARSEC_ARENA_MIN_ALIGNMENT(arena->alignment));
-    return item;
+    return chunk;
 }
 
 static void
@@ -186,37 +221,11 @@ parsec_data_copy_t *parsec_arena_get_copy(parsec_arena_t *arena, size_t count, i
     /* quick fix, override to always allocate arena size */
     count = 1;
 
-    if( count == 1 ) {
-        size = PARSEC_ALIGN(arena->elem_size + arena->alignment + sizeof(parsec_arena_chunk_t),
-                           arena->alignment, size_t);
-        chunk = (parsec_arena_chunk_t *)parsec_arena_get_chunk( arena, size, arena->data_malloc );
-    } else {
-        assert(count > 1);
-        if(arena->max_used != INT32_MAX) {
-            int32_t current = parsec_atomic_fetch_add_int32(&arena->used, count) + count;
-            if(current > arena->max_used) {
-                (void)parsec_atomic_fetch_sub_int32(&arena->used, count);
-                return NULL;
-            }
-        }
-        size = PARSEC_ALIGN(arena->elem_size * count + arena->alignment + sizeof(parsec_arena_chunk_t),
-                           arena->alignment, size_t);
-        chunk = (parsec_arena_chunk_t*)arena->data_malloc(size);
-        PARSEC_OBJ_CONSTRUCT(&chunk->item, parsec_list_item_t);
+    chunk = parsec_arena_get_chunk( arena, count );
+    if( NULL == chunk )
+        return NULL;  /* no more */
 
-        TRACE_MALLOC(arena_memory_alloc_key, size, chunk);
-    }
-    if(NULL == chunk) return NULL;  /* no more */
-
-#if defined(PARSEC_DEBUG_PARANOID)
-    PARSEC_LIST_ITEM_SINGLETON( &chunk->item );
-#endif
     TRACE_MALLOC(arena_memory_used_key, size, chunk);
-
-    chunk->origin = arena;
-    chunk->count = count;
-    chunk->data = PARSEC_ALIGN_PTR( ((ptrdiff_t)chunk + sizeof(parsec_arena_chunk_t)),
-                                   arena->alignment, void* );
 
     assert(0 == (((ptrdiff_t)chunk->data) % arena->alignment));
     assert((arena->elem_size + (ptrdiff_t)chunk->data)  <= (size + (ptrdiff_t)chunk));
