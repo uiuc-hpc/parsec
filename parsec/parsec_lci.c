@@ -166,16 +166,17 @@ static PARSEC_OBJ_CLASS_INSTANCE(lci_mem_reg_handle_t, parsec_list_item_t, NULL,
 /* memory pool for memory handles */
 static parsec_mempool_t lci_mem_reg_handle_mempool;
 
-/* types of callbacks */
+/* types of callbacks
+ * ordered by priority, least to greatest */
 typedef enum lci_cb_handle_type_e {
-    LCI_ABORT,
-    LCI_ACTIVE_MESSAGE,
-    LCI_PUT_ORIGIN,
-    LCI_PUT_TARGET_HANDSHAKE,
-    LCI_PUT_TARGET,
-    LCI_GET_ORIGIN,
-    LCI_GET_TARGET_HANDSHAKE,
-    LCI_GET_TARGET,
+    LCI_GET_TARGET           /* low priority, send is done */,
+    LCI_PUT_ORIGIN           /* low priority, send is done */,
+    LCI_ACTIVE_MESSAGE       /* med priority, user might start send */,
+    LCI_GET_TARGET_HANDSHAKE /* med priority, must start send */,
+    LCI_PUT_TARGET_HANDSHAKE /* med priority, must start recv */,
+    LCI_GET_ORIGIN           /* high priority, recv done so task can start */,
+    LCI_PUT_TARGET           /* high priority, recv done so task can start */,
+    LCI_ABORT                /* highest priorty, must exit ASAP */,
     LCI_CB_HANDLE_TYPE_MAX
 } lci_cb_handle_type_t;
 
@@ -213,6 +214,8 @@ typedef struct lci_cb_handle_s {
 } lci_cb_handle_t;
 static PARSEC_OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
 static_assert(sizeof(lci_cb_handle_t) == 256, "lci_cb_handle_t size incorrect");
+#define CB_HANDLE_PRIORITY (offsetof(lci_cb_handle_t, args.type) - \
+                            offsetof(lci_cb_handle_t, list_item))
 
 /* memory pool for callbacks */
 static parsec_mempool_t lci_cb_handle_mempool;
@@ -250,9 +253,140 @@ static PARSEC_OBJ_CLASS_INSTANCE(lci_dynmsg_t, parsec_list_item_t, NULL, NULL);
 /* memory pool for dynamic messages */
 static parsec_mempool_t lci_dynmsg_mempool;
 
+#define LCI_USE_TICKET_LOCK 0
+#if       LCI_USE_TICKET_LOCK
+typedef struct ticket_lock_s {
+    atomic_size_t ticket;
+    atomic_size_t lock;
+} ticket_lock_t;
+
+typedef struct ticket_s {
+    size_t ticket;
+    bool   valid;
+} ticket_t;
+
+#define TICKET_LOCK_INIT { .ticket = 0, .lock = 0 }
+#define TICKET_INIT      { .ticket = 0, .valid = false }
+
+static inline void ticket_lock_acquire(ticket_lock_t *tlock, ticket_t *ticket)
+{
+    if (!ticket->valid) {
+        ticket->ticket = atomic_fetch_add_explicit(&tlock->ticket, 1, memory_order_relaxed);
+        ticket->valid  = true;
+    }
+}
+
+static inline bool ticket_lock_check(const ticket_lock_t *tlock, ticket_t *ticket)
+{
+    return ticket->valid &&
+           ticket->ticket == atomic_load_explicit(&tlock->lock, memory_order_acquire);
+}
+
+static inline void ticket_lock_release(ticket_lock_t *tlock, ticket_t *ticket)
+{
+    atomic_fetch_add_explicit(&tlock->lock, 1, memory_order_acq_rel);
+    ticket->valid = false;
+}
+
+static inline void ticket_lock_clear(ticket_lock_t *tlock, ticket_t *ticket)
+{
+    if (ticket->valid) {
+        while (!ticket_lock_check(tlock, ticket))
+            continue;
+        ticket_lock_release(tlock, ticket);
+    }
+}
+
+static ticket_lock_t lci_shared_tlock = TICKET_LOCK_INIT;
+static ticket_t lci_progress_ticket = TICKET_INIT;
+static ticket_t lci_comm_ticket     = TICKET_INIT;
+#endif /* LCI_USE_TICKET_LOCK*/
 static parsec_list_t lci_shared_cb_fifo;
 static parsec_list_t lci_progress_cb_fifo;
 static parsec_list_t lci_comm_cb_fifo;
+
+static parsec_list_t lci_am_fifo;
+static parsec_list_t lci_dynamic_fifo;
+
+#if       LCI_USE_TICKET_LOCK
+#define LCI_FIFO_LOCK_INIT(  ticket) ticket_lock_acquire(&lci_shared_tlock, (ticket))
+#define LCI_FIFO_LOCK_TRY(   ticket) ticket_lock_check(  &lci_shared_tlock, (ticket))
+#define LCI_FIFO_LOCK_UNLOCK(ticket) ticket_lock_release(&lci_shared_tlock, (ticket))
+#define LCI_FIFO_LOCK_CLEAR( ticket) ticket_lock_clear(  &lci_shared_tlock, (ticket))
+#define LCI_FIFO_LOCK_PROGRESS (&lci_progress_ticket)
+#define LCI_FIFO_LOCK_COMM     (&lci_comm_ticket)
+#else  /* LCI_USE_TICKET_LOCK */
+#define LCI_FIFO_LOCK_INIT(  ticket) do { } while (0)
+#define LCI_FIFO_LOCK_TRY(   ticket) parsec_atomic_trylock(&lci_shared_cb_fifo.atomic_lock)
+#define LCI_FIFO_LOCK_UNLOCK(ticket) parsec_atomic_unlock( &lci_shared_cb_fifo.atomic_lock)
+#define LCI_FIFO_LOCK_CLEAR( ticket) do { } while (0)
+#define LCI_FIFO_LOCK_PROGRESS (0)
+#define LCI_FIFO_LOCK_COMM     (1)
+#endif /* LCI_USE_TICKET_LOCK */
+
+static inline bool lci_fifo_try_chain(void)
+{
+    parsec_list_item_t *ring = NULL;
+    bool succeed = false;
+    LCI_FIFO_LOCK_INIT(LCI_FIFO_LOCK_PROGRESS);
+    succeed = LCI_FIFO_LOCK_TRY(LCI_FIFO_LOCK_PROGRESS);
+    if (succeed) {
+        ring = parsec_list_nolock_unchain(&lci_progress_cb_fifo);
+//      parsec_list_nolock_chain_sorted(&lci_shared_cb_fifo, ring,
+//                                      CB_HANDLE_PRIORITY);
+        parsec_list_nolock_chain_back(&lci_shared_cb_fifo, ring);
+        LCI_FIFO_LOCK_UNLOCK(LCI_FIFO_LOCK_PROGRESS);
+    }
+    return succeed;
+}
+
+#define LCI_FIFO_SPIN_UNCHAIN 0
+static inline parsec_list_item_t * lci_fifo_try_unchain(void)
+{
+    parsec_list_item_t *ring = NULL;
+    LCI_FIFO_LOCK_INIT(LCI_FIFO_LOCK_COMM);
+#if       LCI_FIFO_SPIN_UNCHAIN
+    while (!LCI_FIFO_LOCK_TRY(LCI_FIFO_LOCK_COMM))
+        continue;
+    ring = parsec_list_nolock_unchain(&lci_shared_cb_fifo);
+    LCI_FIFO_LOCK_UNLOCK(LCI_FIFO_LOCK_COMM);
+#else  /* LCI_FIFO_SPIN_UNCHAIN */
+    if (LCI_FIFO_LOCK_TRY(LCI_FIFO_LOCK_COMM)) {
+        ring = parsec_list_nolock_unchain(&lci_shared_cb_fifo);
+        LCI_FIFO_LOCK_UNLOCK(LCI_FIFO_LOCK_COMM);
+    }
+#endif /* LCI_FIFO_SPIN_UNCHAIN */
+    return ring;
+}
+
+static inline void lci_fifo_push(lci_cb_handle_t *handle, parsec_list_t *list)
+{
+#if 1
+    while (!parsec_atomic_trylock(&list->atomic_lock))
+        continue;
+    parsec_list_nolock_push_back(list, &handle->list_item);
+    parsec_atomic_unlock(&list->atomic_lock);
+#else
+    parsec_list_push_back(list, &handle->list_item);
+#endif
+}
+
+static inline void lci_am_fifo_push(lci_cb_handle_t *handle)
+{
+//  parsec_list_nolock_push_sorted(&lci_progress_cb_fifo, &handle->list_item,
+//                                 CB_HANDLE_PRIORITY);
+//  parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+//  parsec_list_push_sorted(&lci_shared_cb_fifo, &handle->list_item,
+//                          CB_HANDLE_PRIORITY);
+    lci_fifo_push(handle, &lci_am_fifo);
+//  parsec_list_push_back(&lci_shared_cb_fifo, &handle->list_item);
+//  lci_fifo_try_chain();
+}
+
+static inline void lci_dynamic_fifo_push(lci_cb_handle_t *handle)
+{
+    lci_fifo_push(handle, &lci_dynamic_fifo);
+}
 
 /* LCI one-sided activate message handshake header type */
 typedef struct lci_handshake_header_s {
@@ -519,8 +653,11 @@ static inline void lci_abort_handler(lc_req *req)
     LCI_CE_DEBUG_VERBOSE("Abort %d recv:\t%d -> %d",
                          (int)handle->args.tag, handle->args.remote, ep_rank);
     LCI_HANDLER_PROGRESS(LCI_ABORT);
+#if 0
     /* push to front of local callback fifo */
     parsec_list_nolock_push_front(&lci_progress_cb_fifo, &handle->list_item);
+#endif
+    lci_dynamic_fifo_push(handle);
 }
 
 /* handler for active message
@@ -560,17 +697,22 @@ static inline void lci_active_message_handler(lc_req *req)
     handle->cb.am       = am_handle->cb;
 
     LCI_HANDLER_PROGRESS(LCI_ACTIVE_MESSAGE);
+#if 0
     /* push to local callback fifo */
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#endif
+    lci_am_fifo_push(handle);
 }
 
 /* handler for put on origin
  * using rendezvous recv, should only be called on progress thread */
 static inline void lci_put_origin_handler(void *ctx)
 {
+#if 0
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
     /* send is complete, decrement message count */
     lci_message_count_dec();
+#endif
 #endif
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
@@ -586,7 +728,10 @@ static inline void lci_put_origin_handler(void *ctx)
     /* send is always large, so this is always called on progress thread
      * push to back of progress cb fifo */
     LCI_HANDLER_PROGRESS(LCI_PUT_ORIGIN);
+#if 0
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#endif
+    lci_dynamic_fifo_push(handle);
 #if 0
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_PUT_ORIGIN);
@@ -625,6 +770,7 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
     handle->args.data        = handshake->data;
     handle->args.size        = handshake->header.size;
     handle->args.remote      = req->rank;
+    handle->args.type        = LCI_PUT_TARGET;
     handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->header.cb;
 
     LCI_CE_DEBUG_VERBOSE("Put Target handshake %s:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
@@ -639,14 +785,34 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
     if (send_eager) {
         byte_t *msg = handshake->data + handshake->header.cb_size;
         memcpy(handshake->header.buffer, msg, handshake->header.size);
-        handle->args.type = LCI_PUT_TARGET;
+        lci_dynamic_fifo_push(handle);
     } else {
-        handle->args.type = LCI_PUT_TARGET_HANDSHAKE;
+        /* attempt to start rendezvous receive on target for put */
+        lc_status ret = lc_recvl(handle->args.msg, handle->args.size,
+                                 handle->args.remote, handle->args.tag,
+                                put_ep, &handle->req);
+        if (LC_OK == ret) {
+            /* attempt succeeded */
+            LCI_CE_DEBUG_VERBOSE("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
+                                 handle->args.remote, ep_rank,
+                                 (void *)handle->args.msg, handle->args.size,
+                                 handle->args.tag);
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+            /* starting recv, increment message count */
+//          lci_message_count_inc();
+#endif
+        } else {
+            /* attempt failed, delegate to comm thread */
+            handle->args.type = LCI_PUT_TARGET_HANDSHAKE;
+            lci_am_fifo_push(handle);
+        }
     }
     /* push to callback fifo
      * if eager, comm thread will call callback
      * if not, comm thread will start receive */
+#if 0
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#endif
 }
 
 /* handler for put on target
@@ -664,7 +830,10 @@ static inline void lci_put_target_handler(lc_req *req)
     /* recv is always large, so this is always called on progress thread
      * push to back of progress cb fifo */
     LCI_HANDLER_PROGRESS(LCI_PUT_TARGET);
+#if 0
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#endif
+    lci_dynamic_fifo_push(handle);
 #if 0
     if (pthread_equal(progress_thread_id, pthread_self())) {
         LCI_HANDLER_PROGRESS(LCI_PUT_TARGET);
@@ -700,13 +869,22 @@ static inline void lci_get_origin_handler(lc_req *req)
         LCI_HANDLER_PROGRESS(LCI_GET_ORIGIN);
         /* recv was posted prior to send arrival, so we are on progress thread
          * push to back of progress cb fifo */
+#if 0
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#endif
+        lci_dynamic_fifo_push(handle);
     } else {
         LCI_HANDLER_OTHER(LCI_GET_ORIGIN);
         /* recv matched with unexpected send, so we are on caller thread
          * assume this is communication thread for now
          * push to back of comm cb fifo */
-        parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
+//      parsec_list_nolock_push_sorted(&lci_comm_cb_fifo, &handle->list_item,
+//                                     CB_HANDLE_PRIORITY);
+//      parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
+//      parsec_list_push_back(&lci_shared_cb_fifo, &handle->list_item);
+//      parsec_list_push_sorted(&lci_shared_cb_fifo, &handle->list_item,
+//                              CB_HANDLE_PRIORITY);
+        lci_dynamic_fifo_push(handle);
     }
 }
 
@@ -734,16 +912,21 @@ static inline void lci_get_target_handshake_handler(lc_req *req)
 
     LCI_HANDLER_PROGRESS(LCI_GET_TARGET_HANDSHAKE);
     /* push to callback fifo - send will be started by comm thread */
+#if 0
     parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#endif
+    lci_am_fifo_push(handle);
 }
 
 /* handler for get on target
  * can be called anywhere - deal with progress thread vs. elsewhere */
 static inline void lci_get_target_handler(void *ctx)
 {
+#if 0
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
     /* send is complete, decrement message count */
     lci_message_count_dec();
+#endif
 #endif
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
@@ -756,12 +939,21 @@ static inline void lci_get_target_handler(void *ctx)
         LCI_HANDLER_PROGRESS(LCI_GET_TARGET);
         /* send was large, so we are on progress thread
          * push to back of progress cb fifo */
+#if 0
         parsec_list_nolock_push_back(&lci_progress_cb_fifo, &handle->list_item);
+#endif
+        lci_dynamic_fifo_push(handle);
     } else {
         LCI_HANDLER_OTHER(LCI_GET_TARGET);
         /* send was small or medium, so we are on communication thread
          * push to back of comm cb fifo */
-        parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
+//      parsec_list_nolock_push_sorted(&lci_comm_cb_fifo, &handle->list_item,
+//                                     CB_HANDLE_PRIORITY);
+//      parsec_list_nolock_push_back(&lci_comm_cb_fifo, &handle->list_item);
+//      parsec_list_push_back(&lci_shared_cb_fifo, &handle->list_item);
+//      parsec_list_push_sorted(&lci_shared_cb_fifo, &handle->list_item,
+//                              CB_HANDLE_PRIORITY);
+        lci_dynamic_fifo_push(handle);
     }
 }
 
@@ -872,14 +1064,13 @@ static void * lci_progress_thread(void *arg)
             parsec_list_chain_back(&lci_shared_cb_fifo, ring);
         }
 #endif
-        /* push back to shared callback fifo if we could get the lock
-         * if we can't, we'll try again the next iteration */
-        if (!parsec_list_nolock_is_empty(&lci_progress_cb_fifo) &&
-             parsec_atomic_trylock(&lci_shared_cb_fifo.atomic_lock)) {
-            ring = parsec_list_nolock_unchain(&lci_progress_cb_fifo);
-            parsec_list_nolock_chain_back(&lci_shared_cb_fifo, ring);
-            parsec_atomic_unlock(&lci_shared_cb_fifo.atomic_lock);
+
+#if 0
+        /* did we do any work? */
+        if (!parsec_list_nolock_is_empty(&lci_progress_cb_fifo)) {
+            lci_fifo_try_chain();
         }
+#endif
 
         /* sleep for comm_yield_ns if:
          *     lci_comm_yield == 1 && we made no progress in last loop
@@ -919,6 +1110,10 @@ static void * lci_progress_thread(void *arg)
     }
 #endif
 
+    /* make sure we release any claimed ticket */
+    LCI_FIFO_LOCK_CLEAR(LCI_FIFO_LOCK_PROGRESS);
+
+    progress_start.status = false;
     PARSEC_PAPI_SDE_THREAD_FINI();
     LCI_CE_DEBUG_VERBOSE("progress thread stop");
     return NULL;
@@ -1017,6 +1212,9 @@ lci_init(parsec_context_t *context)
     PARSEC_OBJ_CONSTRUCT(&lci_progress_cb_fifo, parsec_list_t);
     PARSEC_OBJ_CONSTRUCT(&lci_comm_cb_fifo, parsec_list_t);
 
+    PARSEC_OBJ_CONSTRUCT(&lci_am_fifo, parsec_list_t);
+    PARSEC_OBJ_CONSTRUCT(&lci_dynamic_fifo, parsec_list_t);
+
 #ifdef PARSEC_LCI_CB_HASH_TABLE
     /* allocated hash tables for callbacks */
     PARSEC_OBJ_CONSTRUCT(&lci_am_cb_hash_table, parsec_hash_table_t);
@@ -1088,6 +1286,9 @@ lci_fini(parsec_comm_engine_t *comm_engine)
     lci_sync(comm_engine);
     void *progress_retval = NULL;
 
+    /* make sure we release any claimed ticket */
+    LCI_FIFO_LOCK_CLEAR(LCI_FIFO_LOCK_COMM);
+
     /* stop progress thread if multiple nodes */
     if (ep_size > 1) {
         LCI_CE_DEBUG_VERBOSE("stopping progress thread");
@@ -1110,6 +1311,9 @@ lci_fini(parsec_comm_engine_t *comm_engine)
     PARSEC_OBJ_DESTRUCT(&lci_progress_cb_fifo);
     PARSEC_OBJ_DESTRUCT(&lci_shared_cb_fifo);
 
+    PARSEC_OBJ_DESTRUCT(&lci_am_fifo);
+    PARSEC_OBJ_DESTRUCT(&lci_dynamic_fifo);
+
     parsec_mempool_destruct(&lci_dynmsg_mempool);
     parsec_mempool_destruct(&lci_cb_handle_mempool);
     parsec_mempool_destruct(&lci_mem_reg_handle_mempool);
@@ -1129,6 +1333,7 @@ int lci_tag_register(parsec_ce_tag_t tag,
                        ep_rank, tag, msg_length, lc_max_medium(0));
         return PARSEC_ERROR;
     }
+
 #ifdef PARSEC_LCI_CB_HASH_TABLE
     parsec_key_t key = tag;
     /* allocate handle */
@@ -1300,7 +1505,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
     void *rbuf = rdata->mem + rdispl;
 
     // NOTE: size is always passed as 0, use ldata->size and rdata->size
-    // NOTE: just use ldata->size, we can send a buffer short than destination
+    // NOTE: just use ldata->size, can send a buffer shorter than destination
 
     /* set handshake info */
     handshake->header.buffer  = rbuf;
@@ -1344,9 +1549,21 @@ lci_put(parsec_comm_engine_t *comm_engine,
     handle->cb.put_origin    = l_cb;
 
     if (send_eager) {
+#if 0
+        /* NOTE: lci_cb_progress assumes that this is a long send and
+         * decrements the message count appropriately; we need to either
+         * increment the count here or just execute the callback directly,
+         * or figure out a way to disambiguate eager versus rendezvous in
+         * lci_cb_progress. I'm not sure it makes a significant difference. */
+
         /* data sent eagerly in handshake, push to comm cb fifo
          * assume this is communication thread for now */
+//      parsec_list_nolock_push_sorted(&lci_comm_cb_fifo,  &handle->list_item,
+//                                     CB_HANDLE_PRIORITY);
         parsec_list_nolock_push_back(&lci_comm_cb_fifo,  &handle->list_item);
+#else
+        lci_put_origin_callback(handle, comm_engine);
+#endif
     } else {
         LCI_CE_DEBUG_VERBOSE("Put Origin start:\t%d(%p+%td) -> %d(%p+%td) size %zu with tag %d",
                              ep_rank, (void *)ldata->mem, ldispl,
@@ -1432,6 +1649,10 @@ lci_get(parsec_comm_engine_t *comm_engine,
                          ep_rank, (void *)ldata->mem, ldispl,
                          remote,  (void *)rdata->mem, rdispl,
                          ldata->size, tag);
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+    /* starting recv, increment message count */
+//  lci_message_count_inc();
+#endif
     RETRY(lc_recv(lbuf, ldata->size, remote, tag, get_ep, &handle->req));
     LCI_CALL_GET();
     return 1;
@@ -1474,98 +1695,138 @@ lci_abort(int exit_code)
     _Exit(exit_code);
 }
 
+static inline __attribute__((always_inline)) size_t
+lci_process_cb_handle(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine)
+{
+    lci_cb_handle_type_t type = handle->args.type;
+    switch (type) {
+    case LCI_ABORT:
+        LCI_CE_DEBUG_VERBOSE("Abort %d barrier:\t%d ->",
+                             (int)handle->args.tag, handle->args.remote);
+        /* wait for all processes to ack the abort */
+        lc_barrier(collective_ep);
+        /* exit without cleaning up */
+        _Exit(handle->args.tag);
+        return 0;
+
+    case LCI_ACTIVE_MESSAGE:
+        lci_active_message_callback(handle, comm_engine);
+        return 0;
+
+    case LCI_PUT_ORIGIN:
+        lci_put_origin_callback(handle, comm_engine);
+        return 1;
+
+    case LCI_PUT_TARGET_HANDSHAKE:
+        /* change handle type; we are now starting to put target call */
+        handle->args.type = LCI_PUT_TARGET;
+        /* start rendezvous receive on target for put */
+        LCI_CE_DEBUG_VERBOSE("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
+                             handle->args.remote, ep_rank,
+                             (void *)handle->args.msg, handle->args.size,
+                             handle->args.tag);
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+        /* starting recv, increment message count */
+//      lci_message_count_inc();
+#endif
+        RETRY(lc_recvl(handle->args.msg, handle->args.size,
+                       handle->args.remote, handle->args.tag,
+                       put_ep, &handle->req));
+        return 0;
+
+    case LCI_PUT_TARGET:
+        lci_put_target_callback(handle, comm_engine);
+//      return 1;
+        return 0;
+
+    case LCI_GET_ORIGIN:
+        lci_get_origin_callback(handle, comm_engine);
+//      return 1;
+        return 0;
+
+    case LCI_GET_TARGET_HANDSHAKE:
+        /* change handle type; we are now starting to get target call */
+        handle->args.type = LCI_GET_TARGET;
+        /* start send on target for get */
+        LCI_CE_DEBUG_VERBOSE("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
+                             handle->args.remote, ep_rank,
+                             (void *)handle->args.msg, handle->args.size,
+                             handle->args.tag);
+#ifdef PARSEC_LCI_MESSAGE_LIMIT
+        /* starting send, increment message count */
+        lci_message_count_inc();
+#endif
+        RETRY(lc_send(handle->args.msg, handle->args.size,
+                      handle->args.remote, handle->args.tag,
+                      get_ep, lci_get_target_handler, handle));
+        return 0;
+
+    case LCI_GET_TARGET:
+        lci_get_target_callback(handle, comm_engine);
+        return 1;
+
+    default:
+        lci_ce_fatal("invalid callback type: %d", type);
+        return 0;
+    }
+}
+
+static inline __attribute__((always_inline)) void
+lci_process_cb_handle_fifo(parsec_list_t *fifo, int limit, int *progress,
+                           size_t *completed, parsec_comm_engine_t *comm_engine)
+{
+
+    int iter = 0;
+    do {
+#if 1
+        while (!parsec_atomic_trylock(&fifo->atomic_lock))
+            continue;
+        parsec_list_item_t *item = parsec_list_nolock_pop_front(fifo);
+        parsec_atomic_unlock(&fifo->atomic_lock);
+#else
+        parsec_list_item_t *item = parsec_list_pop_front(fifo);
+#endif
+        if (NULL == item)
+            break;
+
+        lci_cb_handle_t *handle = container_of(item, lci_cb_handle_t, list_item);
+        lci_cb_handle_type_t type = handle->args.type;
+        (*completed) += lci_process_cb_handle(handle, comm_engine);
+        iter++;
+    } while ((limit ? iter < limit : 1));
+    (*progress) += iter;
+}
+
 int
 lci_cb_progress(parsec_comm_engine_t *comm_engine)
 {
-    int ret = 0;
-    parsec_list_item_t *ring = NULL;
+//  parsec_list_item_t *ring = NULL;
+    size_t completed_messages = 0;
+    int progress = 0;
+    int prior_progress = 0;
 
-    /* push back to private callback fifo if we got lock and list nonempty */
-    /* unchain list if we get lock */
-    if (parsec_atomic_trylock(&lci_shared_cb_fifo.atomic_lock)) {
-        ring = parsec_list_nolock_unchain(&lci_shared_cb_fifo);
-        parsec_atomic_unlock(&lci_shared_cb_fifo.atomic_lock);
+#if 0
+    ring = lci_fifo_try_unchain();
+    /* if ring is NULL, we either didn't get lock or shared fifo was empty */
+    if (NULL == ring) {
+        return 0;
     }
 
-    /* chain back if ring not NULL i.e. got lock AND shared fifo not empty */
-    if (NULL != ring) {
-        parsec_list_nolock_chain_back(&lci_comm_cb_fifo, ring);
-    }
-
+    /* chain back, guaranteed ring is not NULL */
+    parsec_list_nolock_chain_back(&lci_comm_cb_fifo, ring);
     for (parsec_list_item_t *item = parsec_list_nolock_pop_front(&lci_comm_cb_fifo);
                              item != NULL;
                              item = parsec_list_nolock_pop_front(&lci_comm_cb_fifo)) {
-        lci_cb_handle_t *handle = container_of(item, lci_cb_handle_t, list_item);
-
-        switch (handle->args.type) {
-        case LCI_ABORT:
-            LCI_CE_DEBUG_VERBOSE("Abort %d barrier:\t%d ->",
-                                 (int)handle->args.tag, handle->args.remote);
-            /* wait for all processes to ack the abort */
-            lc_barrier(collective_ep);
-            /* exit without cleaning up */
-            _Exit(handle->args.tag);
-            break;
-
-        case LCI_ACTIVE_MESSAGE:
-            lci_active_message_callback(handle, comm_engine);
-            break;
-
-        case LCI_PUT_ORIGIN:
-            lci_put_origin_callback(handle, comm_engine);
-            break;
-
-        case LCI_PUT_TARGET_HANDSHAKE:
-            /* change handle type; we are now starting to put target call */
-            handle->args.type = LCI_PUT_TARGET;
-            /* start rendezvous receive on target for put */
-            LCI_CE_DEBUG_VERBOSE("Put Target start:\t%d -> %d(%p) size %zu with tag %d",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag);
-            RETRY(lc_recvl(handle->args.msg, handle->args.size,
-                           handle->args.remote, handle->args.tag,
-                           put_ep, &handle->req));
-            break;
-
-        case LCI_PUT_TARGET:
-            lci_put_target_callback(handle, comm_engine);
-            break;
-
-        case LCI_GET_ORIGIN:
-            lci_get_origin_callback(handle, comm_engine);
-            break;
-
-        case LCI_GET_TARGET_HANDSHAKE:
-            /* change handle type; we are now starting to get target call */
-            handle->args.type = LCI_GET_TARGET;
-            /* start send on target for get */
-            LCI_CE_DEBUG_VERBOSE("Get Target start:\t%d <- %d(%p) size %zu with tag %d",
-                                 handle->args.remote, ep_rank,
-                                 (void *)handle->args.msg, handle->args.size,
-                                 handle->args.tag);
-#ifdef PARSEC_LCI_MESSAGE_LIMIT
-            /* starting send, increment message count */
-            lci_message_count_inc();
 #endif
-            RETRY(lc_send(handle->args.msg, handle->args.size,
-                          handle->args.remote, handle->args.tag,
-                          get_ep, lci_get_target_handler, handle));
-            break;
+    do {
+        completed_messages = 0;
+        prior_progress = progress;
+        lci_process_cb_handle_fifo(&lci_am_fifo,      5, &progress, &completed_messages, comm_engine);
+        lci_process_cb_handle_fifo(&lci_dynamic_fifo, 0, &progress, &completed_messages, comm_engine);
+        lci_message_count_sub(completed_messages);
+    } while (progress > prior_progress);
 
-        case LCI_GET_TARGET:
-            lci_get_target_callback(handle, comm_engine);
-            break;
-
-        default:
-            lci_ce_fatal("invalid callback type: %d", handle->args.type);
-            break;
-        }
-
-        ret++;
-    }
-
-    return ret;
+    return progress;
 }
 
 /* restarts progress thread, if paused */
