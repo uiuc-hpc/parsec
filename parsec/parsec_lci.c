@@ -269,8 +269,15 @@ typedef struct lci_handshake_s {
 /* max size of handshake buffer on stack */
 #define HANDSHAKE_STACK_BUFFER_SIZE (128UL)
 
+/* these typedefs are not in the current standard, for some reason */
 typedef _Atomic(uint16_t) atomic_uint16_t;
-static atomic_uint16_t current_tag = 0;
+typedef _Atomic(uint64_t) atomic_uint64_t;
+
+static inline int lci_get_tag(void)
+{
+    static atomic_uint16_t tag = 0;
+    return atomic_fetch_add_explicit(&tag, 1, memory_order_relaxed);
+}
 
 /* global endpoint */
 lc_ep *lci_global_ep = NULL;
@@ -325,6 +332,26 @@ static inline void * lci_dyn_alloc(size_t size, void **ctx)
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
 static size_t lci_max_message = SIZE_MAX;
 static atomic_size_t lci_message_count = 0;
+
+static inline void lci_message_count_inc(void)
+{
+    atomic_fetch_add_explicit(&lci_message_count, 1, memory_order_relaxed);
+}
+
+static inline void lci_message_count_dec(void)
+{
+    atomic_fetch_sub_explicit(&lci_message_count, 1, memory_order_relaxed);
+}
+
+static inline void lci_message_count_sub(size_t subtrahend)
+{
+    atomic_fetch_sub_explicit(&lci_message_count, subtrahend, memory_order_relaxed);
+}
+
+static inline size_t lci_message_count_load(void)
+{
+    return atomic_load_explicit(&lci_message_count, memory_order_relaxed);
+}
 #endif
 
 #ifdef PARSEC_LCI_HANDLER_COUNT
@@ -540,7 +567,8 @@ static inline void lci_active_message_handler(lc_req *req)
 static inline void lci_put_origin_handler(void *ctx)
 {
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
-    atomic_fetch_sub_explicit(&lci_message_count, 1, memory_order_relaxed);
+    /* send is complete, decrement message count */
+    lci_message_count_dec();
 #endif
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
@@ -712,7 +740,8 @@ static inline void lci_get_target_handshake_handler(lc_req *req)
 static inline void lci_get_target_handler(void *ctx)
 {
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
-    atomic_fetch_sub_explicit(&lci_message_count, 1, memory_order_relaxed);
+    /* send is complete, decrement message count */
+    lci_message_count_dec();
 #endif
     /* ctx is pointer to lci_cb_handle_t */
     lci_cb_handle_t *handle = ctx;
@@ -1263,7 +1292,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
     }
 
     /* get next tag */
-    int tag = atomic_fetch_add_explicit(&current_tag, 1, memory_order_relaxed);
+    int tag = lci_get_tag();
 
     void *lbuf = ldata->mem + ldispl;
     void *rbuf = rdata->mem + rdispl;
@@ -1322,7 +1351,8 @@ lci_put(parsec_comm_engine_t *comm_engine,
                              remote,  (void *)rdata->mem, rdispl,
                              ldata->size, tag);
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
-        atomic_fetch_add_explicit(&lci_message_count, 1, memory_order_relaxed);
+        /* starting send, increment message count */
+        lci_message_count_inc();
 #endif
         /* start rendezvous send to remote with tag */
         RETRY(lc_sendl(lbuf, ldata->size, remote, tag, put_ep,
@@ -1356,7 +1386,7 @@ lci_get(parsec_comm_engine_t *comm_engine,
     bool send_short = (buffer_size <= lc_max_short(0));
 
     /* get next tag */
-    int tag = atomic_fetch_add_explicit(&current_tag, 1, memory_order_relaxed);
+    int tag = lci_get_tag();
 
     void *lbuf = ldata->mem + ldispl;
     void *rbuf = rdata->mem + rdispl;
@@ -1513,7 +1543,8 @@ lci_cb_progress(parsec_comm_engine_t *comm_engine)
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
-            atomic_fetch_add_explicit(&lci_message_count, 1, memory_order_relaxed);
+            /* starting send, increment message count */
+            lci_message_count_inc();
 #endif
             RETRY(lc_send(handle->args.msg, handle->args.size,
                           handle->args.remote, handle->args.tag,
@@ -1643,7 +1674,8 @@ int
 lci_can_push_more(parsec_comm_engine_t *comm_engine)
 {
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
-    size_t message_count = atomic_load_explicit(&lci_message_count, memory_order_relaxed);
+    /* check if we can send more messages */
+    size_t message_count = lci_message_count_load();
     return message_count < lci_max_message;
 #else
     return 1;
