@@ -40,6 +40,10 @@
 
 /* ------- LCI implementation below ------- */
 
+#if defined(PARSEC_PROF_TRACE) && 0
+#define PARSEC_PROF_TRACE_LCI
+#endif
+
 #define LCI_ENABLE_EAGER (true)
 
 typedef unsigned char byte_t;
@@ -184,6 +188,9 @@ typedef enum lci_cb_handle_type_e {
 typedef struct lci_cb_handle_s {
     alignas(256) parsec_list_item_t       list_item; /* pool/queue: 40 bytes */
     alignas(8)   parsec_thread_mempool_t  *mempool_owner;        /*  8 bytes */
+#ifdef PARSEC_PROF_TRACE_LCI
+    alignas(8)   uint64_t                 event_id;    /* optional:  8 bytes */
+#endif
     alignas(64)  struct /* callback arguments */ {
         union {
             struct /* onesided callback arguments - 32B */ {
@@ -324,6 +331,10 @@ static parsec_list_t lci_dynamic_fifo;
 #define LCI_FIFO_LOCK_COMM     (1)
 #endif /* LCI_USE_TICKET_LOCK */
 
+#ifdef PARSEC_PROF_TRACE_LCI
+static atomic_size_t queue_len = 0;
+#endif
+
 static inline bool lci_fifo_try_chain(void)
 {
     parsec_list_item_t *ring = NULL;
@@ -361,6 +372,9 @@ static inline parsec_list_item_t * lci_fifo_try_unchain(void)
 
 static inline void lci_fifo_push(lci_cb_handle_t *handle, parsec_list_t *list)
 {
+#ifdef PARSEC_PROF_TRACE_LCI
+    atomic_fetch_add_explicit(&queue_len, 1, memory_order_relaxed);
+#endif
 #if 1
     while (!parsec_atomic_trylock(&list->atomic_lock))
         continue;
@@ -508,6 +522,86 @@ static inline void LCI_CALL_GET() { lci_call_count[2]++; }
 #define LCI_CALL_PUT()
 #define LCI_CALL_GET()
 #endif /* PARSEC_LCI_HANDLER_COUNT */
+
+#if defined(PARSEC_PROF_TRACE_LCI)
+static parsec_profiling_stream_t *comm_prof;
+static parsec_profiling_stream_t *prog_prof;
+static int LCI_AM_RCV_sk,   LCI_AM_RCV_ek;
+static int LCI_PUT_HS_sk,   LCI_PUT_HS_ek;
+static int LCI_PUT_DATA_sk, LCI_PUT_DATA_ek;
+static int LCI_PUT_CB_sk,   LCI_PUT_CB_ek;
+static int LCI_CB_PROG_sk,  LCI_CB_PROG_ek;
+
+typedef struct {
+    uint64_t tag;
+    uint64_t size;
+    uint64_t cb_size;
+    int src;
+    int dst;
+} lci_prof_info_t;
+static const char *lci_prof_info_str = "tag{uint64_t};size{uint64_t};cb_size{uint64_t};src{int};dst{int}";
+
+#define CB_SIZE_NULL (UINT64_MAX)
+
+static inline uint64_t lci_profile_event_id(void)
+{
+    static atomic_uint64_t event_id = 0;
+    return atomic_fetch_add_explicit(&event_id, 1, memory_order_relaxed);
+}
+
+static inline void
+lci_profile_info(parsec_profiling_stream_t *prof, int key, uint64_t event_id,
+            uint64_t tag, uint64_t size, uint64_t cb_size, int src, int dst)
+{
+    lci_prof_info_t info = { .tag = tag, .size = size, .cb_size = cb_size,
+                             .src = src, .dst = dst };
+    PARSEC_PROFILING_TRACE(prof, key, event_id, PROFILE_OBJECT_ID_NULL, &info);
+#if 0
+    PARSEC_PROFILING_TRACE(prof, key, event_id, PROFILE_OBJECT_ID_NULL,
+                           (&(lci_prof_info_t){tag, size, cb_size, src, dst}));
+#endif
+}
+
+static inline void
+lci_profile(parsec_profiling_stream_t *prof, int key, uint64_t event_id)
+{
+    PARSEC_PROFILING_TRACE(prof, key, event_id, PROFILE_OBJECT_ID_NULL, NULL);
+}
+
+typedef struct {
+    uint32_t queue_len;
+    uint32_t iter;
+} lci_prof_cb_prog_t;
+static const char *lci_prof_cb_prog_str = "queue{uint32_t};iter{uint32_t}";
+
+static inline void
+lci_profiling_init(void)
+{
+    parsec_profiling_add_dictionary_keyword("LCI_AM_RCV", "fill:#FF0000",
+                                            sizeof(lci_prof_info_t),
+                                            lci_prof_info_str,
+                                            &LCI_AM_RCV_sk, &LCI_AM_RCV_ek);
+    parsec_profiling_add_dictionary_keyword("LCI_PUT_HS", "fill:#FF0000",
+                                            sizeof(lci_prof_info_t),
+                                            lci_prof_info_str,
+                                            &LCI_PUT_HS_sk, &LCI_PUT_HS_ek);
+    parsec_profiling_add_dictionary_keyword("LCI_PUT_DATA", "fill:#FF0000",
+                                            sizeof(lci_prof_info_t),
+                                            lci_prof_info_str,
+                                            &LCI_PUT_DATA_sk, &LCI_PUT_DATA_ek);
+    parsec_profiling_add_dictionary_keyword("LCI_PUT_CB", "fill:#FF0000",
+                                            sizeof(lci_prof_info_t),
+                                            lci_prof_info_str,
+                                            &LCI_PUT_CB_sk, &LCI_PUT_CB_ek);
+    parsec_profiling_add_dictionary_keyword("LCI_CB_PROG", "fill:#FF0000",
+                                            sizeof(lci_prof_cb_prog_t),
+                                            lci_prof_cb_prog_str,
+                                            &LCI_CB_PROG_sk, &LCI_CB_PROG_ek);
+
+    comm_prof = parsec_comm_es.es_profile;
+    prog_prof = parsec_profiling_stream_init(2*1024*1024, "Progress thread");
+}
+#endif /* PARSEC_PROF_TRACE_LCI */
 
 
 
@@ -669,6 +763,12 @@ static inline void lci_active_message_handler(lc_req *req)
     LCI_CE_DEBUG_VERBOSE("Active Message %"PRIu64" recv:\t%d -> %d message %p size %zu",
                          tag, req->rank, ep_rank, req->buffer, req->size);
 
+#ifdef PARSEC_PROF_TRACE_LCI
+    uint64_t event_id = lci_profile_event_id();
+    lci_profile_info(prog_prof, LCI_AM_RCV_sk, event_id, req->meta,
+                     req->size, CB_SIZE_NULL, req->rank, ep_rank);
+#endif
+
     /* find AM handle, based on active message tag */
 #ifdef PARSEC_LCI_CB_HASH_TABLE
     am_handle = parsec_hash_table_nolock_find(&lci_am_cb_hash_table, tag);
@@ -695,6 +795,9 @@ static inline void lci_active_message_handler(lc_req *req)
     handle->args.remote = req->rank;
     handle->args.type   = LCI_ACTIVE_MESSAGE;
     handle->cb.am       = am_handle->cb;
+#ifdef PARSEC_PROF_TRACE_LCI
+    handle->event_id    = event_id;
+#endif
 
     LCI_HANDLER_PROGRESS(LCI_ACTIVE_MESSAGE);
 #if 0
@@ -754,6 +857,13 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
 {
     lci_handshake_t *handshake = req->buffer;
 
+#ifdef PARSEC_PROF_TRACE_LCI
+    uint64_t event_id = lci_profile_event_id();
+    lci_profile_info(prog_prof, LCI_PUT_HS_sk, event_id, req->meta,
+                     handshake->header.size, handshake->header.cb_size,
+                     req->rank, ep_rank);
+#endif
+
     size_t buffer_size = sizeof(lci_handshake_t) + handshake->header.cb_size;
     size_t buffer_size_eager = buffer_size + handshake->header.size;
     bool send_eager = LCI_ENABLE_EAGER && (buffer_size_eager <= lc_max_medium(0));
@@ -772,6 +882,9 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
     handle->args.remote      = req->rank;
     handle->args.type        = LCI_PUT_TARGET;
     handle->cb.put_target    = (parsec_ce_am_callback_t)handshake->header.cb;
+#ifdef PARSEC_PROF_TRACE_LCI
+    handle->event_id         = event_id;
+#endif
 
     LCI_CE_DEBUG_VERBOSE("Put Target handshake %s:\t%d -> %d(%p) size %zu with tag %d, cb data %p",
                          send_eager ? "eager" : "rendezvous",
@@ -785,6 +898,12 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
     if (send_eager) {
         byte_t *msg = handshake->data + handshake->header.cb_size;
         memcpy(handshake->header.buffer, msg, handshake->header.size);
+#if defined(PARSEC_PROF_TRACE_LCI)
+        lci_profile(prog_prof, LCI_PUT_HS_ek, event_id);
+        lci_profile_info(prog_prof, LCI_PUT_CB_sk, event_id,
+                         handle->args.tag, handle->args.size, CB_SIZE_NULL,
+                         handle->args.remote, ep_rank);
+#endif /* PARSEC_PROF_TRACE_LCI */
         lci_dynamic_fifo_push(handle);
     } else {
         /* attempt to start rendezvous receive on target for put */
@@ -797,6 +916,14 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
                                  handle->args.remote, ep_rank,
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
+#if defined(PARSEC_PROF_TRACE_LCI)
+            /* lci_put_target_handler is called on this same thread,
+             * but necessarily only in lc_progress, so this ordering is safe */
+            lci_profile(prog_prof, LCI_PUT_HS_ek, event_id);
+            lci_profile_info(prog_prof, LCI_PUT_DATA_sk, event_id,
+                             handle->args.tag, handle->args.size, CB_SIZE_NULL,
+                             handle->args.remote, ep_rank);
+#endif /* PARSEC_PROF_TRACE_LCI */
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
             /* starting recv, increment message count */
 //          lci_message_count_inc();
@@ -826,6 +953,12 @@ static inline void lci_put_target_handler(lc_req *req)
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
+#ifdef PARSEC_PROF_TRACE_LCI
+    lci_profile(prog_prof, LCI_PUT_DATA_ek, handle->event_id);
+    lci_profile_info(prog_prof, LCI_PUT_CB_sk, handle->event_id,
+                     handle->args.tag, handle->args.size, CB_SIZE_NULL,
+                     handle->args.remote, ep_rank);
+#endif
 
     /* recv is always large, so this is always called on progress thread
      * push to back of progress cb fifo */
@@ -1045,6 +1178,10 @@ static void * lci_progress_thread(void *arg)
     parsec_context_t *context = arg;
     progress_thread_bind(context, progress_thread_binding);
 
+#ifdef PARSEC_PROF_TRACE_LCI
+    parsec_profiling_set_default_thread(prog_prof);
+#endif
+
     /* signal init */
     pthread_mutex_lock(&progress_start.mutex);
     progress_start.status = true;
@@ -1149,6 +1286,10 @@ lci_init(parsec_context_t *context)
                                     "Maximum number of concurrent messages to send",
                                     false, false,
                                     SIZE_MAX, &lci_max_message);
+#endif
+
+#ifdef PARSEC_PROF_TRACE_LCI
+    lci_profiling_init();
 #endif
 
     /* Make all the fn pointers point to this component's functions */
@@ -1710,6 +1851,9 @@ lci_process_cb_handle(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine
         return 0;
 
     case LCI_ACTIVE_MESSAGE:
+#ifdef PARSEC_PROF_TRACE_LCI
+        lci_profile(comm_prof, LCI_AM_RCV_ek, handle->event_id);
+#endif
         lci_active_message_callback(handle, comm_engine);
         return 0;
 
@@ -1725,6 +1869,12 @@ lci_process_cb_handle(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine
                              handle->args.remote, ep_rank,
                              (void *)handle->args.msg, handle->args.size,
                              handle->args.tag);
+#ifdef PARSEC_PROF_TRACE_LCI
+        lci_profile(comm_prof, LCI_PUT_HS_ek, handle->event_id);
+        lci_profile_info(comm_prof, LCI_PUT_DATA_sk, handle->event_id,
+                         handle->args.tag, handle->args.size, CB_SIZE_NULL,
+                         handle->args.remote, ep_rank);
+#endif
 #ifdef PARSEC_LCI_MESSAGE_LIMIT
         /* starting recv, increment message count */
 //      lci_message_count_inc();
@@ -1735,6 +1885,9 @@ lci_process_cb_handle(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine
         return 0;
 
     case LCI_PUT_TARGET:
+#ifdef PARSEC_PROF_TRACE_LCI
+        lci_profile(comm_prof, LCI_PUT_CB_ek, handle->event_id);
+#endif
         lci_put_target_callback(handle, comm_engine);
 //      return 1;
         return 0;
@@ -1775,6 +1928,9 @@ static inline __attribute__((always_inline)) void
 lci_process_cb_handle_fifo(parsec_list_t *fifo, int limit, int *progress,
                            size_t *completed, parsec_comm_engine_t *comm_engine)
 {
+#ifdef PARSEC_PROF_TRACE_LCI
+    lci_prof_cb_prog_t prof_info;
+#endif
 
     int iter = 0;
     do {
@@ -1791,7 +1947,15 @@ lci_process_cb_handle_fifo(parsec_list_t *fifo, int limit, int *progress,
 
         lci_cb_handle_t *handle = container_of(item, lci_cb_handle_t, list_item);
         lci_cb_handle_type_t type = handle->args.type;
+#ifdef PARSEC_PROF_TRACE_LCI
+        prof_info.queue_len = atomic_fetch_sub_explicit(&queue_len, 1, memory_order_relaxed) - 1;
+        prof_info.iter      = *progress + iter;
+        PARSEC_PROFILING_TRACE(comm_prof, LCI_CB_PROG_sk, type, PROFILE_OBJECT_ID_NULL, &prof_info);
+#endif
         (*completed) += lci_process_cb_handle(handle, comm_engine);
+#ifdef PARSEC_PROF_TRACE_LCI
+        lci_profile(comm_prof, LCI_CB_PROG_ek, type);
+#endif
         iter++;
     } while ((limit ? iter < limit : 1));
     (*progress) += iter;
