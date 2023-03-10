@@ -40,6 +40,8 @@
 
 /* ------- LCI implementation below ------- */
 
+#define LCI_ENABLE_EAGER (true)
+
 typedef unsigned char byte_t;
 
 #define lci_ce_output_verbose_lvl(LVL, FMT, ...)                              \
@@ -609,7 +611,7 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
 
     size_t buffer_size = sizeof(lci_handshake_t) + handshake->header.cb_size;
     size_t buffer_size_eager = buffer_size + handshake->header.size;
-    bool send_eager = (buffer_size_eager <= lc_max_medium(0));
+    bool send_eager = LCI_ENABLE_EAGER && (buffer_size_eager <= lc_max_medium(0));
 
     if (send_eager) {
         buffer_size = buffer_size_eager;
@@ -1273,7 +1275,7 @@ lci_put(parsec_comm_engine_t *comm_engine,
     size_t buffer_size_eager = buffer_size + ldata->size;
     assert(buffer_size <= lc_max_medium(0) && "active message data too long");
 
-    bool send_eager = (buffer_size_eager <= lc_max_medium(0));
+    bool send_eager = LCI_ENABLE_EAGER && (buffer_size_eager <= lc_max_medium(0));
     if (send_eager) {
         buffer_size = buffer_size_eager;
     }
