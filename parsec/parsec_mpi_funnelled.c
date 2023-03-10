@@ -417,6 +417,36 @@ int parsec_mpi_sendrecv(parsec_comm_engine_t *ce,
     return (MPI_SUCCESS == rc ? 0 : -1);
 }
 
+#if defined(PARSEC_PROF_TRACE) && 0
+static parsec_profiling_stream_t *comm_prof;
+static int MPI_CB_PROG_sk, MPI_CB_PROG_ek;
+static int MPI_TESTSOME_sk, MPI_TESTSOME_ek;
+
+static inline void
+mpi_profile(parsec_profiling_stream_t *prof, int key, uint64_t event_id, void *info)
+{
+    PARSEC_PROFILING_TRACE(prof, key, event_id, PROFILE_OBJECT_ID_NULL, info);
+}
+
+static inline void
+mpi_profiling_init(void)
+{
+    parsec_profiling_add_dictionary_keyword("MPI_CB_PROG", "fill:#FF0000", 0, "",
+                                            &MPI_CB_PROG_sk, &MPI_CB_PROG_ek);
+    parsec_profiling_add_dictionary_keyword("MPI_TESTSOME", "fill:#FF0000",
+                                            sizeof(int), "completed{int}",
+                                            &MPI_TESTSOME_sk, &MPI_TESTSOME_ek);
+    comm_prof = parsec_comm_es.es_profile;
+}
+
+#else /* PARSEC_PROF_TRACE */
+#define comm_prof      0
+#define MPI_CB_PROG_sk 0
+#define MPI_CB_PROG_ek 0
+#define mpi_profile(prof, key, event_id, info) do { } while(0)
+#define mpi_profiling_init() do { } while(0)
+#endif /* PARSEC_PROF_TRACE */
+
 /**
  * The following function take care of all the steps necessary to initialize the
  * invariable part of the communication engine such as the const dependencies
@@ -460,6 +490,8 @@ static int mpi_funneled_init_once(parsec_context_t* context)
     }
 
     (void)context;
+    mpi_profiling_init();
+
     return 0;
 }
 
@@ -1032,6 +1064,7 @@ mpi_no_thread_serve_cb(parsec_comm_engine_t *ce, mpi_funnelled_callback_t *cb,
                        int reset)
 {
     int ret = 0;
+    mpi_profile(comm_prof, MPI_CB_PROG_sk, cb->type, NULL);
     if(cb->type == MPI_FUNNELLED_TYPE_AM) {
         if(cb->cb_type.am.fct != NULL) {
             ret = cb->cb_type.am.fct(ce, mpi_tag, buf, length,
@@ -1062,6 +1095,7 @@ mpi_no_thread_serve_cb(parsec_comm_engine_t *ce, mpi_funnelled_callback_t *cb,
         /* We only have three types */
         assert(0);
     }
+    mpi_profile(comm_prof, MPI_CB_PROG_ek, cb->type, NULL);
 
     return ret;
 }
@@ -1127,8 +1161,10 @@ mpi_no_thread_progress(parsec_comm_engine_t *ce)
     int length;
 
     do {
+        mpi_profile(comm_prof, MPI_TESTSOME_sk, mpi_funnelled_last_active_req, NULL);
         MPI_Testsome(mpi_funnelled_last_active_req, array_of_requests,
                      &outcount, array_of_indices, array_of_statuses);
+        mpi_profile(comm_prof, MPI_TESTSOME_ek, mpi_funnelled_last_active_req, &outcount);
 
         if(0 == outcount) goto feed_more_work;  /* can we push some more work? */
 
