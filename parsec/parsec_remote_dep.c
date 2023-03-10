@@ -81,11 +81,11 @@ remote_dep_cmd_to_string(remote_dep_wire_activate_t* origin,
 #define datakey_count 3
 
 static pthread_t dep_thread_id;
-parsec_dequeue_t dep_cmd_queue;
-parsec_list_t    dep_cmd_fifo;             /* ordered non threaded fifo */
-parsec_list_t    dep_activates_fifo;       /* ordered non threaded fifo */
-parsec_list_t    dep_activates_noobj_fifo; /* non threaded fifo */
-parsec_list_t    dep_put_fifo;             /* ordered non threaded fifo */
+static parsec_dequeue_t dep_cmd_queue;
+static parsec_list_t    dep_cmd_fifo;             /* ordered non threaded fifo */
+static parsec_list_t    dep_activates_fifo;       /* ordered non threaded fifo */
+static parsec_list_t    dep_activates_noobj_fifo; /* non threaded fifo */
+static parsec_list_t    dep_put_fifo;             /* ordered non threaded fifo */
 
 /* help manage the messages in the same category, where a category is either messages
  * to the same destination, or with the same action key.
@@ -1409,7 +1409,7 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
                          parsec_remote_deps_t* deps)
 {
     remote_dep_wire_activate_t* task = &(deps->msg);
-    int from = deps->from, k, count, nbdtt;
+    int from = deps->from, k, nbdtt;
     remote_dep_wire_get_t msg;
     parsec_datatype_t dtt;
 #if defined(PARSEC_DEBUG_NOISIER)
@@ -1420,8 +1420,6 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
     char tmp[MAX_TASK_STRLEN];
     remote_dep_cmd_to_string(task, tmp, MAX_TASK_STRLEN);
 #endif
-    for(k = count = 0; deps->incoming_mask >> k; k++)
-        if( ((1U<<k) & deps->incoming_mask) ) count++;
 
     (void)es;
 
@@ -1511,6 +1509,7 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
          * to the source. Source is anticipating this exact configuration.
          */
         int buf_size = sizeof(remote_dep_wire_get_t) + receiver_memory_handle_size;
+        /* TODO: put on stack if possible, use mempool? */
         void *buf = malloc(buf_size);
         memcpy( buf,
                 &msg,
