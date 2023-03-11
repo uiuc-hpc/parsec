@@ -20,9 +20,10 @@ class Parsec(CMakePackage):
     patch('profile2h5.patch', when='@devel-profiling')
     version('1.1.0', '6c8b2b8d6408004bdb4c6d9134da74a4')
 
-    variant('transport', default='mpi', values=('mpi', 'lci'), multi=False,
+    variant('transport', default='mpi', values=('mpi', 'lci', 'none'), multi=False,
             description='Inter-node dependency transport backend')
     variant('lci-static', default=False, description='Static link to LCI')
+    variant('lci-msg-limit', default=False, description='Limit concurrent messages')
     variant('debug-lci', default=False, description='Enable LCI CE debug')
     variant('lci-cbtable', default=False, description='Use callback hashtable')
     variant('cuda', default=True, description='Use CUDA for GPU acceleration')
@@ -65,7 +66,7 @@ class Parsec(CMakePackage):
     depends_on('py-tables',     when='+profile-tools', type='run')
 
     def cmake_args(self):
-        return [
+        args = [
             self.define_from_variant('PARSEC_DEBUG_HISTORY', 'debug-history'),
             self.define_from_variant('PARSEC_DEBUG_PARANOID', 'debug'),
             self.define_from_variant('PARSEC_DEBUG_NOISIER', 'debug'),
@@ -78,4 +79,10 @@ class Parsec(CMakePackage):
             self.define_from_variant('PARSEC_LCI_RETRY_HISTOGRAM', 'debug-lci'),
             self.define_from_variant('PARSEC_LCI_HANDLER_COUNT', 'debug-lci'),
             self.define_from_variant('PARSEC_LCI_CB_HASH_TABLE', 'lci-cbtable'),
+            self.define_from_variant('PARSEC_LCI_MESSAGE_LIMIT', 'lci-msg-limit'),
+            self.define('PARSEC_DIST_COLLECTIVES', True),
         ]
+        # lci uses a default eager limit of 12 KiB - 108 bytes
+        if self.spec.variants['transport'].value == 'lci':
+            args.append(self.define('PARSEC_DIST_EAGER_LIMIT', '12180'))
+        return args
