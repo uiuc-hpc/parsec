@@ -81,7 +81,7 @@ static tl_freelist_t *default_freelist = NULL;
 static parsec_profiling_buffer_t *allocate_empty_buffer(tl_freelist_t *fl, off_t *offset, char type);
 
 /* Process-global dictionary */
-static unsigned int parsec_prof_keys_count, parsec_prof_keys_number;
+static int parsec_prof_keys_count, parsec_prof_keys_number;
 static parsec_profiling_key_t* parsec_prof_keys;
 
 static int         __already_called = 0;
