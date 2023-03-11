@@ -942,6 +942,7 @@ install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/include/parsec/execution_stream.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_remote_dep.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_comm_engine.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_comm_stats.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/bindthread.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_internal.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/vpmap.h

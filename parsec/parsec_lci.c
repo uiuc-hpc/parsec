@@ -38,6 +38,8 @@
 #include "parsec/utils/debug.h"
 #include "parsec/utils/mca_param.h"
 
+#include "parsec/parsec_comm_stats.h"
+
 /* ------- LCI implementation below ------- */
 
 #if defined(PARSEC_PROF_TRACE) && 0
@@ -130,6 +132,11 @@ static struct {
 #endif
 #endif /* PARSEC_LCI_RETRY_HISTOGRAM */
 
+#if defined(PARSEC_COMM_STATS)
+static parsec_comm_engine_stat_t lci_send_stat = PARSEC_COMM_ENGINE_STAT_INITIALIZER;
+static parsec_comm_engine_stat_t lci_recv_stat = PARSEC_COMM_ENGINE_STAT_INITIALIZER;
+#endif /* PARSEC_COMM_STATS */
+
 /* LCI memory handle type
  * PaRSEC object, inherits from parsec_list_item_t
  */
@@ -217,12 +224,35 @@ typedef struct lci_cb_handle_s {
         parsec_ce_am_callback_t       get_target;
     } cb;                                                        /*  8 bytes */
     alignas(64) lc_req req;               /* LCI request, for recv: 64 bytes */
+#if defined(PARSEC_COMM_STATS)
+    double             start_time;                     /* optional:  8 bytes */
+#endif /* PARSEC_COMM_STATS */
                                                   /* padding: up to 64 bytes */
 } lci_cb_handle_t;
 static PARSEC_OBJ_CLASS_INSTANCE(lci_cb_handle_t, parsec_list_item_t, NULL, NULL);
 static_assert(sizeof(lci_cb_handle_t) == 256, "lci_cb_handle_t size incorrect");
 #define CB_HANDLE_PRIORITY (offsetof(lci_cb_handle_t, args.type) - \
                             offsetof(lci_cb_handle_t, list_item))
+
+#if defined(PARSEC_COMM_STATS)
+static inline void update_stat_start(lci_cb_handle_t *handle,
+                                     parsec_comm_engine_stat_t *stat)
+{
+    parsec_comm_engine_stat_update_last(stat, &handle->start_time, 1);
+}
+
+static inline void update_stat_end(const lci_cb_handle_t *handle,
+                                   parsec_comm_engine_stat_t *stat)
+{
+    double end_time, duration;
+    parsec_comm_engine_stat_update_last(stat, &end_time, -1);
+    if (!LCI_ENABLE_EAGER || !isnan(handle->start_time)) {
+        /* when eager is disabled, don't need to check for NaN */
+        duration = end_time - handle->start_time;
+        parsec_comm_engine_stat_update(stat, handle->args.size, duration);
+    }
+}
+#endif /* PARSEC_COMM_STATS */
 
 /* memory pool for callbacks */
 static parsec_mempool_t lci_cb_handle_mempool;
@@ -642,6 +672,10 @@ lci_put_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
                          (void *)((lci_mem_reg_handle_data_t *)handle->args.rreg)->mem,
                          handle->args.rdispl,
                          handle->args.size, handle->args.data);
+#if defined(PARSEC_COMM_STATS)
+    update_stat_end(handle, &lci_send_stat);
+#endif /* PARSEC_COMM_STATS */
+
     handle->cb.put_origin(comm_engine,
                           handle->args.lreg, handle->args.ldispl,
                           handle->args.rreg, handle->args.rdispl,
@@ -660,6 +694,10 @@ lci_put_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          (void *)handle->args.data, handle->args.tag);
+#if defined(PARSEC_COMM_STATS)
+    update_stat_end(handle, &lci_recv_stat);
+#endif /* PARSEC_COMM_STATS */
+
 #if 0
     handle->cb.put_target(comm_engine,         handle->args.tag,
                           handle->args.msg,    handle->args.size,
@@ -692,6 +730,10 @@ lci_get_origin_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
                          (void *)((lci_mem_reg_handle_data_t *)handle->args.rreg)->mem,
                          handle->args.rdispl,
                          handle->args.size, handle->args.data);
+#if defined(PARSEC_COMM_STATS)
+    update_stat_end(handle, &lci_recv_stat);
+#endif /* PARSEC_COMM_STATS */
+
     handle->cb.get_origin(comm_engine,
                           handle->args.lreg, handle->args.ldispl,
                           handle->args.rreg, handle->args.rdispl,
@@ -710,6 +752,10 @@ lci_get_target_callback(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engi
                          handle->args.remote, ep_rank,
                          (void *)handle->args.msg, handle->args.size,
                          handle->args.tag);
+#if defined(PARSEC_COMM_STATS)
+    update_stat_end(handle, &lci_send_stat);
+#endif /* PARSEC_COMM_STATS */
+
 #if 0
     handle->cb.get_target(comm_engine,         handle->args.tag,
                           handle->args.msg,    handle->args.size,
@@ -898,6 +944,11 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
     if (send_eager) {
         byte_t *msg = handshake->data + handshake->header.cb_size;
         memcpy(handshake->header.buffer, msg, handshake->header.size);
+#if defined(PARSEC_COMM_STATS)
+        update_stat_start(handle, &lci_recv_stat);
+        /* use NAN to exclude this communication from stats */
+        handle->start_time = NAN;
+#endif /* PARSEC_COMM_STATS */
 #if defined(PARSEC_PROF_TRACE_LCI)
         lci_profile(prog_prof, LCI_PUT_HS_ek, event_id);
         lci_profile_info(prog_prof, LCI_PUT_CB_sk, event_id,
@@ -916,6 +967,9 @@ static inline void lci_put_target_handshake_handler(lc_req *req)
                                  handle->args.remote, ep_rank,
                                  (void *)handle->args.msg, handle->args.size,
                                  handle->args.tag);
+#if defined(PARSEC_COMM_STATS)
+            update_stat_start(handle, &lci_recv_stat);
+#endif /* PARSEC_COMM_STATS */
 #if defined(PARSEC_PROF_TRACE_LCI)
             /* lci_put_target_handler is called on this same thread,
              * but necessarily only in lc_progress, so this ordering is safe */
@@ -1430,6 +1484,20 @@ lci_fini(parsec_comm_engine_t *comm_engine)
     /* make sure we release any claimed ticket */
     LCI_FIFO_LOCK_CLEAR(LCI_FIFO_LOCK_COMM);
 
+#if defined(PARSEC_COMM_STATS)
+    fit_point_t fit_point = parsec_comm_stat_time_delay(comm_engine->parsec_context);
+    for (int i = 0; i < ep_size; i++) {
+        const struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
+        fflush(stdout);
+        if (i == ep_rank) {
+            parsec_comm_stat_print(stdout, i, &fit_point, &lci_send_stat, &lci_recv_stat);
+            fflush(stdout);
+        }
+        lci_sync(comm_engine);
+        nanosleep(&ts, NULL);
+    }
+#endif /* PARSEC_COMM_STATS */
+
     /* stop progress thread if multiple nodes */
     if (ep_size > 1) {
         LCI_CE_DEBUG_VERBOSE("stopping progress thread");
@@ -1703,6 +1771,11 @@ lci_put(parsec_comm_engine_t *comm_engine,
 //                                     CB_HANDLE_PRIORITY);
         parsec_list_nolock_push_back(&lci_comm_cb_fifo,  &handle->list_item);
 #else
+#if defined(PARSEC_COMM_STATS)
+        update_stat_start(handle, &lci_send_stat);
+        /* use NAN to exclude this communication from stats */
+        handle->start_time = NAN;
+#endif /* PARSEC_COMM_STATS */
         lci_put_origin_callback(handle, comm_engine);
 #endif
     } else {
@@ -1717,6 +1790,9 @@ lci_put(parsec_comm_engine_t *comm_engine,
         /* start rendezvous send to remote with tag */
         RETRY(lc_sendl(lbuf, ldata->size, remote, tag, put_ep,
                       lci_put_origin_handler, handle));
+#if defined(PARSEC_COMM_STATS)
+        update_stat_start(handle, &lci_send_stat);
+#endif /* PARSEC_COMM_STATS */
     }
     LCI_CALL_PUT();
     return 1;
@@ -1795,6 +1871,9 @@ lci_get(parsec_comm_engine_t *comm_engine,
 //  lci_message_count_inc();
 #endif
     RETRY(lc_recv(lbuf, ldata->size, remote, tag, get_ep, &handle->req));
+#if defined(PARSEC_COMM_STATS)
+    update_stat_start(handle, &lci_recv_stat);
+#endif /* PARSEC_COMM_STATS */
     LCI_CALL_GET();
     return 1;
 }
@@ -1882,6 +1961,9 @@ lci_process_cb_handle(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine
         RETRY(lc_recvl(handle->args.msg, handle->args.size,
                        handle->args.remote, handle->args.tag,
                        put_ep, &handle->req));
+#if defined(PARSEC_COMM_STATS)
+        update_stat_start(handle, &lci_recv_stat);
+#endif /* PARSEC_COMM_STATS */
         return 0;
 
     case LCI_PUT_TARGET:
@@ -1912,6 +1994,9 @@ lci_process_cb_handle(lci_cb_handle_t *handle, parsec_comm_engine_t *comm_engine
         RETRY(lc_send(handle->args.msg, handle->args.size,
                       handle->args.remote, handle->args.tag,
                       get_ep, lci_get_target_handler, handle));
+#if defined(PARSEC_COMM_STATS)
+        update_stat_start(handle, &lci_send_stat);
+#endif /* PARSEC_COMM_STATS */
         return 0;
 
     case LCI_GET_TARGET:

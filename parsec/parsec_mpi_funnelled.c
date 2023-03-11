@@ -17,6 +17,8 @@
 #include "parsec/utils/debug.h"
 #include "parsec/utils/mca_param.h"
 
+#include "parsec/parsec_comm_stats.h"
+
 #ifdef OPEN_MPI
 #include <dlfcn.h>
 #endif /* OPEN_MPI */
@@ -32,6 +34,11 @@
  */
 #define MPI_FUNNELLED_GET_TAG_INTERNAL 0
 #define MPI_FUNNELLED_PUT_TAG_INTERNAL 1
+
+#if defined(PARSEC_COMM_STATS)
+static parsec_comm_engine_stat_t mpi_send_stat = PARSEC_COMM_ENGINE_STAT_INITIALIZER;
+static parsec_comm_engine_stat_t mpi_recv_stat = PARSEC_COMM_ENGINE_STAT_INITIALIZER;
+#endif /* PARSEC_COMM_STATS */
 
 static int
 mpi_no_thread_push_posted_req(parsec_comm_engine_t *ce);
@@ -184,7 +191,28 @@ typedef struct mpi_funnelled_callback_s {
             void *msg;
         } onesided_mimic_am;
     } cb_type;
+#if defined(PARSEC_COMM_STATS)
+    double start_time;
+    size_t stat_bytes;
+#endif /* PARSEC_COMM_STATS */
 } mpi_funnelled_callback_t;
+
+#if defined(PARSEC_COMM_STATS)
+static inline void update_stat_start(mpi_funnelled_callback_t *cb,
+                                     parsec_comm_engine_stat_t *stat)
+{
+    parsec_comm_engine_stat_update_last(stat, &cb->start_time, 1);
+}
+
+static inline void update_stat_end(mpi_funnelled_callback_t *cb,
+                                   parsec_comm_engine_stat_t *stat)
+{
+    double end_time, duration;
+    parsec_comm_engine_stat_update_last(stat, &end_time, -1);
+    duration = end_time - cb->start_time;
+    parsec_comm_engine_stat_update(stat, cb->stat_bytes, duration);
+}
+#endif /* PARSEC_COMM_STATS */
 
 /* The internal communicator used by the communication engine to host its requests and
  * other operations. It is a copy of the context->comm_ctx (which is a duplicate of
@@ -285,12 +313,21 @@ mpi_funnelled_internal_get_am_callback(parsec_comm_engine_t *ce,
         MPI_Isend(remote_memory_handle->mem, remote_memory_handle->count, remote_memory_handle->datatype,
                   src, handshake_info->tag, dep_comm,
                   request);
+#if defined(PARSEC_COMM_STATS)
+        update_stat_start(cb, &mpi_send_stat);
+#endif /* PARSEC_COMM_STATS */
     } else {
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
         item->post_isend = 1;
         request = &item->request;
         cb = &item->cb;
     }
+
+#if defined(PARSEC_COMM_STATS)
+    int stat_size;
+    parsec_type_size(remote_memory_handle->datatype, &stat_size);
+    cb->stat_bytes = stat_size * remote_memory_handle->count;
+#endif /* PARSEC_COMM_STATS */
 
     /* we(the remote side) requested the source to forward us callback data that will be passed
      * to the callback function to notify upper level that the data has reached. We are copying
@@ -368,6 +405,10 @@ mpi_funnelled_internal_put_am_callback(parsec_comm_engine_t *ce,
 
     MPI_Irecv(remote_memory_handle->mem, remote_memory_handle->count, remote_memory_handle->datatype,
               src, handshake_info->tag, dep_comm, request);
+#if defined(PARSEC_COMM_STATS)
+    update_stat_start(cb, &mpi_recv_stat);
+    cb->stat_bytes = (size_t)-1;
+#endif /* PARSEC_COMM_STATS */
 
     /* we(the remote side) requested the source to forward us callback data that will be passed
      * to the callback function to notify upper level that the data has reached. We are copying
@@ -817,6 +858,20 @@ mpi_funnelled_fini(parsec_comm_engine_t *ce)
     assert( -1 != MAX_MPI_TAG );
     mpi_no_thread_sync(ce);
 
+#if defined(PARSEC_COMM_STATS)
+    fit_point_t fit_point = parsec_comm_stat_time_delay(ce->parsec_context);
+    for (int i = 0; i < ce->parsec_context->nb_nodes; i++) {
+        const struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
+        fflush(stdout);
+        if (i == ce->parsec_context->my_rank) {
+            parsec_comm_stat_print(stdout, i, &fit_point, &mpi_send_stat, &mpi_recv_stat);
+            fflush(stdout);
+        }
+        mpi_no_thread_sync(ce);
+        nanosleep(&ts, NULL);
+    }
+#endif /* PARSEC_COMM_STATS */
+
     /* stop progress thread if enabled and multiple nodes */
     if (progress_thread_enable && ce->parsec_context->nb_nodes > 1) {
         void *progress_retval = NULL;
@@ -1136,12 +1191,21 @@ mpi_no_thread_put(parsec_comm_engine_t *ce,
         MPI_Isend((char *)source_memory_handle->mem + ldispl, source_memory_handle->count,
                   source_memory_handle->datatype, remote, tag, dep_comm,
                   request);
+#if defined(PARSEC_COMM_STATS)
+        update_stat_start(cb, &mpi_send_stat);
+#endif /* PARSEC_COMM_STATS */
     } else {
         item = (mpi_funnelled_dynamic_req_t *)parsec_thread_mempool_allocate(mpi_funnelled_dynamic_req_mempool->thread_mempools);
         item->post_isend = 1;
         request = &item->request;
         cb = &item->cb;
     }
+
+#if defined(PARSEC_COMM_STATS)
+    int stat_size;
+    parsec_type_size(source_memory_handle->datatype, &stat_size);
+    cb->stat_bytes = stat_size * source_memory_handle->count;
+#endif /* PARSEC_COMM_STATS */
 
     cb->cb_type.onesided.fct = l_cb;
     cb->storage1 = mpi_funnelled_last_active_req;
@@ -1239,6 +1303,9 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
 
     MPI_Irecv((char*)source_memory_handle->mem + ldispl, source_memory_handle->count, source_memory_handle->datatype,
               remote, tag, dep_comm, request);
+#if defined(PARSEC_COMM_STATS)
+    cb->stat_bytes = (size_t)-1;
+#endif /* PARSEC_COMM_STATS */
 
     cb->cb_type.onesided.fct = l_cb;
     cb->storage1 = mpi_funnelled_last_active_req;
@@ -1370,6 +1437,15 @@ mpi_no_thread_push_posted_req(parsec_comm_engine_t *ce)
                   &array_of_requests[mpi_funnelled_last_active_req]);
     }
 
+#if defined(PARSEC_COMM_STATS)
+    if(item->post_isend) {
+        update_stat_start(&array_of_callbacks[mpi_funnelled_last_active_req], &mpi_send_stat);
+    } else {
+        array_of_callbacks[mpi_funnelled_last_active_req].start_time = item->cb.start_time;
+    }
+    array_of_callbacks[mpi_funnelled_last_active_req].stat_bytes = item->cb.stat_bytes;
+#endif /* PARSEC_COMM_STATS */
+
     mpi_funnelled_last_active_req++;
 
     parsec_thread_mempool_free(mpi_funnelled_dynamic_req_mempool->thread_mempools, item);
@@ -1404,6 +1480,19 @@ mpi_no_thread_progress(parsec_comm_engine_t *ce)
                 MPI_Get_count(status, MPI_BYTE, &length);
             else
                 length = 0; /* unused */
+
+#if defined(PARSEC_COMM_STATS)
+            if (MPI_FUNNELLED_TYPE_AM != cb->type) {
+                if (cb->stat_bytes == (size_t)-1) {
+                    int stat_bytes;
+                    MPI_Get_count(status, MPI_BYTE, &stat_bytes);
+                    cb->stat_bytes = stat_bytes;
+                    update_stat_end(cb, &mpi_recv_stat);
+                } else {
+                    update_stat_end(cb, &mpi_send_stat);
+                }
+            }
+#endif /* PARSEC_COMM_STATS */
 
             /* Serve the callback and comeback */
             mpi_no_thread_serve_cb(ce, cb, status->MPI_TAG,

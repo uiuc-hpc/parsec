@@ -21,6 +21,19 @@
 
 #include "parsec/parsec_binary_profile.h"
 
+#include "parsec/parsec_comm_stats.h"
+#if defined(PARSEC_COMM_STATS)
+parsec_comm_stat_t parsec_comm_send_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for activation send -> dep send done */
+parsec_comm_stat_t parsec_comm_sdep_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for activation send -> all send done */
+parsec_comm_stat_t parsec_comm_recv_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for activation recv -> dep recv done */
+parsec_comm_stat_t parsec_comm_rdep_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for activation recv -> all recv done */
+parsec_comm_stat_t parsec_comm_actv_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for activation send -> activation recv */
+parsec_comm_stat_t parsec_comm_srcv_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for activation send -> dep recv done, inter-node */
+parsec_comm_stat_t parsec_comm_srdp_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for activation send -> all recv done, inter-node */
+parsec_comm_stat_t parsec_comm_root_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for root activ send -> dep recv done, inter-node */
+parsec_comm_stat_t parsec_comm_rtdp_stat = PARSEC_COMM_STAT_INITIALIZER; /* stats for root activ send -> all recv done, inter-node */
+#endif /* PARSEC_COMM_STATS */
+
 #define PARSEC_DTD_SKIP_SAVING -1
 
 int parsec_comm_gets_max  = DEP_NB_CONCURENT * MAX_PARAM_COUNT;
@@ -690,6 +703,14 @@ remote_dep_mpi_save_activate_cb(parsec_comm_engine_t *ce, parsec_ce_tag_t tag,
         deps->from = src;
         deps->eager_msg = msg;
 
+#if defined(PARSEC_COMM_STATS)
+        double time_recv, duration_actv;
+        time_recv = parsec_comm_stat_time_since_init();
+        duration_actv = time_recv - deps->msg.time_pred;
+        deps->time_recv = time_recv;
+        parsec_comm_stat_update(&parsec_comm_actv_stat, duration_actv);
+#endif /* PARSEC_COMM_STATS */
+
         /* Retrieve the data arenas and update the msg.incoming_mask to reflect
          * the data we should be receiving from the predecessor.
          */
@@ -978,6 +999,10 @@ remote_dep_dequeue_fini(parsec_context_t* context)
     return 0;
 }
 
+#if defined(PARSEC_COMM_STATS)
+parsec_comm_clock_model_t parsec_comm_clock_model = PARSEC_COMM_CLOCK_MODEL_INITIALIZER;
+#endif /* PARSEC_COMM_STATS */
+
 static int
 remote_dep_ce_init(parsec_context_t* context)
 {
@@ -1028,6 +1053,9 @@ remote_dep_ce_init(parsec_context_t* context)
 
     /* wait for all nodes to finish init */
     parsec_ce.sync(&parsec_ce);
+#if defined(PARSEC_COMM_STATS)
+    parsec_comm_stat_clock_model(context, &parsec_comm_clock_model);
+#endif /* PARSEC_COMM_STATS */
     return 0;
 }
 
@@ -1227,6 +1255,11 @@ remote_dep_mpi_put_end_cb(parsec_comm_engine_t *ce,
     parsec_execution_stream_t* es = &parsec_comm_es;
     /* Retreive deps from callback_data */
     parsec_remote_deps_t* deps = ((remote_dep_cb_data_t *)cb_data)->deps;
+
+#if defined(PARSEC_COMM_STATS)
+    double duration = parsec_comm_stat_time_since_init() - deps->msg.time_pred;
+    parsec_comm_stat_update(&parsec_comm_send_stat, duration);
+#endif /* PARSEC_COMM_STATS */
 
     PARSEC_DEBUG_VERBOSE(6, parsec_debug_output, "MPI:\tTO\tna\tPut END  \tunknown \tk=%d\twith deps %p\tparams bla\t(tag=bla) data ptr bla",
             ((remote_dep_cb_data_t *)cb_data)->k, deps);
@@ -1613,6 +1646,17 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
     int i, pidx;
     uint32_t action_mask = 0;
 
+#if defined(PARSEC_COMM_STATS)
+    double time_end, duration_recv, duration_srcv, duration_root;
+    time_end      = parsec_comm_stat_time_since_init();
+    duration_recv = time_end - origin->time_recv;
+    duration_srcv = time_end - origin->msg.time_pred;
+    duration_root = time_end - origin->msg.time_root;
+    parsec_comm_stat_update(&parsec_comm_recv_stat, duration_recv);
+    parsec_comm_stat_update(&parsec_comm_srcv_stat, duration_srcv);
+    parsec_comm_stat_update(&parsec_comm_root_stat, duration_root);
+#endif /* PARSEC_COMM_STATS */
+
     /* Update the mask of remaining dependencies to avoid releasing the same outputs twice */
     assert((origin->incoming_mask & complete_mask) == complete_mask);
     origin->incoming_mask ^= complete_mask;
@@ -1682,6 +1726,12 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
      */
     uint32_t mask = origin->outgoing_mask;
     origin->outgoing_mask = 0;
+
+#if defined(PARSEC_COMM_STATS)
+    parsec_comm_stat_update(&parsec_comm_rdep_stat, duration_recv);
+    parsec_comm_stat_update(&parsec_comm_srdp_stat, duration_srcv);
+    parsec_comm_stat_update(&parsec_comm_rtdp_stat, duration_root);
+#endif /* PARSEC_COMM_STATS */
 
 #if defined(PARSEC_DIST_COLLECTIVES)
     if( PARSEC_TASKPOOL_TYPE_PTG == origin->taskpool->taskpool_type ) /* indicates it is a PTG taskpool */
