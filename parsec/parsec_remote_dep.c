@@ -835,6 +835,15 @@ remote_dep_dequeue_init(parsec_context_t* context)
 
 #if defined(PARSEC_HAVE_MPI)
     MPI_Query_thread( &thread_level_support );
+    if( thread_level_support < MPI_THREAD_MULTIPLE ) {
+        parsec_warning("MPI was not initialized with the appropriate level of thread support.\n"
+                      "\t* Current level is %s, while MPI_THREAD_MULTIPLE is needed\n"
+                      "\t* to guarantee correctness of the PaRSEC runtime.\n",
+                thread_level_support == MPI_THREAD_SINGLE    ? "MPI_THREAD_SINGLE"   :
+                thread_level_support ==  MPI_THREAD_FUNNELED ? "MPI_THREAD_FUNNELED" :
+                                                               "MPI_THREAD_SERIALIZED" );
+    }
+#if 0
     if( thread_level_support == MPI_THREAD_SINGLE ||
         thread_level_support == MPI_THREAD_FUNNELED ) {
         parsec_warning("MPI was not initialized with the appropriate level of thread support.\n"
@@ -842,6 +851,7 @@ remote_dep_dequeue_init(parsec_context_t* context)
                       "\t* to guarantee correctness of the PaRSEC runtime.\n",
                 thread_level_support == MPI_THREAD_SINGLE ? "MPI_THREAD_SINGLE" : "MPI_THREAD_FUNNELED" );
     }
+#endif
     if( -1 == context->comm_ctx ) {
         MPI_Comm comm;
         MPI_Comm_dup(MPI_COMM_WORLD, &comm);

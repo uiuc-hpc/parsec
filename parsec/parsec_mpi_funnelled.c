@@ -17,6 +17,10 @@
 #include "parsec/utils/debug.h"
 #include "parsec/utils/mca_param.h"
 
+#ifdef OPEN_MPI
+#include <dlfcn.h>
+#endif /* OPEN_MPI */
+
 /* Range between which tags are allowed to be registered.
  * For now we allow 10 tags to be registered
  */
@@ -99,6 +103,16 @@ reread:
     }
     return __tag;
 }
+
+static struct {
+    pthread_cond_t  cond;
+    pthread_mutex_t mutex;
+    _Bool           status;
+} progress_start = { PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, false };
+static int progress_thread_binding = -1;
+static int progress_thread_enable = 0;
+static pthread_t progress_thread_id;
+static MPI_Comm progress_comm_self = MPI_COMM_NULL;
 
 /* Range of index allowed for each type of request.
  * For registered tags, each will get 5 spots in the array of requests.
@@ -332,9 +346,6 @@ mpi_funnelled_internal_put_am_callback(parsec_comm_engine_t *ce,
     assert(handshake_info->tag >= MIN_MPI_TAG);
     assert(mpi_funnelled_last_active_req >= mpi_funnelled_static_req_idx);
 
-    int _size;
-    MPI_Type_size(remote_memory_handle->datatype, &_size);
-
     int post_in_static_array = 1;
     mpi_funnelled_dynamic_req_t *item;
     if(!(mpi_funnelled_last_active_req < size_of_total_reqs)) {
@@ -447,6 +458,151 @@ mpi_profiling_init(void)
 #define mpi_profiling_init() do { } while(0)
 #endif /* PARSEC_PROF_TRACE */
 
+#ifdef OPEN_MPI
+static int (*opal_progress)(void);
+static volatile _Bool progress_thread_stop = false;
+static int mpi_comm_yield = 1;
+#endif /* OPEN_MPI */
+
+/* bind progress thread to core */
+static void progress_thread_bind(parsec_context_t *context, int binding)
+{
+#if defined(PARSEC_HAVE_HWLOC) && defined(PARSEC_HAVE_HWLOC_BITMAP)
+    /* we weren't given a binding, so choose one from free mask */
+    if (binding < 0) {
+        binding = hwloc_bitmap_first(context->cpuset_free_mask);
+        /* if this consumed last free core, make sure to bind comm thread here too */
+        if (hwloc_bitmap_next(context->cpuset_free_mask, binding) < 0 &&
+            context->comm_th_core < 0) {
+            context->comm_th_core = binding;
+        }
+    }
+#endif /* PARSEC_HAVE_HWLOC */
+
+    if (binding >= 0) {
+        /* we have a valid binding */
+        if (parsec_bindthread(binding, -1) > -1) {
+#if defined(PARSEC_HAVE_HWLOC) && defined(PARSEC_HAVE_HWLOC_BITMAP)
+            /* we are alone if:
+             *   1a: requested binding is not in allowed mask
+             *       (so obviously not used by compute thread) OR
+             *   1b: requested binding is in free mask
+             *       (so obviously not used by anyone) AND
+             *   2:  requested binding isn't the same as that of comm thread */
+            if ((!hwloc_bitmap_isset(context->cpuset_allowed_mask, binding) ||
+                  hwloc_bitmap_isset(context->cpuset_free_mask, binding)) &&
+                context->comm_th_core != binding) {
+#ifdef OPEN_MPI
+                /* we are alone, disable yielding */
+                mpi_comm_yield = 0;
+#endif /* OPEN_MPI */
+            } else {
+                parsec_debug_verbose(4, parsec_comm_output_stream,
+                                     "MPI:\tcore %d hosts progress thread "
+                                     "and compute eu or comm thread", binding);
+            }
+            /* set bit in allowed mask, clear in free mask */
+            hwloc_bitmap_set(context->cpuset_allowed_mask, binding);
+            hwloc_bitmap_clr(context->cpuset_free_mask, binding);
+#else /* PARSEC_HAVE_HWLOC */
+#ifdef OPEN_MPI
+            /* we were given an explicit binding, presumably we're alone? */
+            mpi_comm_yield = 0;
+#endif /* OPEN_MPI */
+#endif /* PARSEC_HAVE_HWLOC */
+            parsec_debug_verbose(4, parsec_comm_output_stream,
+                                 "MPI:\tprogress thread bound to physical core %d", binding);
+        } else {
+#if !defined(PARSEC_OSX)
+            /* might share a core */
+            parsec_warning("Request to bind MPI progress thread on core %d failed.", binding);
+#endif  /* !defined(PARSEC_OSX) */
+        }
+    } else {
+#if defined(PARSEC_HAVE_HWLOC) && defined(PARSEC_HAVE_HWLOC_BITMAP)
+        /* no binding given or no free core, let thread float */
+        if (parsec_bindthread_mask(context->cpuset_allowed_mask) > -1) {
+            char *mask_str = NULL;
+            hwloc_bitmap_asprintf(&mask_str, context->cpuset_allowed_mask);
+            parsec_debug_verbose(4, parsec_comm_output_stream,
+                                 "MPI:\tprogress thread bound on the cpu mask %s", mask_str);
+            free(mask_str);
+        }
+#else /* PARSEC_HAVE_HWLOC */
+        /* we don't even bother with this case for now, just use hwloc */
+#endif /* PARSEC_HAVE_HWLOC */
+    }
+}
+
+static void * mpi_progress_thread(void *arg)
+{
+    MPI_Request req[2] = { MPI_REQUEST_NULL, MPI_REQUEST_NULL };
+    long recv_data[2] = { 0, 0 };
+
+    /* bind thread */
+    parsec_context_t *context = arg;
+    progress_thread_bind(context, progress_thread_binding);
+
+    /* signal init */
+    pthread_mutex_lock(&progress_start.mutex);
+    progress_start.status = true;
+    pthread_cond_signal(&progress_start.cond);
+    pthread_mutex_unlock(&progress_start.mutex);
+
+#ifdef OPEN_MPI
+    {
+        int yield = mpi_comm_yield;
+        const struct timespec ts = { .tv_sec = 0, .tv_nsec = comm_yield_ns };
+        printf("%d: started progress loop\n", parsec_debug_rank);
+        fflush(stdout);
+        while (!progress_thread_stop) {
+            parsec_atomic_rmb();
+            size_t progress_count = 0;
+            while (opal_progress() && !progress_thread_stop) {
+                parsec_atomic_rmb();
+                progress_count++;
+            }
+
+            switch (yield) {
+            case 1:
+                /* if we made progress, continue for another loop */
+                if (progress_count > 0)
+                    break;
+                __attribute__((fallthrough));
+            case 2:
+                nanosleep(&ts, NULL);
+                break;
+            default:
+                break;
+            }
+        }
+        printf("%d: exited progress loop\n", parsec_debug_rank);
+        fflush(stdout);
+    }
+#else /* OPEN_MPI */
+    printf("%d: starting irecv\n", parsec_debug_rank);
+    fflush(stdout);
+    /* start recv with tag=0, tag=1 from self */
+    MPI_Irecv(&recv_data[0], 1, MPI_LONG, 0, 0, progress_comm_self, &req[0]);
+    MPI_Irecv(&recv_data[1], 1, MPI_LONG, 0, 1, progress_comm_self, &req[1]);
+    /* wait for recvs to complete; this only occurs in fini */
+#if 0
+    int done = 0;
+    do {
+        MPI_Testall(2, req, &done, MPI_STATUSES_IGNORE);
+    } while (!done);
+#endif
+    printf("%d: waitall\n", parsec_debug_rank);
+    fflush(stdout);
+    MPI_Waitall(2, req, MPI_STATUSES_IGNORE);
+    printf("%d: waitall done\n", parsec_debug_rank);
+    fflush(stdout);
+#endif /* OPEN_MPI */
+
+    progress_start.status = false;
+    return NULL;
+}
+
 /**
  * The following function take care of all the steps necessary to initialize the
  * invariable part of the communication engine such as the const dependencies
@@ -491,6 +647,47 @@ static int mpi_funneled_init_once(parsec_context_t* context)
 
     (void)context;
     mpi_profiling_init();
+
+    assert(MPI_COMM_NULL == progress_comm_self);
+    MPI_Comm_dup(MPI_COMM_SELF, &progress_comm_self);
+    parsec_mca_param_reg_int_name("mpi", "progress_thread",
+                                  "Enable MPI progress thread",
+                                  false, false,
+                                  0, &progress_thread_enable);
+    parsec_mca_param_reg_int_name("mpi", "thread_bind",
+                                  "Bind MPI progress thread to core",
+                                  false, false,
+                                  -1, &progress_thread_binding);
+#ifdef OPEN_MPI
+    /* opal_progress is defined in libopen-pal, so we can't link to it directly
+     * libopen-pal is a dependency of libmpi, so we look it up at runtime */
+    *(void**)&opal_progress = dlsym(RTLD_DEFAULT, "opal_progress");
+    mpi_comm_yield = comm_yield;
+#endif /* OPEN_MPI */
+
+    /* start progress thread if enabled and multiple nodes */
+    if (progress_thread_enable && context->nb_nodes > 1) {
+        parsec_debug_verbose(10, parsec_comm_output_stream,
+                             "rank %d start MPI progress thread", parsec_debug_rank);
+        printf("%d: starting progress thread\n", parsec_debug_rank);
+        fflush(stdout);
+        /* lock mutex before starting thread */
+        pthread_mutex_lock(&progress_start.mutex);
+#ifdef OPEN_MPI
+        /* ensure progress_thread_stop == false */
+        progress_thread_stop = false;
+        parsec_atomic_wmb();
+#endif /* OPEN_MPI */
+        /* start thread */
+        pthread_create(&progress_thread_id, NULL, mpi_progress_thread, context);
+        /* wait until thread started */
+        while (!progress_start.status)
+            pthread_cond_wait(&progress_start.cond, &progress_start.mutex);
+        /* unlock mutex */
+        pthread_mutex_unlock(&progress_start.mutex);
+        printf("%d: started progress thread\n", parsec_debug_rank);
+        fflush(stdout);
+    }
 
     return 0;
 }
@@ -618,6 +815,35 @@ int
 mpi_funnelled_fini(parsec_comm_engine_t *ce)
 {
     assert( -1 != MAX_MPI_TAG );
+    mpi_no_thread_sync(ce);
+
+    /* stop progress thread if enabled and multiple nodes */
+    if (progress_thread_enable && ce->parsec_context->nb_nodes > 1) {
+        void *progress_retval = NULL;
+        parsec_debug_verbose(10, parsec_comm_output_stream,
+                             "rank %d stop MPI progress thread", parsec_debug_rank);
+        printf("%d: stopping progress thread\n", parsec_debug_rank);
+
+#ifdef OPEN_MPI
+        progress_thread_stop = true;
+        parsec_atomic_wmb();
+#else /* OPEN_MPI */
+        {
+            MPI_Request req[2] = { MPI_REQUEST_NULL, MPI_REQUEST_NULL };
+            long send_data[2] = { 1, 1 };
+            printf("%d: sends\n", parsec_debug_rank);
+            fflush(stdout);
+            MPI_Send(&send_data[0], 1, MPI_LONG, 0, 0, progress_comm_self);
+            MPI_Send(&send_data[1], 1, MPI_LONG, 0, 1, progress_comm_self);
+            printf("%d: sends done\n", parsec_debug_rank);
+            fflush(stdout);
+        }
+#endif /* OPEN_MPI */
+
+        pthread_join(progress_thread_id, &progress_retval);
+        printf("%d: stopped progress thread\n", parsec_debug_rank);
+        fflush(stdout);
+    }
 
     /* TODO: GO through all registered tags and unregister them */
     ce->tag_unregister(MPI_FUNNELLED_GET_TAG_INTERNAL);
@@ -641,11 +867,13 @@ mpi_funnelled_fini(parsec_comm_engine_t *ce)
 
     /* Remove the static handles */
     MPI_Comm_free(&dep_self); /* dep_self becomes MPI_COMM_NULL */
+    MPI_Comm_free(&progress_comm_self); /* ditto */
 
     /* Release the context communicators if any */
     if( -1 != ce->parsec_context->comm_ctx) {
         MPI_Comm_free((MPI_Comm*)&ce->parsec_context->comm_ctx);
         ce->parsec_context->comm_ctx = -1; /* We use -1 for the opaque comm_ctx, rather than the MPI specific MPI_COMM_NULL */
+        dep_comm = MPI_COMM_NULL;
     }
 
     MAX_MPI_TAG = -1;  /* mark the layer as uninitialized */
@@ -1010,8 +1238,7 @@ mpi_no_thread_get(parsec_comm_engine_t *ce,
     }
 
     MPI_Irecv((char*)source_memory_handle->mem + ldispl, source_memory_handle->count, source_memory_handle->datatype,
-              remote, tag, dep_comm,
-              request);
+              remote, tag, dep_comm, request);
 
     cb->cb_type.onesided.fct = l_cb;
     cb->storage1 = mpi_funnelled_last_active_req;
@@ -1109,9 +1336,7 @@ mpi_no_thread_push_posted_req(parsec_comm_engine_t *ce)
     mpi_funnelled_dynamic_req_t *item;
     item = (mpi_funnelled_dynamic_req_t *) parsec_list_nolock_pop_front(&mpi_funnelled_dynamic_req_fifo);
 
-    MPI_Request tmp = array_of_requests[mpi_funnelled_last_active_req];
     array_of_requests[mpi_funnelled_last_active_req] = item->request;
-    item->request = tmp;
     item->request = MPI_REQUEST_NULL;
 
     array_of_callbacks[mpi_funnelled_last_active_req].storage1 = item->cb.storage1;
