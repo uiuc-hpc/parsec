@@ -7,6 +7,7 @@
 #
 ##############################################################################
 from spack import *
+import os
 
 class Parsec(CMakePackage):
     """PaRSEC: the Parallel Runtime Scheduler and Execution Controller for micro-tasks on distributed heterogeneous systems"""
@@ -42,6 +43,9 @@ class Parsec(CMakePackage):
     conflicts('transport=mpi', when='^lci')
     conflicts('transport=lci', when='^mpi')
 
+    generator = 'Ninja'
+    depends_on('ninja', type='build')
+
     depends_on('cmake@3.16.0:', type='build')
     depends_on('bison', type='build')
     depends_on('flex', type='build')
@@ -64,6 +68,10 @@ class Parsec(CMakePackage):
     depends_on('py-networkx',   when='+profile-tools', type=('build', 'run'))
     # py-pandas HDF5 support
     depends_on('py-tables',     when='+profile-tools', type='run')
+
+    @property
+    def build_directory(self):
+        return os.path.join(self.stage.path, 'spack-build', self.spec.dag_hash(7))
 
     def cmake_args(self):
         args = [
