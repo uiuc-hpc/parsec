@@ -16,7 +16,7 @@
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
 #elif defined(PARSEC_HAVE_LCI)
-#include <lc.h>
+#include <lci.h>
 #endif  /* defined(PARSEC_HAVE_MPI) */
 
 enum regions {
@@ -71,11 +71,9 @@ int main(int argc, char ** argv)
     MPI_Comm_size(MPI_COMM_WORLD, &world);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 #elif defined(PARSEC_HAVE_LCI)
-    lc_ep ep;
-    lc_init(1, &ep);
-    lci_global_ep = &ep;
-    lc_get_proc_num(&rank);
-    lc_get_num_proc(&world);
+    LCI_initialize();
+    world = LCI_NUM_PROCESSES;
+    rank = LCI_RANK;
 #endif
 
     if( world != 1 ) {
@@ -166,7 +164,7 @@ int main(int argc, char ** argv)
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
 #elif defined(PARSEC_HAVE_LCI)
-    lc_finalize();
+    LCI_finalize();
 #endif
 
     return 0;

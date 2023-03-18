@@ -26,9 +26,7 @@ int main( int argc, char** argv )
 #ifdef PARSEC_HAVE_MPI
     MPI_Init(NULL, NULL);
 #elif defined(PARSEC_HAVE_LCI)
-    lc_ep ep;
-    lc_init(1, &ep);
-    lci_global_ep = &ep;
+    LCI_initialize();
 #endif
 
     while( NULL != argv[i] ) {
@@ -67,7 +65,7 @@ int main( int argc, char** argv )
 #ifdef PARSEC_HAVE_MPI
     MPI_Finalize();
 #elif defined(PARSEC_HAVE_LCI)
-    lc_finalize();
+    LCI_finalize();
 #endif
     return 0;
 }

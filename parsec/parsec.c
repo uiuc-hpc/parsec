@@ -65,7 +65,7 @@
 #endif
 
 #ifdef PARSEC_HAVE_LCI
-#include <lc.h>
+#include <lci.h>
 #include "parsec/parsec_lci.h"
 #endif
 
@@ -441,8 +441,10 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
         parsec_weaksym_exit = parsec_mpi_exit;
     }
 #  elif defined(PARSEC_HAVE_LCI)
-    if (NULL != lci_global_ep) {
-        lc_get_proc_num(&parsec_debug_rank);
+    int lci_is_up;
+    LCI_initialized(&lci_is_up);
+    if (lci_is_up) {
+        parsec_debug_rank = LCI_RANK;
         parsec_weaksym_exit = parsec_lci_exit;
     }
 #  endif
@@ -2013,10 +2015,10 @@ int parsec_taskpool_register( parsec_taskpool_t* tp )
 }
 
 #if defined(DISTRIBUTED) && defined(PARSEC_HAVE_LCI)
-static void lci_max_op(void *dst, void *src, size_t count)
+static void lci_max_op(void *dst, const void *src, size_t count)
 {
     uint32_t *d = dst;
-    uint32_t *s = src;
+    const uint32_t *s = src;
     if (*s > *d)
         *d = *s;
 }
@@ -2036,9 +2038,10 @@ void parsec_taskpool_sync_ids( void )
         MPI_Allreduce( MPI_IN_PLACE, &idx, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD );
     }
 #elif defined(DISTRIBUTED) && defined(PARSEC_HAVE_LCI)
-    if (NULL != lci_global_ep) {
-        lc_alreduce(LC_COL_IN_PLACE, &idx, sizeof(uint32_t),
-                    lci_max_op, *lci_global_ep);
+    int lci_is_on;
+    LCI_initialized(&lci_is_on);
+    if (lci_is_on) {
+        lci_allreducem(&idx, sizeof(uint32_t), lci_max_op);
     }
 #endif
     if( idx >= taskpool_array_size ) {
@@ -2256,8 +2259,10 @@ int parsec_parse_binding_parameter(const char * option, parsec_context_t* contex
             MPI_Comm_rank(*(MPI_Comm*)context->comm_ctx, &rank);
         }
 #elif defined(DISTRIBUTED) && defined(PARSEC_HAVE_LCI)
-        if (NULL != lci_global_ep)
-            lc_get_proc_num(&rank);
+        int lci_is_on;
+        LCI_initialized(&lci_is_on);
+        if (lci_is_on)
+            rank = LCI_RANK;
 #endif /* DISTRIBUTED && PARSEC_HAVE_MPI */
         while (getline(&line, &line_len, f) != -1) {
             if(line_num == rank) {

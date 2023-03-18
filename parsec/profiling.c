@@ -1412,27 +1412,6 @@ int parsec_profiling_dbp_dump( void )
     return 0;
 }
 
-#if defined(PARSEC_HAVE_LCI)
-/* we haven't started comm engine yet, must do own progress ... */
-#define LCI_COLL_PROGRESS(call, ...) \
-  do {                               \
-    lc_colreq req;                   \
-    call(__VA_ARGS__, &req);         \
-    while (!req.flag) {              \
-        lc_progress(0);              \
-        lc_col_progress(&req);       \
-    }                                \
-  } while (0)
-
-static void lci_min_op(void *dst, void *src, size_t count)
-{
-    int *d = dst;
-    int *s = src;
-    if (*s < *d)
-        *d = *s;
-}
-#endif
-
 int parsec_profiling_dbp_start( const char *basefile, const char *hr_info )
 {
     int64_t zero;

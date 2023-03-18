@@ -12,7 +12,7 @@
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
 #elif defined(PARSEC_HAVE_LCI)
-#include <lc.h>
+#include <lci.h>
 #endif
 #include <stdio.h>
 
@@ -35,7 +35,7 @@ parsec_taskpool_t *rtt_new(parsec_data_collection_t *A, int size, int nb)
 #if defined(PARSEC_HAVE_MPI)
     MPI_Comm_size(MPI_COMM_WORLD, &worldsize);
 #elif defined(PARSEC_HAVE_LCI)
-    lc_get_num_proc(&worldsize);
+    worldsize = LCI_NUM_PROCESSES;
 #endif
 
     if( nb <= 0 || size <= 0 ) {

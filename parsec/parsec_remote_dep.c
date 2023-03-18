@@ -3,7 +3,7 @@
 #if   defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
 #elif defined(PARSEC_HAVE_LCI)
-#include <lc.h>
+#include <lci.h>
 #endif
 
 #include "datatype.h"
@@ -815,7 +815,6 @@ int
 remote_dep_dequeue_init(parsec_context_t* context)
 {
     pthread_attr_t thread_attr;
-    int is_mpi_up = 0;
     int thread_level_support;
 
     assert(mpi_initialized == 0);
@@ -823,6 +822,7 @@ remote_dep_dequeue_init(parsec_context_t* context)
     remote_dep_mpi_params(context);
 
 #if defined(PARSEC_HAVE_MPI)
+    int is_mpi_up = 0;
     MPI_Initialized(&is_mpi_up);
     if( 0 == is_mpi_up ) {
         /**
@@ -839,7 +839,9 @@ remote_dep_dequeue_init(parsec_context_t* context)
         return 1;
     }
 #elif defined(PARSEC_HAVE_LCI)
-    if (NULL == lci_global_ep) {
+    int is_lci_up = 0;
+    LCI_initialized(&is_lci_up);
+    if( 0 == is_lci_up ) {
         /**
          * LCI is not up, so we will consider this as a single node run. Fall
          * back to the no-LCI case.
@@ -848,8 +850,6 @@ remote_dep_dequeue_init(parsec_context_t* context)
         parsec_communication_engine_up = -1;  /* No communications supported */
         return 1;
     }
-    if (-1 == context->comm_ctx)
-        context->comm_ctx = (intptr_t)lci_global_ep;
 #endif
 
     parsec_communication_engine_up = 0;  /* we have communication capabilities */
@@ -901,7 +901,7 @@ remote_dep_dequeue_init(parsec_context_t* context)
                                   false, false, parsec_param_enable_mpi_overtake, &parsec_param_enable_mpi_overtake);
 #  endif
 #elif defined(PARSEC_HAVE_LCI)
-    lc_get_num_proc(&context->nb_nodes);
+    context->nb_nodes = LCI_NUM_PROCESSES;
     if (parsec_param_comm_thread_multiple) {
         context->flags |= PARSEC_CONTEXT_FLAG_COMM_MT;
     }

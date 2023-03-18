@@ -7,6 +7,7 @@
 #define __USE_PARSEC_LCI_H__
 
 #include "parsec/parsec_comm_engine.h"
+#include <lci.h>
 
 /* ------- LCI implementation below ------- */
 parsec_comm_engine_t * lci_init(parsec_context_t *parsec_context);
@@ -85,5 +86,10 @@ int lci_sync(parsec_comm_engine_t *comm_engine);
 
 int
 lci_can_push_more(parsec_comm_engine_t *comm_engine);
+
+void lci_barrier(void);
+void lci_bcastm(void *buf, size_t len, int root);
+void lci_allreducem(void *buf, size_t len, LCI_op_t op);
+void lci_allreducel(void *buf, size_t len, LCI_op_t op);
 
 #endif /* __USE_PARSEC_LCI_H__ */

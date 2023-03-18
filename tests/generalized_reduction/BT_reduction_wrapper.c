@@ -11,7 +11,7 @@
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
 #elif defined(PARSEC_HAVE_LCI)
-#include <lc.h>
+#include <lci.h>
 #endif
 static parsec_datatype_t block;
 

@@ -210,8 +210,11 @@ int parsec_remote_dep_set_ctx( parsec_context_t* context, intptr_t opaque_comm_c
 
 
 #ifdef PARSEC_HAVE_LCI
-#include <lc.h>
-extern lc_ep *lci_global_ep;
+#include <lci.h>
+void lci_barrier(void);
+void lci_bcastm(void *buf, size_t len, int root);
+void lci_allreducem(void *buf, size_t len, LCI_op_t op);
+void lci_allreducel(void *buf, size_t len, LCI_op_t op);
 #endif
 
 

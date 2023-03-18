@@ -23,7 +23,7 @@
 #if   defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
 #elif defined(PARSEC_HAVE_LCI)
-#include <lc.h>
+#include <lci.h>
 #endif   /* PARSEC_HAVE_MPI */
 
 typedef struct kahan_sum_s {
@@ -175,8 +175,9 @@ static inline void parsec_comm_stat_time_delay_send(double *time, int rank,
 #if   defined(PARSEC_HAVE_MPI)
     MPI_Send(time, 1, MPI_DOUBLE, rank, 0, MPI_COMM_WORLD);
 #elif defined(PARSEC_HAVE_LCI)
-    while (LC_OK != lc_sends(time, sizeof(double), rank, 0,
-                             *(lc_ep*)context->comm_ctx))
+    extern LCI_endpoint_t timer_ep;
+    LCI_mbuffer_t mbuf = { .address = time, .length = sizeof(double) };
+    while (LCI_OK != LCI_sendm(timer_ep, mbuf, rank, 0))
         continue;
 #endif   /* PARSEC_HAVE_MPI */
 }
@@ -188,12 +189,12 @@ static inline void parsec_comm_stat_time_delay_recv(double *time, int rank,
 #if   defined(PARSEC_HAVE_MPI)
     MPI_Recv(time, 1, MPI_DOUBLE, rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 #elif defined(PARSEC_HAVE_LCI)
-    lc_req req;
-    while (LC_OK != lc_recvs(time, sizeof(double), rank, 0,
-                             *(lc_ep*)context->comm_ctx, &req))
+    extern LCI_endpoint_t timer_ep;
+    extern LCI_comp_t timer_comp;
+    LCI_mbuffer_t mbuf = { .address = time, .length = sizeof(double) };
+    while (LCI_OK != LCI_recvm(timer_ep, mbuf, rank, 0, timer_comp, NULL))
         continue;
-    while (!req.sync)
-        continue;
+    LCI_sync_wait(timer_comp, NULL);
 #endif   /* PARSEC_HAVE_MPI */
 }
 

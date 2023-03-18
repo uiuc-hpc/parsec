@@ -17,7 +17,7 @@
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
 #elif defined(PARSEC_HAVE_LCI)
-#include <lc.h>
+#include <lci.h>
 #endif
 
 #include "parsec/class/lifo.h"
@@ -228,9 +228,7 @@ int main(int argc, char *argv[])
         MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided);
     }
 #elif defined(PARSEC_HAVE_LCI)
-    lc_ep ep;
-    lc_init(1, &ep);
-    lci_global_ep = &ep;
+    LCI_initialize();
 #endif
     while( (ch = getopt(argc, argv, "c:n:N:h?")) != -1 ) {
         switch(ch) {
@@ -347,7 +345,7 @@ int main(int argc, char *argv[])
 #if defined(PARSEC_HAVE_MPI)
     MPI_Finalize();
 #elif defined(PARSEC_HAVE_LCI)
-    lc_finalize();
+    LCI_finalize();
 #endif
     return 0;
 }
