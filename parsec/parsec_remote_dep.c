@@ -1187,11 +1187,13 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
     remote_dep_mpi_initialize_execution_stream(context);
 
     remote_dep_mpi_on(context);
+    parsec_ce.enable(&parsec_ce);
     /* acknowledge the activation */
     parsec_communication_engine_up = 3;
     whatsup = remote_dep_dequeue_nothread_progress(&parsec_comm_es, -1 /* loop till explicitly asked to return */);
     PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine OFF on process %d/%d",
                          context->my_rank, context->nb_nodes);
+    parsec_ce.disable(&parsec_ce);
     parsec_communication_engine_up = 1;  /* went to sleep */
 
     while( -1 != whatsup ) {
@@ -1202,11 +1204,13 @@ void* remote_dep_dequeue_main(parsec_context_t* context)
         /* The MPI thread is owning the lock */
         assert( parsec_communication_engine_up == 2 );
         remote_dep_mpi_on(context);
+        parsec_ce.enable(&parsec_ce);
         /* acknowledge the activation */
         parsec_communication_engine_up = 3;
         whatsup = remote_dep_dequeue_nothread_progress(&parsec_comm_es, -1 /* loop till explicitly asked to return */);
         PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "MPI: comm engine OFF on process %d/%d",
                              context->my_rank, context->nb_nodes);
+        parsec_ce.disable(&parsec_ce);
         parsec_communication_engine_up = 1;  /* went to sleep */
     }
 
