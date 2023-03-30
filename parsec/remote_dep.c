@@ -140,12 +140,12 @@ remote_dep_complete_and_cleanup(parsec_remote_deps_t** deps,
         (*deps)->outgoing_mask = 0;
         if(ncompleted)
             remote_dep_dec_flying_messages((*deps)->taskpool);
-#if defined(PARSEC_COMM_STATS)
+#if defined(PARSEC_STATS_COMM)
         if ((*deps)->forwarded) {
-            double duration = parsec_comm_stat_time_since_init() - (*deps)->msg.time_pred;
+            double duration = parsec_stat_time(&parsec_stat_clock_model) - (*deps)->msg.time_pred;
             parsec_comm_stat_update(&parsec_comm_sdep_stat, duration);
         }
-#endif /* PARSEC_COMM_STATS */
+#endif /* PARSEC_STATS_COMM */
         remote_deps_free(*deps);
         *deps = NULL;
         return 1;
@@ -479,13 +479,13 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
     /* make valgrind happy */
     memset(&remote_deps->msg.locals[i], 0, (MAX_LOCAL_COUNT - i) * sizeof(int));
 #endif
-#if defined(PARSEC_COMM_STATS)
-    remote_deps->msg.time_pred = parsec_comm_stat_time_since_init();
+#if defined(PARSEC_STATS_COMM)
+    remote_deps->msg.time_pred = parsec_stat_time(&parsec_stat_clock_model);
     if (remote_deps->root == es->virtual_process->parsec_context->my_rank) {
         remote_deps->msg.time_root = remote_deps->msg.time_pred;
     }
     remote_deps->forwarded = 0;
-#endif /* PARSEC_COMM_STATS */
+#endif /* PARSEC_STATS_COMM */
 
     /* Mark the root of the collective as rank 0 */
     remote_dep_mark_forwarded(es, remote_deps, remote_deps->root);
@@ -575,9 +575,9 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
                          */
                         (void)parsec_atomic_fetch_inc_int32(&remote_deps->pending_ack);
                     }
-#if defined(PARSEC_COMM_STATS)
+#if defined(PARSEC_STATS_COMM)
                     remote_deps->forwarded = 1;
-#endif /* PARSEC_COMM_STATS */
+#endif /* PARSEC_STATS_COMM */
                     remote_dep_send(es, rank, remote_deps);
                 } else {
                     PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "[%d:%d] task %s my_idx %d idx %d rank %d -- skip (not my direct descendant)",

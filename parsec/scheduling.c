@@ -16,6 +16,7 @@
 #include "parsec/parsec_remote_dep.h"
 #include "parsec/scheduling.h"
 #include "parsec/papi_sde.h"
+#include "parsec/parsec_stats.h"
 
 #include "parsec/debug_marks.h"
 #include "parsec/ayudame.h"
@@ -422,6 +423,9 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
                             int distance)
 {
     int rc = PARSEC_HOOK_RETURN_DONE;
+#if defined(PARSEC_STATS_SCHED)
+    double time_execute;
+#endif /* PARSEC_STATS_SCHED */
 
     PARSEC_PINS(es, SELECT_END, task);
 
@@ -433,7 +437,14 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
     switch(rc) {
     case PARSEC_HOOK_RETURN_DONE: {
         if(task->status <= PARSEC_TASK_STATUS_HOOK) {
+#if defined(PARSEC_STATS_SCHED)
+            time_execute = parsec_stat_time(&parsec_stat_clock_model);
+#endif /* PARSEC_STATS_SCHED */
             rc = __parsec_execute( es, task );
+#if defined(PARSEC_STATS_SCHED)
+            time_execute = parsec_stat_time(&parsec_stat_clock_model) - time_execute;
+            kahan_sum(&es->time.execute, time_execute);
+#endif /* PARSEC_STATS_SCHED */
         }
         /* We're good to go ... */
         switch(rc) {
@@ -490,6 +501,9 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     parsec_task_t* task;
     int nbiterations = 0, distance, rc;
     struct timespec rqtp;
+#if defined(PARSEC_STATS_SCHED)
+    double time_wait, time_select;
+#endif /* PARSEC_STATS_SCHED */
 
     rqtp.tv_sec = 0;
     misses_in_a_row = 1;
@@ -533,6 +547,10 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     }
 
   skip_first_barrier:
+#if defined(PARSEC_STATS_SCHED)
+    time_wait = parsec_stat_time(&parsec_stat_clock_model);
+    time_select = time_wait;
+#endif /* PARSEC_STATS_SCHED */
     while( !all_tasks_done(parsec_context) ) {
 
         if(PARSEC_THREAD_IS_MASTER(es)) {
@@ -562,12 +580,27 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
         if( task != NULL ) {
             misses_in_a_row = 0;  /* reset the misses counter */
 
+#if defined(PARSEC_STATS_SCHED)
+            /* time for this scheduling period */
+            time_select = parsec_stat_time(&parsec_stat_clock_model) - time_select;
+            kahan_sum(&es->time.select, time_select);
+#endif /* PARSEC_STATS_SCHED */
+
             rc = __parsec_task_progress(es, task, distance);
             (void)rc;  /* for now ignore the return value */
+#if defined(PARSEC_STATS_SCHED)
+            /* start time for next scheduling period */
+            time_select = parsec_stat_time(&parsec_stat_clock_model);
+#endif /* PARSEC_STATS_SCHED */
 
             nbiterations++;
         }
     }
+#if defined(PARSEC_STATS_SCHED)
+    /* time for this entire wait period */
+    time_wait = parsec_stat_time(&parsec_stat_clock_model) - time_wait;
+    kahan_sum(&es->time.wait, time_wait);
+#endif /* PARSEC_STATS_SCHED */
 
     parsec_rusage_per_es(es, true);
 

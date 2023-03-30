@@ -241,6 +241,14 @@ option(PARSEC_PROF_PINS
 #  SET(PARSEC_PROF_TRACE ON CACHE BOOL "Enable the generation of the profiling information during execution" FORCE)
 # endif( PARSEC_PROF_PINS AND NOT PARSEC_PROF_TRACE )
 
+### Performance stat options
+option(PARSEC_STATS
+  "Gather aggregate timing stats (lightweight profiling)" OFF)
+option(PARSEC_STATS_SCHED
+  "Gather aggregate scheduler timing stats (lightweight profiling)" OFF)
+option(PARSEC_STATS_COMM
+  "Gather aggregate communication timing stats (lightweight profiling)" OFF)
+
 # cmake modules setup
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules)
 include (CMakeDetermineSystem)
@@ -942,7 +950,7 @@ install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/include/parsec/execution_stream.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_remote_dep.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_comm_engine.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_comm_stats.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_stats.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/bindthread.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/parsec_internal.h
   ${CMAKE_CURRENT_SOURCE_DIR}/parsec/vpmap.h

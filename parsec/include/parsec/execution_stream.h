@@ -17,6 +17,7 @@
 #include "parsec/mempool.h"
 #include "parsec/profiling.h"
 #include "parsec/class/barrier.h"
+#include "parsec/parsec_stats.h"
 
 #ifdef PARSEC_PROF_PINS
 #include "parsec/mca/pins/pins.h"
@@ -65,6 +66,14 @@ struct parsec_execution_stream_s {
                                                                     *   we use these mempools */
     parsec_thread_mempool_t *dependencies_mempool; /**< If using hashtables to store dependencies
                                                     *   those are allocated using this mempool */
+
+#if defined(PARSEC_STATS_SCHED)
+    struct {
+        kahan_sum_t execute; /* time executing tasks: doing useful work   */
+        kahan_sum_t select;  /* time in scheduler's select function: idle */
+        kahan_sum_t wait;    /* time waiting to complete all tasks: total */
+    } time;
+#endif /* PARSEC_STATS_SCHED */
 };
 
 /**

@@ -69,6 +69,8 @@
 #include "parsec/parsec_lci.h"
 #endif
 
+#include "parsec/parsec_stats.h"
+
 /*
  * Global variables.
  */
@@ -289,6 +291,13 @@ static void* __parsec_thread_init( __parsec_temporary_thread_initialization_t* s
 #if defined(PARSEC_SIM)
     es->largest_simulation_date = 0;
 #endif
+
+#if defined(PARSEC_STATS_SCHED)
+    /* reset stats */
+    es->time.execute = KAHAN_SUM_INITIALIZER;
+    es->time.select  = KAHAN_SUM_INITIALIZER;
+    es->time.wait    = KAHAN_SUM_INITIALIZER;
+#endif /* PARSEC_STATS_SCHED */
 
     /* The main thread of VP 0 will go back to the user level */
     if( PARSEC_THREAD_IS_MASTER(es) ) {

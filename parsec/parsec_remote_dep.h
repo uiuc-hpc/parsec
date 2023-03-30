@@ -21,7 +21,7 @@
 #include "parsec/parsec_comm_engine.h"
 #include "parsec/scheduling.h"
 
-#include "parsec/parsec_comm_stats.h"
+#include "parsec/parsec_stats.h"
 
 typedef struct dep_cmd_item_s dep_cmd_item_t;
 typedef union dep_cmd_u dep_cmd_t;
@@ -51,10 +51,10 @@ typedef struct remote_dep_wire_activate_s {
     uint32_t             task_class_id;
     uint32_t             length;
     parsec_assignment_t  locals[MAX_LOCAL_COUNT];
-#if defined(PARSEC_COMM_STATS)
+#if defined(PARSEC_STATS_COMM)
     double               time_pred; /* time when predecesor sent activation */
     double               time_root; /* time when root sent activation */
-#endif /* PARSEC_COMM_STATS */
+#endif /* PARSEC_STATS_COMM */
 } remote_dep_wire_activate_t;
 
 typedef struct remote_dep_wire_get_s {
@@ -119,10 +119,10 @@ struct parsec_remote_deps_s {
     int32_t                          root;    /**< The root of the control message */
     uint32_t                         incoming_mask;  /**< track all incoming actions (receives) */
     uint32_t                         outgoing_mask;  /**< track all outgoing actions (send) */
-#if defined(PARSEC_COMM_STATS)
+#if defined(PARSEC_STATS_COMM)
     int32_t                          forwarded; /* has this activation been forwarded? */
     double                           time_recv; /* time when this activation was received */
-#endif /* PARSEC_COMM_STATS */
+#endif /* PARSEC_STATS_COMM */
     remote_dep_wire_activate_t       msg;     /**< A copy of the message control */
     void                            *eager_msg; /**< A pointer to the eager buffer if this is an eager msg, otherwise NULL */
     int32_t                          max_priority;
@@ -215,6 +215,12 @@ int parsec_remote_dep_propagate(parsec_execution_stream_t* es,
 
 #else
 #define parsec_remote_dep_init(ctx)            1
+static inline int parsec_remote_dep_init(parsec_context_t* context)
+{
+#if defined(PARSEC_STATS)
+    parsec_stat_clock_model_init(context, &parsec_stat_clock_model);
+#endif /* PARSEC_STATS_COMM */
+}
 #define parsec_remote_dep_fini(ctx)            0
 #define parsec_remote_dep_on(ctx)              0
 #define parsec_remote_dep_off(ctx)             0

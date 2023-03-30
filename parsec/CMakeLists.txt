@@ -120,6 +120,10 @@ if( PARSEC_PROF_GRAPHER )
       parsec_prof_grapher.c)
 endif( PARSEC_PROF_GRAPHER )
 
+if( PARSEC_STATS )
+  list(APPEND SOURCES parsec_stats.c)
+endif( PARSEC_STATS )
+
 #
 # Setup targets
 #
