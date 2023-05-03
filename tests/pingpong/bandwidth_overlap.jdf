@@ -9,6 +9,8 @@ extern "C" %{
 #include <parsec.h>
 #include <parsec/data_dist/matrix/two_dim_rectangle_cyclic.h>
 #include <parsec/data_dist/matrix/matrix.h>
+#include <parsec/vpmap.h>
+#include <parsec/parsec_stats.h>
 
 /* system and io */
 #include <stdlib.h>
@@ -16,6 +18,7 @@ extern "C" %{
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <stdalign.h>
 
 #if defined(PARSEC_HAVE_MPI)
 #include <mpi.h>
@@ -23,94 +26,69 @@ extern "C" %{
 #include <lci.h>
 #endif
 
-#ifndef NSEC_PER_SEC
-#define NSEC_PER_SEC 1000000000L
-#endif
-
-static inline void clock_diff(const struct timespec *a,
-                              const struct timespec *b, struct timespec *c)
+static inline void kernel(const parsec_execution_stream_t *es,
+                          double *restrict T, int size, int intensity, int t)
 {
-    time_t sec = b->tv_sec - a->tv_sec;
-    long nsec = b->tv_nsec - a->tv_nsec;
-    if (nsec < 0) {
-        nsec += NSEC_PER_SEC;
-        sec -= 1;
-    }
-    c->tv_sec = sec;
-    c->tv_nsec = nsec;
-}
-
-static inline void compute_for_time(double *restrict T, int size, long time,
-                                    int t, int f)
-{
-    struct timespec start, end, diff = { .tv_sec = 0, .tv_nsec = 0L };
-    int inc = (127 / size) + 1;
-    double val = (double)(t + f);
-
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    while (diff.tv_nsec < time && diff.tv_sec < 1) {
-        for (int j = 0; j < inc; j++)
-            for (int i = 0; i < size; i++)
-                T[i] = cbrt(T[i] + val + (double)i + (double)j);
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        clock_diff(&start, &end, &diff);
-    }
+    for (int j = 0; j < intensity; j++)
+        for (int i = 0; i < size; i++)
+            T[i] = fma(T[i], (double)t, (double)j);
 }
 
 %}
 
 descA       [ type = "parsec_tiled_matrix_dc_t*" ]
-Disk        [ type = "parsec_tiled_matrix_dc_t*" ]
 loops       [ type = "int" ]
 frags       [ type = "int" ]
 ws          [ type = "int" ]
 size        [ type = "int" ]
-time        [ type = "long" ]
+intensity   [ type = "int" ]
+sync        [ type = "int" ]
+chains      [ type = "int" ]
 
-SYNC(t)
-
-t = 0 .. loops-1
-
-: Disk(0, t%ws)
-
-CTL C -> C PING(t, 0 .. frags-1)
-      <- (t > 0) ? C PONG(t-1, 0 .. frags-1)
-BODY
-
-END
-
-PING(t, f)
-
+ping_pong(t, f, c)
 t = 0 .. loops-1
 f = 0 .. frags-1
-
-: Disk(0, t%ws)
-
-RW   T <- (t == 0) ? descA(f, 0) : T PONG(t-1, f)
-       -> T PONG(t, f)
-CTL  C <- C SYNC(t)
-
+c = 0 .. chains-1
+: descA((t+c)%ws, f)
+RW  T <- (t == 0) ? descA((t+c)%ws, f)
+      <- (t > 0 && sync == 0) ? T data_sync(t-1, f, c)
+      <- (t > 0 && sync  > 0) ? T ping_pong(t-1, f, c)
+      -> (sync == 0) ? T data_sync(t,   f, c)
+      -> (sync  > 0) ? T ping_pong(t+1, f, c)
+CTL C <- (sync > 0 && t >= sync) ? C exec_sync(t-sync, c)
+      -> C exec_sync(t, c)
+; loops-t
 BODY
-{
-    compute_for_time(T, size, time, t, f);
-}
+    kernel(es, T, size, intensity, t);
 END
 
-PONG(t, f)
-
-t = 0 .. loops-1
-f = 0 .. frags-1
-
-: Disk(0, (t+1)%ws)
-
-RW   T <- T PING(t, f)
-       -> (t < loops-1) ? T PING(t+1, f)
-CTL  C -> C SYNC(t+1)
-
+/* If sync > 0, ensures that ping_pong(t+sync, 0 .. frags-1, c) cannot start
+ * until all ping_pong(t, 0 .. frags-1, c) have completed execution
+ * If sync == 0, ensures that data_sync(t, 0 .. frags-1, c) cannot start
+ * until all ping_pong(t, 0 .. frags-1, c) have completed execution */
+exec_sync(t, c)
+t = 0 .. loops-1-sync
+c = 0 .. chains-1
+: descA((t+sync+c)%ws, 0)
+CTL C <- C ping_pong(t, 0 .. frags-1, c)
+      -> (sync == 0) ? C data_sync(t,      0 .. frags-1, c)
+      -> (sync  > 0) ? C ping_pong(t+sync, 0 .. frags-1, c)
+; loops-t
 BODY
-{
-    compute_for_time(T, size, time, t, f);
-}
+END
+
+/* Ensure that data cannot be sent to ping_pong(t+1, f, c)
+ * until all ping_pong(t, 0 .. frags-1, c) have completed execution */
+data_sync(t, f, c)
+t = 0 .. %{ return (sync > 0) ? -1 : loops-1; %}
+f = 0 .. frags-1
+c = 0 .. chains-1
+: descA((t+c)%ws, f)
+RO  T <- T ping_pong(t,   f, c)
+      -> T ping_pong(t+1, f, c)
+CTL C <- C exec_sync(t, c)
+; loops-t
+BODY
 END
 
 extern "C" %{
@@ -119,7 +97,6 @@ extern "C" %{
  * @brief bandwidth,  no-blocking 
  *
  * @param [in] dcA: data 
- * @param [in] Disk: distribution 
  * @param [in] loops: loops of bandwidth 
  * @param [in] frags: fragments
  * @param [in] ws: number of process
@@ -127,18 +104,24 @@ extern "C" %{
  */
 parsec_taskpool_t*
 parsec_bandwidth_overlap_New(parsec_tiled_matrix_dc_t *dcA,
-                    parsec_tiled_matrix_dc_t *Disk,
-                    int loops, int frags, int ws, int size, long time)
+                    int loops, int frags, int ws,
+                    int size, int intensity, int sync, int chains)
 {
   parsec_taskpool_t* bandwidth_overlap_taskpool;
   parsec_bandwidth_overlap_taskpool_t* taskpool = NULL;
 
-  if( loops < 1 || frags < 1 || size < 1) {
-    fprintf(stderr, "loops/frags/size should not smaller than 1\n");
+  if( loops < 1 || frags < 1 || size < 1 || chains < 1 ) {
+    fprintf(stderr, "loops/frags/size/chains should not be less than 1\n");
     exit(1);
   }
 
-  taskpool = parsec_bandwidth_overlap_new(dcA, Disk, loops, frags, ws, size, time); 
+  if( intensity < 0 || sync < 0 ) {
+    fprintf(stderr, "intensity/sync should not be less than 0\n");
+    exit(1);
+  }
+
+  taskpool = parsec_bandwidth_overlap_new(dcA, loops, frags, ws,
+                                          size, intensity, sync, chains);
   bandwidth_overlap_taskpool = (parsec_taskpool_t*)taskpool;
 
   parsec_matrix_add2arena( &taskpool->arenas_datatypes[PARSEC_bandwidth_overlap_DEFAULT_ARENA],
@@ -163,7 +146,6 @@ void parsec_bandwidth_overlap_Destruct(parsec_taskpool_t *taskpool)
  * @brief bandwidth 
  * 
  * @param [in] dcA: data 
- * @param [in] Disk: distribution 
  * @param [in] loops: loops of bandwidth
  * @param [in] frags: fragments
  * @param [in] ws: number of process 
@@ -171,12 +153,13 @@ void parsec_bandwidth_overlap_Destruct(parsec_taskpool_t *taskpool)
  */
 int parsec_bandwidth_overlap(parsec_context_t *parsec,
                     parsec_tiled_matrix_dc_t *dcA,
-                    parsec_tiled_matrix_dc_t *Disk,
-                    int loops, int frags, int ws, int size, long time)
+                    int loops, int frags, int ws,
+                    int size, int intensity, int sync, int chains)
 {
   parsec_taskpool_t *parsec_bandwidth_overlap = NULL;
 
-  parsec_bandwidth_overlap = parsec_bandwidth_overlap_New(dcA, Disk, loops, frags, ws, size, time);
+  parsec_bandwidth_overlap = parsec_bandwidth_overlap_New(dcA,
+                              loops, frags, ws, size, intensity, sync, chains);
 
   if( parsec_bandwidth_overlap != NULL ){
       parsec_enqueue(parsec, parsec_bandwidth_overlap);
@@ -188,6 +171,33 @@ int parsec_bandwidth_overlap(parsec_context_t *parsec,
   return 0;
 }
 
+static inline double timespec_to_ns(const struct timespec *ts)
+{
+    return (double)ts->tv_sec * 1e9 + (double)ts->tv_nsec;
+}
+
+typedef struct {
+    double value;
+    const char *prefix;
+} SI_t;
+
+static const char *SI_prefixes[] = {
+    "q", "r", "y", "z", "a", "f", "p", "n", "µ", "m",
+    " ",
+    "k", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q",
+};
+
+static inline SI_t to_SI(double value)
+{
+    double exponent = floor(log10(value)/3.0);
+    if (exponent < -10.0)
+        exponent = -10.0;
+    if (exponent > 10.0)
+        exponent = 10.0;
+    size_t index = (size_t)(exponent + 10.0);
+    return (SI_t){ value/pow(1000.0, exponent), SI_prefixes[index] };
+}
+
 int main(int argc, char *argv[])
 {
     parsec_context_t* parsec;
@@ -196,8 +206,10 @@ int main(int argc, char *argv[])
     int rank, nodes, ch, i;
     int pargc = 0, dashdash = -1;
     char **pargv;
-    struct timeval tstart, tend;
-    double t, bw;
+    struct timespec tstart, tend;
+    double t, bw, flop;
+    size_t tasks;
+    SI_t si_bw, si_flop, si_flops;
 
     /* Default */
     int loops = 100;
@@ -205,7 +217,9 @@ int main(int argc, char *argv[])
     int size = 1024;
     int cores = 1;
     int nb_runs = 1;
-    long sleep_time = 0;
+    int intensity = 1;
+    int sync = 0;
+    int chains = 0;
 
 #if   defined(PARSEC_HAVE_MPI)
     {
@@ -223,20 +237,23 @@ int main(int argc, char *argv[])
     rank = 0;
 #endif
 
-    while ((ch = getopt(argc, argv, "n:f:l:c:h:e:t:")) != -1) {
+    while ((ch = getopt(argc, argv, "n:f:l:c:h:e:i:s:a:")) != -1) {
         switch (ch) {
             case 'n': loops = atoi(optarg); break;
             case 'f': frags = atoi(optarg); break;
             case 'l': size = atoi(optarg) / sizeof(double); break;
             case 'e': nb_runs = atoi(optarg); break;
             case 'c': cores = atoi(optarg); break;
-            case 't': sleep_time = atol(optarg); break;
+            case 'i': intensity = atoi(optarg); break;
+            case 's': sync = atoi(optarg); break;
+            case 'a': chains = atoi(optarg); break;
             case '?': case 'h': default:
                 fprintf(stderr,
                         "-n : loops of bandwidth(default: 100)\n"
                         "-f : frags, number of fragments (default: 60)\n"
                         "-l : size, size of message (default: 1024 * sizeof(double))\n"
-                        "-t : time, number of ns tasks should sleep (default: 0)\n"
+                        "-i : intensity, number of flops per 8 bytes (default: 1)\n"
+                        "-s : sync, loops ahead to sync with, 0 syncs data (default: 0)\n"
                         "-c : number of cores used (default: 1)\n"
                         "-e : number of runs (default: 1)\n"
                         "\n");
@@ -284,38 +301,23 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    /* If the number of cores has not been defined as a parameter earlier
-     * update it with the default parameter computed in parsec_init. */
-    if(cores <= 0)
-    {
-        int p, nb_total_comp_threads = 0;
-        for(p = 0; p < parsec->nb_vp; p++) {
-            nb_total_comp_threads += parsec->virtual_processes[p]->nb_cores;
-        }
-        cores = nb_total_comp_threads;
-    }
+    /* Get real number of cores */
+    cores = vpmap_get_nb_total_threads();
 
     /* initializing matrix structure */
     two_dim_block_cyclic_t dcA;
     two_dim_block_cyclic_init(&dcA, matrix_RealDouble, matrix_Tile,
-                              nodes, rank, 1, size, frags, size, 0, 0,
-                              frags, size, 1, 1, 1);
+                              nodes, rank, 1, size, nodes, size*frags, 0, 0,
+                              nodes, size*frags, 1, 1, nodes);
     dcA.mat = parsec_data_allocate((size_t)dcA.super.nb_local_tiles *
                                    (size_t)dcA.super.bsiz *
                                    (size_t)parsec_datadist_getsizeoftype(dcA.super.mtype));
     parsec_data_collection_set_key((parsec_data_collection_t*)&dcA, "dcA");
 
-    two_dim_block_cyclic_t Disk;
-    two_dim_block_cyclic_init(&Disk, matrix_RealDouble, matrix_Tile,
-                              nodes, rank, 1, 1, 1, nodes, 0, 0,
-                              1, nodes, 1, 1, 1);
-    parsec_data_collection_set_key((parsec_data_collection_t*)&Disk, "Disk");
-
     for(i = 0; i < nb_runs; i++) {
         /* bandwidth */
         taskpool = parsec_bandwidth_overlap_new((parsec_tiled_matrix_dc_t *)&dcA,
-                                       (parsec_tiled_matrix_dc_t *)&Disk,
-                                       loops, frags, nodes, size, sleep_time);
+                                       loops, frags, nodes, size, intensity, sync, chains);
 
         bandwidth_overlap_taskpool = (parsec_taskpool_t*)taskpool;
 
@@ -324,13 +326,21 @@ int main(int argc, char *argv[])
                                  1, 1, size, 1,
                                  PARSEC_ARENA_ALIGNMENT_SSE, -1 );
 
+#ifdef PARSEC_STATS_SCHED
+        parsec_sched_stat_reset(parsec);
+#endif
+#ifdef PARSEC_STATS_COMM
+        parsec_comm_stat_reset(parsec);
+#endif
+
         /* Time start */
 #if defined(PARSEC_HAVE_MPI)
         MPI_Barrier(MPI_COMM_WORLD);
 #elif defined(PARSEC_HAVE_LCI)
         lci_barrier();
 #endif  /* defined(PARSEC_HAVE_MPI) */
-        gettimeofday(&tstart, NULL);
+
+        clock_gettime(CLOCK_MONOTONIC, &tstart);
 
         parsec_context_add_taskpool(parsec, bandwidth_overlap_taskpool);
         parsec_context_start(parsec);
@@ -342,19 +352,34 @@ int main(int argc, char *argv[])
 #elif defined(PARSEC_HAVE_LCI)
         lci_barrier();
 #endif  /* defined(PARSEC_HAVE_MPI) */
-        gettimeofday(&tend, NULL);
+        clock_gettime(CLOCK_MONOTONIC, &tend);
+
+#ifdef PARSEC_STATS_SCHED
+        parsec_sched_stat_print(parsec);
+#endif
+#ifdef PARSEC_STATS_COMM
+        parsec_comm_stat_print(parsec);
+#endif
 
         if( 0 == rank ) {
-            t = (tend.tv_sec - tstart.tv_sec) * 1000000.0 + (tend.tv_usec - tstart.tv_usec);
-            bw = ((double)loops * (double)frags * (double)size) / t * 1000.0 * 1000.0 / (1000.0 * 1000.0 * 1000.0) * sizeof(double) * 8;
-            printf("%d %d %lu %08.4g %4.8g GB/s\n", loops, frags, size*sizeof(double), t / 1000000.0, bw);
+            t = (timespec_to_ns(&tend) - timespec_to_ns(&tstart)) * 1e-9;
+            tasks = (size_t)loops * (size_t)frags * (size_t)chains;
+            bw = (double)(tasks * (size_t)size * sizeof(double) * 8) / t;
+            flop = (double)(tasks * 2 * (size_t)intensity * (size_t)size);
+            si_bw = to_SI(bw);
+            si_flop = to_SI(flop);
+            si_flops = to_SI(flop/t);
+            printf("%d %d %d %zu: %08.4g s, %7.3f %sbit/s, %7.3f %sFLOP, %7.3f %sFLOP/s\n",
+                   loops, frags, chains, (size_t)size*sizeof(double), t,
+                   si_bw.value, si_bw.prefix,
+                   si_flop.value, si_flop.prefix,
+                   si_flops.value, si_flops.prefix);
         }
 
         parsec_bandwidth_overlap_Destruct(bandwidth_overlap_taskpool);
     }
 
     parsec_tiled_matrix_dc_destroy((parsec_tiled_matrix_dc_t*)&dcA);
-    parsec_tiled_matrix_dc_destroy((parsec_tiled_matrix_dc_t*)&Disk);
 
     /* Clean up parsec*/
     parsec_fini(&parsec);
