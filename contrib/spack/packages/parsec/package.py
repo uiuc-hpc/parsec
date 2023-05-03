@@ -36,6 +36,8 @@ class Parsec(CMakePackage):
     #variant('xcompile', default=False, description='Cross compile')
     variant('visualization', default=False, description='Visualization support')
     variant('graph', default=False, description='Graphing support')
+    variant('stats', description='Lightweight timing statistics',
+            values=any_combination_of('sched', 'comm'))
 
     conflicts('+lci-static', when='transport=mpi')
     conflicts('+debug-lci', when='transport=mpi')
@@ -89,8 +91,12 @@ class Parsec(CMakePackage):
             self.define_from_variant('PARSEC_LCI_CB_HASH_TABLE', 'lci-cbtable'),
             self.define_from_variant('PARSEC_LCI_MESSAGE_LIMIT', 'lci-msg-limit'),
             self.define('PARSEC_DIST_COLLECTIVES', True),
+            self.define('PARSEC_STATS', 'none' not in self.spec.variants['stats'].value),
+            self.define('PARSEC_STATS_SCHED', 'sched' in self.spec.variants['stats'].value),
+            self.define('PARSEC_STATS_COMM', 'comm' in self.spec.variants['stats'].value),
         ]
         # lci uses a default eager limit of 12 KiB - 108 bytes
         if self.spec.variants['transport'].value == 'lci':
             args.append(self.define('PARSEC_DIST_EAGER_LIMIT', '12180'))
+
         return args
