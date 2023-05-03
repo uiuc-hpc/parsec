@@ -90,6 +90,7 @@ void parsec_stat_clock_model_init(const parsec_context_t* context,
 
 #if defined(PARSEC_STATS_SCHED)
 void parsec_sched_stat_print(const parsec_context_t *context);
+void parsec_sched_stat_reset(const parsec_context_t *context);
 #endif /* PARSEC_STATS_SCHED */
 
 #if defined(PARSEC_STATS_COMM)
@@ -283,6 +284,7 @@ fit_point_t parsec_comm_stat_time_delay(const parsec_context_t* context,
                                         const parsec_stat_clock_model_t *clk);
 
 void parsec_comm_stat_print(const parsec_context_t *context);
+void parsec_comm_stat_reset(const parsec_context_t *context);
 
 #endif /* PARSEC_STATS_COMM */
 #endif /* PARSEC_STATS */
