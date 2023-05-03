@@ -502,7 +502,7 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     int nbiterations = 0, distance, rc;
     struct timespec rqtp;
 #if defined(PARSEC_STATS_SCHED)
-    double time_wait, time_select;
+    double time_now, time_wait, time_select;
 #endif /* PARSEC_STATS_SCHED */
 
     rqtp.tv_sec = 0;
@@ -548,8 +548,9 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
 
   skip_first_barrier:
 #if defined(PARSEC_STATS_SCHED)
-    time_wait = parsec_stat_time(&parsec_stat_clock_model);
-    time_select = time_wait;
+    time_now    = parsec_stat_time(&parsec_stat_clock_model);
+    time_wait   = time_now;
+    time_select = time_now;
 #endif /* PARSEC_STATS_SCHED */
     while( !all_tasks_done(parsec_context) ) {
 
@@ -581,15 +582,15 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
             misses_in_a_row = 0;  /* reset the misses counter */
 
 #if defined(PARSEC_STATS_SCHED)
-            /* time for this scheduling period */
-            time_select = parsec_stat_time(&parsec_stat_clock_model) - time_select;
-            kahan_sum(&es->time.select, time_select);
+            /* time for this scheduling epoch */
+            time_now = parsec_stat_time(&parsec_stat_clock_model);
+            kahan_sum(&es->time.select, time_now - time_select);
 #endif /* PARSEC_STATS_SCHED */
 
             rc = __parsec_task_progress(es, task, distance);
             (void)rc;  /* for now ignore the return value */
 #if defined(PARSEC_STATS_SCHED)
-            /* start time for next scheduling period */
+            /* start time for next scheduling epoch */
             time_select = parsec_stat_time(&parsec_stat_clock_model);
 #endif /* PARSEC_STATS_SCHED */
 
@@ -597,9 +598,11 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
         }
     }
 #if defined(PARSEC_STATS_SCHED)
-    /* time for this entire wait period */
-    time_wait = parsec_stat_time(&parsec_stat_clock_model) - time_wait;
-    kahan_sum(&es->time.wait, time_wait);
+    /* time for entire wait epoch */
+    time_now = parsec_stat_time(&parsec_stat_clock_model);
+    kahan_sum(&es->time.wait, time_now - time_wait);
+    /* time for last scheduling epoch */
+    kahan_sum(&es->time.select, time_now - time_select);
 #endif /* PARSEC_STATS_SCHED */
 
     parsec_rusage_per_es(es, true);
