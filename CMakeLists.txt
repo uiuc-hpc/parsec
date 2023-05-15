@@ -248,6 +248,8 @@ option(PARSEC_STATS_SCHED
   "Gather aggregate scheduler timing stats (lightweight profiling)" OFF)
 option(PARSEC_STATS_COMM
   "Gather aggregate communication timing stats (lightweight profiling)" OFF)
+option(PARSEC_STATS_TC
+  "Gather aggregate task class timing stats (lightweight profiling)" OFF)
 
 # cmake modules setup
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules)

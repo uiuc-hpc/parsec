@@ -423,9 +423,9 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
                             int distance)
 {
     int rc = PARSEC_HOOK_RETURN_DONE;
-#if defined(PARSEC_STATS_SCHED)
+#if defined(PARSEC_STATS_SCHED) || defined(PARSEC_STATS_TC)
     double time_execute;
-#endif /* PARSEC_STATS_SCHED */
+#endif /* PARSEC_STATS_SCHED || PARSEC_STATS_TC */
 
     PARSEC_PINS(es, SELECT_END, task);
 
@@ -437,14 +437,22 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
     switch(rc) {
     case PARSEC_HOOK_RETURN_DONE: {
         if(task->status <= PARSEC_TASK_STATUS_HOOK) {
-#if defined(PARSEC_STATS_SCHED)
+#if defined(PARSEC_STATS_SCHED) || defined(PARSEC_STATS_TC)
             time_execute = parsec_stat_time(&parsec_stat_clock_model);
-#endif /* PARSEC_STATS_SCHED */
+#endif /* PARSEC_STATS_SCHED || PARSEC_STATS_TC */
             rc = __parsec_execute( es, task );
-#if defined(PARSEC_STATS_SCHED)
+#if defined(PARSEC_STATS_SCHED) || defined(PARSEC_STATS_TC)
             time_execute = parsec_stat_time(&parsec_stat_clock_model) - time_execute;
+#endif /* PARSEC_STATS_SCHED || PARSEC_STATS_TC */
+#if defined(PARSEC_STATS_SCHED)
             kahan_sum(&es->time.execute, time_execute);
 #endif /* PARSEC_STATS_SCHED */
+#if defined(PARSEC_STATS_TC)
+            /* task->task_class is const, so we need to cast that away
+             * this is safe, since it should always be in dynamic memory */
+            atomic_kahan_sum((_Atomic(kahan_sum_t) *)&task->task_class->time_execute,
+                             time_execute, memory_order_relaxed, memory_order_relaxed);
+#endif /* PARSEC_STATS_TC */
         }
         /* We're good to go ... */
         switch(rc) {

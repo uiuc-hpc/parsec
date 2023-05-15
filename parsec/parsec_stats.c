@@ -34,6 +34,7 @@ void parsec_stat_clock_model_init(const parsec_context_t* context,
 #if defined(PARSEC_STATS_SCHED)
 void parsec_sched_stat_print(const parsec_context_t *context)
 {
+    const struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
     double time_execute = 0.0;
     double time_select  = 0.0;
     double time_wait    = 0.0;
@@ -47,7 +48,6 @@ void parsec_sched_stat_print(const parsec_context_t *context)
         }
     }
     for (int i = 0; i < context->nb_nodes; i++) {
-        const struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
         fflush(stdout);
         if (i == context->my_rank) {
             fprintf(stdout, "[%d]:\texecute(%f)\tselect(%f)\twait(%f)\n",
@@ -75,6 +75,35 @@ void parsec_sched_stat_reset(const parsec_context_t *context)
     }
 }
 #endif /* PARSEC_STATS_SCHED */
+
+#if defined(PARSEC_STATS_TC)
+void parsec_tc_stat_print(const parsec_taskpool_t *tp)
+{
+    const struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
+    parsec_context_t *context = tp->context;
+    const parsec_task_class_t *tc;
+    kahan_sum_t time_execute;
+
+    for (int i = 0; i < context->nb_nodes; i++) {
+        fflush(stdout);
+        if (i == context->my_rank) {
+            fprintf(stdout, "[%d]:", context->my_rank);
+            for (uint32_t j = 0; j < tp->nb_task_classes; j++) {
+                tc = tp->task_classes_array[j];
+                time_execute = atomic_load_explicit(&tc->time_execute,
+                                                    memory_order_relaxed);
+                fprintf(stdout, "\t%s(%f)", tc->name, time_execute.sum);
+            }
+            fprintf(stdout, "\n");
+            fflush(stdout);
+        }
+#if defined(DISTRIBUTED)
+        parsec_ce.sync(&parsec_ce);
+        nanosleep(&ts, NULL);
+#endif /* DISTRIBUTED */
+    }
+}
+#endif /* PARSEC_STATS_TC */
 
 
 #if defined(PARSEC_STATS_COMM)
@@ -333,10 +362,10 @@ void parsec_comm_stat_print_helper(FILE *stream, int rank, const fit_point_t *de
 
 void parsec_comm_stat_print(const parsec_context_t *context)
 {
+    const struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
     /* print stats for this epoch */
     fit_point_t fit_point = parsec_comm_stat_time_delay(context, &parsec_stat_clock_model);
     for (int i = 0; i < context->nb_nodes; i++) {
-        const struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
         fflush(stdout);
         if (i == context->my_rank) {
             parsec_comm_stat_print_helper(stdout, i, &fit_point);

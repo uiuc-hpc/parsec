@@ -4119,7 +4119,7 @@ static void jdf_generate_one_function( const jdf_t *jdf, jdf_function_entry_t *f
         jdf_generate_simulation_cost_fct(jdf, f, prefix);
         string_arena_add_string(sa,
                                 "#if defined(PARSEC_SIM)\n"
-                                "  .sim_cost_fct =(parsec_sim_cost_fct_t*) %s,\n"
+                                "  .sim_cost_fct = (parsec_sim_cost_fct_t*) %s,\n"
                                 "#endif\n", prefix);
     } else {
         string_arena_add_string(sa,
@@ -4127,6 +4127,11 @@ static void jdf_generate_one_function( const jdf_t *jdf, jdf_function_entry_t *f
                                 "  .sim_cost_fct = (parsec_sim_cost_fct_t*)NULL,\n"
                                 "#endif\n");
     }
+
+    string_arena_add_string(sa,
+                            "#if defined(PARSEC_STATS_TC)\n"
+                            "  .time_execute = KAHAN_SUM_INITIALIZER,\n"
+                            "#endif\n");
 
     sprintf(prefix, "%s_%s_internal_init", jdf_basename, f->fname);
     jdf_generate_internal_init(jdf, f, prefix);

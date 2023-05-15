@@ -419,6 +419,12 @@ static const parsec_task_class_t parsec_map_operator = {
     .complete_execution = complete_hook,
     .release_task = parsec_release_task_to_mempool_update_nbtasks,
     .fini = NULL,
+#if defined(PARSEC_SIM)
+    .sim_cost_fct = (parsec_sim_cost_fct_t *) NULL,
+#endif
+#if defined(PARSEC_STATS_TC)
+    .time_execute = KAHAN_SUM_INITIALIZER,
+#endif
 };
 
 static void parsec_map_operator_startup_fn(parsec_context_t *context,

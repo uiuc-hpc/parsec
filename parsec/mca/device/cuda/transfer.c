@@ -200,6 +200,9 @@ static const parsec_task_class_t parsec_CUDA_d2h_task_class = {
 #if defined(PARSEC_SIM)
     .sim_cost_fct = (parsec_sim_cost_fct_t *) NULL,
 #endif
+#if defined(PARSEC_STATS_TC)
+    .time_execute = KAHAN_SUM_INITIALIZER,
+#endif
 };
 
 

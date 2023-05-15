@@ -2037,6 +2037,13 @@ parsec_dtd_create_task_class( parsec_dtd_taskpool_t *__tp, parsec_dtd_funcptr_t*
     tc->complete_execution    = complete_hook_of_dtd;
     tc->release_task          = parsec_release_dtd_task_to_mempool;
 
+#if defined(PARSEC_SIM)
+    tc->sim_cost_fct = (parsec_sim_cost_fct_t *) NULL;
+#endif
+#if defined(PARSEC_STATS_TC)
+    tc->time_execute = KAHAN_SUM_INITIALIZER;
+#endif
+
     /* Inserting Function structure in the hash table to keep track for each class of task */
     uint64_t fkey = (uint64_t)(uintptr_t)fpointer + tc->nb_flows;
     parsec_dtd_insert_task_class( __tp, fkey, dtd_tc );

@@ -7,10 +7,12 @@
 #ifndef _PARSEC_RECURSIVE_H_
 #define _PARSEC_RECURSIVE_H_
 
+#include "parsec/parsec_config.h"
 #include "parsec/execution_stream.h"
 #include "parsec/scheduling.h"
 #include "parsec/mca/device/device.h"
 #include "parsec/data_dist/matrix/matrix.h"
+#include "parsec/parsec_stats.h"
 
 typedef struct parsec_recursive_cb_data_s parsec_recursive_cb_data_t;
 typedef void (*parsec_recursive_callback)(parsec_taskpool_t*, const parsec_recursive_cb_data_t* );
@@ -27,6 +29,21 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
     int i, rc = 0;
     parsec_recursive_cb_data_t* data = (parsec_recursive_cb_data_t*)cb_data;
     parsec_execution_stream_t *es = parsec_my_execution_stream();
+
+#if defined(PARSEC_STATS_TC)
+    /* sum time for all tasks from this recursive taskpool */
+    double tp_time_execute = 0.0;
+    for (uint32_t i = 0; i < tp->nb_task_classes; i++) {
+        const parsec_task_class_t *tc = tp->task_classes_array[i];
+        kahan_sum_t time_execute = atomic_load_explicit(&tc->time_execute,
+                                                        memory_order_relaxed);
+        tp_time_execute += time_execute.sum;
+    }
+    /* task->task_class is const, so we need to cast that away
+     * this is safe, since it should always be in dynamic memory */
+    atomic_kahan_sum((_Atomic(kahan_sum_t) *)&data->task->task_class->time_execute,
+                     tp_time_execute, memory_order_relaxed, memory_order_relaxed);
+#endif /* PARSEC_STATS_TC */
 
     /* call user callback *before* we complete and release the task */
     data->callback( tp, data );

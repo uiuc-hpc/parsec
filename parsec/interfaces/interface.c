@@ -146,4 +146,7 @@ const parsec_task_class_t __parsec_generic_startup = {
 #if defined(PARSEC_SIM)
     .sim_cost_fct = (parsec_sim_cost_fct_t *) NULL,
 #endif
+#if defined(PARSEC_STATS_TC)
+    .time_execute = KAHAN_SUM_INITIALIZER,
+#endif
 };

@@ -1676,7 +1676,13 @@ static parsec_task_class_t parsec_cuda_data_prefetch_tc = {
     .complete_execution = NULL,
     .new_task = NULL,
     .release_task = NULL,
-    .fini = NULL
+    .fini = NULL,
+#if defined(PARSEC_SIM)
+    .sim_cost_fct = (parsec_sim_cost_fct_t *) NULL,
+#endif
+#if defined(PARSEC_STATS_TC)
+    .time_execute = KAHAN_SUM_INITIALIZER,
+#endif
 };
 
 static int
@@ -1828,7 +1834,13 @@ static parsec_task_class_t parsec_cuda_d2d_complete_tc = {
     .complete_execution = NULL,
     .new_task = NULL,
     .release_task = NULL,
-    .fini = NULL
+    .fini = NULL,
+#if defined(PARSEC_SIM)
+    .sim_cost_fct = (parsec_sim_cost_fct_t *) NULL,
+#endif
+#if defined(PARSEC_STATS_TC)
+    .time_execute = KAHAN_SUM_INITIALIZER,
+#endif
 };
 
 static void

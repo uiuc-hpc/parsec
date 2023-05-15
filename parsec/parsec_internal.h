@@ -24,6 +24,7 @@
 #include "parsec/utils/debug.h"
 #include "parsec/utils/output.h"
 #include "parsec/class/info.h"
+#include "parsec/parsec_stats.h"
 
 #if defined(PARSEC_PROF_GRAPHER)
 #include "parsec/parsec_prof_grapher.h"
@@ -370,6 +371,9 @@ struct parsec_task_class_s {
     parsec_key_t               (*make_key)(const parsec_taskpool_t *, const parsec_assignment_t *);
 #if defined(PARSEC_SIM)
     parsec_sim_cost_fct_t       *sim_cost_fct;
+#endif
+#if defined(PARSEC_STATS_TC)
+    _Atomic(kahan_sum_t)         time_execute;
 #endif
     parsec_datatype_lookup_t    *get_datatype;
     parsec_hook_t               *prepare_input;

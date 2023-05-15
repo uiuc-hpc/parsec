@@ -30,7 +30,19 @@ static inline void kahan_sum(kahan_sum_t *ksum, double value)
     ksum->sum = t;
 }
 
-#define KAHAN_SUM_INITIALIZER (const kahan_sum_t){ .sum = 0.0, .c = 0.0, }
+static inline void atomic_kahan_sum(_Atomic(kahan_sum_t) *ksum, double value,
+                                    memory_order rmw, memory_order load)
+{
+    kahan_sum_t ksum_prior, ksum_now;
+    ksum_prior = atomic_load_explicit(ksum, load);
+    do {
+        ksum_now = ksum_prior;
+        kahan_sum(&ksum_now, value);
+    } while (!atomic_compare_exchange_weak_explicit(ksum, &ksum_prior,
+                                                    ksum_now, rmw, load));
+}
+
+#define KAHAN_SUM_INITIALIZER (const kahan_sum_t){ 0.0, 0.0 }
 
 /* returns time in ns */
 static inline int64_t timespec_to_int64(struct timespec time)
@@ -208,10 +220,9 @@ void parsec_comm_engine_stat_update_active(parsec_comm_engine_stat_t *stat,
                                            double *time, int64_t increment,
                                            const parsec_stat_clock_model_t *clk)
 {
-    comm_active_t active_now, active_prior;
+    comm_active_t active_prior, active_now;
     double now, prior, duration;
     int64_t count;
-    kahan_sum_t ovl_prior, ovl_now;
 
     active_prior = atomic_load_explicit(&stat->active, memory_order_acquire);
     do {
@@ -229,13 +240,8 @@ void parsec_comm_engine_stat_update_active(parsec_comm_engine_stat_t *stat,
     if (count > 0) {
         /* count > 0 means that comms were active between (prior, now) */
         duration = now - prior;
-        ovl_prior = atomic_load_explicit(&stat->lat.ovl, memory_order_relaxed);
-        do {
-            ovl_now = ovl_prior;
-            kahan_sum(&ovl_now, duration);
-        } while (!atomic_compare_exchange_weak_explicit(&stat->lat.ovl,
-                                                        &ovl_prior, ovl_now,
-                                  memory_order_relaxed, memory_order_relaxed));
+        atomic_kahan_sum(&stat->lat.ovl, duration,
+                         memory_order_relaxed, memory_order_relaxed);
 #if 0
         atomic_fetch_add_explicit(&stat->lat.ovl, duration,
                                   memory_order_relaxed);
@@ -287,5 +293,10 @@ void parsec_comm_stat_print(const parsec_context_t *context);
 void parsec_comm_stat_reset(const parsec_context_t *context);
 
 #endif /* PARSEC_STATS_COMM */
+
+#if defined(PARSEC_STATS_TC)
+void parsec_tc_stat_print(const parsec_taskpool_t *tp);
+#endif /* PARSEC_STATS_TC */
+
 #endif /* PARSEC_STATS */
 #endif /* __PARSEC_STATS_H__ */
