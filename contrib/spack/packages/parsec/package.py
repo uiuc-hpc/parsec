@@ -37,13 +37,14 @@ class Parsec(CMakePackage):
     variant('visualization', default=False, description='Visualization support')
     variant('graph', default=False, description='Graphing support')
     variant('stats', description='Lightweight timing statistics',
-            values=any_combination_of('sched', 'comm', 'tc'))
+            values=any_combination_of('sched', 'comm', 'tc', 'graph'))
 
     conflicts('+lci-static', when='transport=mpi')
     conflicts('+debug-lci', when='transport=mpi')
     conflicts('+lci-cbtable', when='transport=mpi')
     conflicts('transport=mpi', when='^lci')
     conflicts('transport=lci', when='^mpi')
+    conflicts('stats=comm', when='transport=none')
 
     generator = 'Ninja'
     depends_on('ninja', type='build')
@@ -95,6 +96,7 @@ class Parsec(CMakePackage):
             self.define('PARSEC_STATS_SCHED', 'sched' in self.spec.variants['stats'].value),
             self.define('PARSEC_STATS_COMM', 'comm' in self.spec.variants['stats'].value),
             self.define('PARSEC_STATS_TC', 'tc' in self.spec.variants['stats'].value),
+            self.define('PARSEC_STATS_GRAPH', 'graph' in self.spec.variants['stats'].value),
         ]
         # lci uses a default eager limit of 12 KiB - 108 bytes
         if self.spec.variants['transport'].value == 'lci':

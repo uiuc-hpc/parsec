@@ -214,7 +214,6 @@ int parsec_remote_dep_propagate(parsec_execution_stream_t* es,
 #endif
 
 #else
-#define parsec_remote_dep_init(ctx)            1
 static inline int parsec_remote_dep_init(parsec_context_t* context)
 {
 #if defined(PARSEC_STATS)

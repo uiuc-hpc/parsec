@@ -104,6 +104,7 @@
 #cmakedefine PARSEC_STATS_SCHED
 #cmakedefine PARSEC_STATS_COMM
 #cmakedefine PARSEC_STATS_TC
+#cmakedefine PARSEC_STATS_GRAPH
 
 /* Configuration parameters */
 #cmakedefine PARSEC_WANT_HOME_CONFIG_FILES

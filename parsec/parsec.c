@@ -767,6 +767,10 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     }
 #endif  /* defined(PARSEC_PROF_GRAPHER) */
 
+#if defined(PARSEC_STATS_GRAPH)
+    parsec_graph_stat_init(context);
+#endif /* PARSEC_STATS_GRAPH */
+
 #if defined(PARSEC_DEBUG_NOISIER) || defined(PARSEC_DEBUG_PARANOID)
     slow_option_warning = 1;
 #endif
@@ -1210,6 +1214,11 @@ int parsec_fini( parsec_context_t** pcontext )
         free(parsec_enable_dot);
         parsec_enable_dot = NULL;
     }
+
+#if defined(PARSEC_STATS_GRAPH)
+    parsec_graph_stat_fini();
+#endif /* PARSEC_STATS_GRAPH */
+
     /* Destroy all resources allocated for the barrier */
     parsec_barrier_destroy( &(context->barrier) );
 

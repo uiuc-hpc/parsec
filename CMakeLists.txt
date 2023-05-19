@@ -250,6 +250,26 @@ option(PARSEC_STATS_COMM
   "Gather aggregate communication timing stats (lightweight profiling)" OFF)
 option(PARSEC_STATS_TC
   "Gather aggregate task class timing stats (lightweight profiling)" OFF)
+option(PARSEC_STATS_GRAPH
+  "Gather aggregate timing stats (lightweight profiling), rolling output for graphing" OFF)
+if(PARSEC_STATS_SCHED AND NOT PARSEC_STATS)
+  message(FATAL_ERROR "PARSEC_STATS_SCHED requires PARSEC_STATS.")
+endif()
+if(PARSEC_STATS_COMM AND NOT PARSEC_STATS)
+  message(FATAL_ERROR "PARSEC_STATS_COMM requires PARSEC_STATS.")
+endif()
+if(PARSEC_STATS_COMM AND NOT (PARSEC_DIST_WITH_MPI OR PARSEC_DIST_WITH_LCI))
+  message(FATAL_ERROR "PARSEC_STATS_COMM requires a communication backend.")
+endif()
+if(PARSEC_STATS_TC AND NOT PARSEC_STATS)
+  message(FATAL_ERROR "PARSEC_STATS_TC requires PARSEC_STATS.")
+endif()
+if(PARSEC_STATS_GRAPH AND NOT PARSEC_STATS)
+  message(FATAL_ERROR "PARSEC_STATS_GRAPH requires PARSEC_STATS.")
+endif()
+if(PARSEC_STATS_GRAPH AND NOT PARSEC_STATS_SCHED)
+  message(FATAL_ERROR "PARSEC_STATS_GRAPH requires PARSEC_STATS_SCHED.")
+endif()
 
 # cmake modules setup
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules)

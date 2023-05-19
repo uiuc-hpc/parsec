@@ -1,10 +1,12 @@
 #include <stdatomic.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <inttypes.h>
 #include <math.h>
 #include <time.h>
 
 #include "parsec/parsec_config.h"
+#include "parsec/parsec_internal.h"
 #include "parsec/execution_stream.h"
 #include "parsec/parsec_comm_engine.h"
 #include "parsec/parsec_remote_dep.h"

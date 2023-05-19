@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <time.h>
+#include <pthread.h>
 
 #include "parsec/parsec_config.h"
 #include "parsec/runtime.h"
@@ -18,16 +19,22 @@
 #endif
 
 typedef struct kahan_sum_s {
-    double sum;
-    double c;
+    alignas(16) struct {
+        double sum;
+        double c;
+    };
 } kahan_sum_t;
 
 static inline void kahan_sum(kahan_sum_t *ksum, double value)
 {
-    double y = value - ksum->c;
-    double t = ksum->sum + y;
-    ksum->c = (t - ksum->sum) - y;
-    ksum->sum = t;
+    double sum = ksum->sum;
+    double c = ksum->c;
+    double y = value - c;
+    double t = sum + y;
+    ksum->c = (t - sum) - y;
+    /* ensure no tearing, for if this is read by other threads
+     * should compile to a normal store on most platforms */
+    atomic_store_explicit((_Atomic(double) *)&ksum->sum, t, memory_order_relaxed);
 }
 
 static inline void atomic_kahan_sum(_Atomic(kahan_sum_t) *ksum, double value,
@@ -297,6 +304,61 @@ void parsec_comm_stat_reset(const parsec_context_t *context);
 #if defined(PARSEC_STATS_TC)
 void parsec_tc_stat_print(const parsec_taskpool_t *tp);
 #endif /* PARSEC_STATS_TC */
+
+#if defined(PARSEC_STATS_GRAPH)
+typedef enum {
+    PGS_CONTINUE, PGS_PAUSE, PGS_STOP, PGS_RESET
+} pgs_status_t;
+
+typedef struct {
+    pthread_t thread;
+    pthread_cond_t cond;
+    pthread_mutex_t mtx;
+    pgs_status_t status;
+    size_t waitns;
+    char *filename;
+    const parsec_context_t* context;
+    _Bool enable;
+    _Atomic(size_t) sched;
+    _Atomic(size_t) exec;
+    _Atomic(int) idle;
+} pgs_thrd_info_t;
+extern pgs_thrd_info_t pgs_thrd;
+
+/* init the stats graphing subsystem */
+void parsec_graph_stat_init(const parsec_context_t* context);
+/* fini the stats graphing subsystem */
+void parsec_graph_stat_fini(void);
+/* internal - signal thread to wake up */
+void parsec_graph_stat_start(void);
+/* internal - signal thread to pause */
+void parsec_graph_stat_end(void);
+
+/* user - measure next epoch */
+static inline void parsec_graph_stat_enable(void)  { pgs_thrd.enable = true;  }
+/* user - stop measurement for next epoch */
+static inline void parsec_graph_stat_disable(void) { pgs_thrd.enable = false; }
+
+static inline void parsec_graph_stat_sched(size_t n)
+{
+    atomic_fetch_add_explicit(&pgs_thrd.sched, n, memory_order_acq_rel);
+}
+
+static inline void parsec_graph_stat_exec(void)
+{
+    atomic_fetch_add_explicit(&pgs_thrd.exec, 1, memory_order_acq_rel);
+}
+
+static inline void parsec_graph_stat_idle(void)
+{
+    atomic_fetch_add_explicit(&pgs_thrd.idle, 1, memory_order_acq_rel);
+}
+
+static inline void parsec_graph_stat_busy(void)
+{
+    atomic_fetch_add_explicit(&pgs_thrd.idle, -1, memory_order_acq_rel);
+}
+#endif /* PARSEC_STATS_GRAPH */
 
 #endif /* PARSEC_STATS */
 #endif /* __PARSEC_STATS_H__ */

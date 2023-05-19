@@ -316,6 +316,10 @@ int __parsec_schedule(parsec_execution_stream_t* es,
     len = 0;
     _LIST_ITEM_ITERATOR(task, &task->super, item, {len++; });
     PARSEC_PAPI_SDE_COUNTER_ADD(PARSEC_PAPI_SDE_TASKS_ENABLED, len);
+#if defined(PARSEC_STATS_GRAPH)
+    /* increment scheduled tasks */
+    parsec_graph_stat_sched(len);
+#endif /* PARSEC_STATS_GRAPH */
     ret = parsec_current_scheduler->module.schedule(es, tasks_ring, distance);
 
     return ret;
@@ -555,6 +559,10 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     }
 
   skip_first_barrier:
+#if defined(PARSEC_STATS_GRAPH)
+    /* mark self idle */
+    parsec_graph_stat_idle();
+#endif /* PARSEC_STATS_GRAPH */
 #if defined(PARSEC_STATS_SCHED)
     time_now    = parsec_stat_time(&parsec_stat_clock_model);
     time_wait   = time_now;
@@ -595,8 +603,21 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
             kahan_sum(&es->time.select, time_now - time_select);
 #endif /* PARSEC_STATS_SCHED */
 
+#if defined(PARSEC_STATS_GRAPH)
+            /* mark self busy */
+            parsec_graph_stat_busy();
+            /* increment executed tasks */
+            parsec_graph_stat_exec();
+#endif /* PARSEC_STATS_GRAPH */
+
             rc = __parsec_task_progress(es, task, distance);
             (void)rc;  /* for now ignore the return value */
+
+#if defined(PARSEC_STATS_GRAPH)
+            /* mark self idle again */
+            parsec_graph_stat_idle();
+#endif /* PARSEC_STATS_GRAPH */
+
 #if defined(PARSEC_STATS_SCHED)
             /* start time for next scheduling epoch */
             time_select = parsec_stat_time(&parsec_stat_clock_model);
@@ -732,6 +753,10 @@ int parsec_context_start( parsec_context_t* context )
         (void)parsec_remote_dep_on(context);
         /* Mark the context so that we will skip the initial barrier during the _wait */
         context->flags |= PARSEC_CONTEXT_FLAG_CONTEXT_ACTIVE;
+#if defined(PARSEC_STATS_GRAPH)
+        /* wake up stats graph thread */
+        parsec_graph_stat_start();
+#endif /* PARSEC_STATS_GRAPH */
         /* Wake up the other threads */
         parsec_barrier_wait( &(context->barrier) );
         /* we keep one extra reference on the context to make sure we only match this with an
@@ -773,6 +798,11 @@ int parsec_context_wait( parsec_context_t* context )
     }
 
     ret = __parsec_context_wait( context->virtual_processes[0]->execution_streams[0] );
+
+#if defined(PARSEC_STATS_GRAPH)
+    /* pause stats graph thread */
+    parsec_graph_stat_end();
+#endif /* PARSEC_STATS_GRAPH */
 
     context->__parsec_internal_finalization_counter++;
     (void)parsec_remote_dep_off(context);

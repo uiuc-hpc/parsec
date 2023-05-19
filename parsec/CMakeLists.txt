@@ -124,6 +124,10 @@ if( PARSEC_STATS )
   list(APPEND SOURCES parsec_stats.c)
 endif( PARSEC_STATS )
 
+if( PARSEC_STATS_GRAPH )
+  list(APPEND SOURCES parsec_stats_graph.c)
+endif( PARSEC_STATS_GRAPH )
+
 #
 # Setup targets
 #
