@@ -64,7 +64,7 @@ void two_dim_block_cyclic_init(two_dim_block_cyclic_t * dc,
                                int lm,   int ln,   /* Global matrix size (what is stored)*/
                                int i,    int j,    /* Staring point in the global matrix */
                                int m,    int n,    /* Submatrix size (the one concerned by the computation */
-                               int kp, int kq,     /* k-cyclicity */
+                               int kp,   int kq,   /* k-cyclicity */
                                int P )
 {
     int temp, Q;

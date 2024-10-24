@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
     /* Init Off_band */
     sym_two_dim_block_cyclic_init(&dcYP.off_band, matrix_RealDouble,
                                 nodes, rank, NB, NB, N, N, 0, 0,
-                                N, N, P, uplo);
+                                N, N, 1, 1, P, uplo);
     parsec_data_collection_set_key((parsec_data_collection_t*)&dcYP, "dcYP off_band");
 
     /* Init band */
