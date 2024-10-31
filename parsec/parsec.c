@@ -1511,10 +1511,15 @@ parsec_update_deps_with_counter(const parsec_taskpool_t *tp,
 
     if( 0 == *deps ) {
         dep_new_value = parsec_check_IN_dependencies_with_counter(tp, task) - 1;
-        if( parsec_atomic_cas_int32( deps, 0, dep_new_value ) == 1 )
+        if( parsec_atomic_cas_int32( deps, 0, dep_new_value ) == 1 ) {
             dep_cur_value = dep_new_value;
-        else
+#if defined(PARSEC_STATS_GRAPH)
+            /* increment known tasks */
+            parsec_graph_stat_known();
+#endif /* PARSEC_STATS_GRAPH */
+        } else {
             dep_cur_value = parsec_atomic_fetch_dec_int32( deps ) - 1;
+        }
     } else {
         dep_cur_value = parsec_atomic_fetch_dec_int32( deps ) - 1;
     }
@@ -1583,6 +1588,14 @@ parsec_update_deps_with_mask(const parsec_taskpool_t *tp,
 
     dep_cur_value = parsec_atomic_fetch_or_int32( deps, dep_new_value ) | dep_new_value;
 
+#if defined(PARSEC_STATS_GRAPH)
+    /* check for first instance */
+    if (dep_cur_value == dep_new_value) {
+        /* increment known tasks */
+        parsec_graph_stat_known();
+    }
+#endif /* PARSEC_STATS_GRAPH */
+
 #if defined(PARSEC_DEBUG_PARANOID)
     if( (dep_cur_value & tc->dependencies_goal) == tc->dependencies_goal ) {
         int success;
@@ -1623,7 +1636,13 @@ void parsec_dependencies_mark_task_as_startup(parsec_task_t* restrict task,
         *deps = PARSEC_DEPENDENCIES_STARTUP_TASK | tc->dependencies_goal;
     } else {
         *deps = 0;
-    }    
+    }
+
+#if defined(PARSEC_STATS_GRAPH)
+    /* startup tasks are both known and ready, increment both */
+    parsec_graph_stat_known();
+    parsec_graph_stat_ready();
+#endif /* PARSEC_STATS_GRAPH */
 }
 
 /*
@@ -1692,6 +1711,11 @@ parsec_release_local_OUT_dependencies(parsec_execution_stream_t* es,
             new_context->data[(int)dest_flow->flow_index].data_in   = origin->data[origin_flow->flow_index].data_out;
             (void)data;
             PARSEC_AYU_ADD_TASK_DEP(new_context, (int)dest_flow->flow_index);
+
+#if defined(PARSEC_STATS_GRAPH)
+            /* increment ready tasks */
+            parsec_graph_stat_ready();
+#endif /* PARSEC_STATS_GRAPH */
 
             if(task->task_class->flags & PARSEC_IMMEDIATE_TASK) {
                 PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "  Task %s is immediate and will be executed ASAP", tmp1);

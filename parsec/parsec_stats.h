@@ -1,8 +1,8 @@
 #ifndef __PARSEC_STATS_H__
 #define __PARSEC_STATS_H__
 
-#include <stdatomic.h>
 #include <stdalign.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <math.h>
@@ -319,9 +319,14 @@ typedef struct {
     char *filename;
     const parsec_context_t* context;
     _Bool enable;
-    _Atomic(size_t) sched;
-    _Atomic(size_t) exec;
-    _Atomic(int) idle;
+    struct {
+        alignas(64) _Atomic(size_t) known;
+        alignas(64) _Atomic(size_t) ready;
+        alignas(64) _Atomic(size_t) executed;
+        alignas(64) _Atomic(size_t) completed;
+        alignas(64) _Atomic(size_t) retired;
+        alignas(64) _Atomic(int)    idle;
+    } data;
 } pgs_thrd_info_t;
 extern pgs_thrd_info_t pgs_thrd;
 
@@ -338,26 +343,14 @@ void parsec_graph_stat_end(void);
 static inline void parsec_graph_stat_enable(void)  { pgs_thrd.enable = true;  }
 /* user - stop measurement for next epoch */
 static inline void parsec_graph_stat_disable(void) { pgs_thrd.enable = false; }
-
-static inline void parsec_graph_stat_sched(size_t n)
-{
-    atomic_fetch_add_explicit(&pgs_thrd.sched, n, memory_order_acq_rel);
-}
-
-static inline void parsec_graph_stat_exec(void)
-{
-    atomic_fetch_add_explicit(&pgs_thrd.exec, 1, memory_order_acq_rel);
-}
-
-static inline void parsec_graph_stat_idle(void)
-{
-    atomic_fetch_add_explicit(&pgs_thrd.idle, 1, memory_order_acq_rel);
-}
-
-static inline void parsec_graph_stat_busy(void)
-{
-    atomic_fetch_add_explicit(&pgs_thrd.idle, -1, memory_order_acq_rel);
-}
+/* increment stat data */
+static inline void parsec_graph_stat_known(void)     { atomic_fetch_add_explicit(&pgs_thrd.data.known,     1, memory_order_acq_rel); }
+static inline void parsec_graph_stat_ready(void)     { atomic_fetch_add_explicit(&pgs_thrd.data.ready,     1, memory_order_acq_rel); }
+static inline void parsec_graph_stat_executed(void)  { atomic_fetch_add_explicit(&pgs_thrd.data.executed,  1, memory_order_acq_rel); }
+static inline void parsec_graph_stat_completed(void) { atomic_fetch_add_explicit(&pgs_thrd.data.completed, 1, memory_order_acq_rel); }
+static inline void parsec_graph_stat_retired(void)   { atomic_fetch_add_explicit(&pgs_thrd.data.retired,   1, memory_order_acq_rel); }
+static inline void parsec_graph_stat_idle(void)      { atomic_fetch_add_explicit(&pgs_thrd.data.idle,      1, memory_order_acq_rel); }
+static inline void parsec_graph_stat_busy(void)      { atomic_fetch_add_explicit(&pgs_thrd.data.idle,     -1, memory_order_acq_rel); }
 #endif /* PARSEC_STATS_GRAPH */
 
 #endif /* PARSEC_STATS */

@@ -9,6 +9,7 @@
 #include "parsec/utils/debug.h"
 #include "parsec/mempool.h"
 #include "parsec/execution_stream.h"
+#include "parsec/parsec_stats.h"
 
 data_repo_t*
 data_repo_create_nothreadsafe(unsigned int hashsize_hint, parsec_key_fn_t key_functions, void *key_hash_data, unsigned int nbdata)
@@ -108,6 +109,10 @@ __data_repo_entry_used_once(parsec_execution_stream_t *es, data_repo_t *repo, pa
     if( (e->usagelmt == r) && (0 == e->retained) ) {
         PARSEC_DEBUG_VERBOSE(20, parsec_debug_output, "entry %p/%s of hash table %s has a usage count of %u/%u and is not retained: freeing it at %s:%d",
                              e, repo->table.key_functions.key_print(estr, 64, e->ht_item.key, repo->table.hash_data), tablename, r, r, file, line);
+#if defined(PARSEC_STATS_GRAPH)
+        /* increment retired tasks */
+        parsec_graph_stat_retired();
+#endif /* PARSEC_STATS_GRAPH */
         parsec_hash_table_nolock_remove(&repo->table, key);
         parsec_hash_table_unlock_bucket(&repo->table, key);
         
@@ -148,6 +153,10 @@ __data_repo_entry_addto_usage_limit(data_repo_t *repo, parsec_key_t key, uint32_
                              "entry %p/%s of hash table %s has a usage count of %u/%u and is"
                              " not retained: freeing it at %s:%d",
                              e, repo->table.key_functions.key_print(estr, 64, e->ht_item.key, repo->table.hash_data),tablename, e->usagecnt, e->usagelmt, file, line);
+#if defined(PARSEC_STATS_GRAPH)
+        /* increment retired tasks */
+        parsec_graph_stat_retired();
+#endif /* PARSEC_STATS_GRAPH */
         parsec_hash_table_nolock_remove(&repo->table, key);
         parsec_hash_table_unlock_bucket(&repo->table, key);
         parsec_thread_mempool_free(e->data_repo_mempool_owner, e );

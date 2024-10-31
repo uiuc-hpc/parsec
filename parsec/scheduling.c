@@ -316,10 +316,6 @@ int __parsec_schedule(parsec_execution_stream_t* es,
     len = 0;
     _LIST_ITEM_ITERATOR(task, &task->super, item, {len++; });
     PARSEC_PAPI_SDE_COUNTER_ADD(PARSEC_PAPI_SDE_TASKS_ENABLED, len);
-#if defined(PARSEC_STATS_GRAPH)
-    /* increment scheduled tasks */
-    parsec_graph_stat_sched(len);
-#endif /* PARSEC_STATS_GRAPH */
     ret = parsec_current_scheduler->module.schedule(es, tasks_ring, distance);
 
     return ret;
@@ -389,6 +385,14 @@ int __parsec_complete_execution( parsec_execution_stream_t *es,
      */
     PARSEC_PINS(es, COMPLETE_EXEC_BEGIN, task);
 
+#if defined(PARSEC_STATS_GRAPH)
+    /* don't count startup tasks */
+    if (task->task_class->task_class_id < task->taskpool->nb_task_classes) {
+        /* increment completed tasks */
+        parsec_graph_stat_completed();
+    }
+#endif /* PARSEC_STATS_GRAPH */
+
     if( NULL != task->task_class->prepare_output ) {
         task->task_class->prepare_output( es, task );
     }
@@ -422,14 +426,19 @@ int __parsec_complete_execution( parsec_execution_stream_t *es,
     return rc;
 }
 
+#if defined(PARSEC_STATS_SCHED) || \
+    defined(PARSEC_STATS_TC)
+#define PARSEC_TASK_TIME_EXECUTE
+#endif
+
 int __parsec_task_progress( parsec_execution_stream_t* es,
                             parsec_task_t* task,
                             int distance)
 {
     int rc = PARSEC_HOOK_RETURN_DONE;
-#if defined(PARSEC_STATS_SCHED) || defined(PARSEC_STATS_TC)
-    double time_execute;
-#endif /* PARSEC_STATS_SCHED || PARSEC_STATS_TC */
+#if defined(PARSEC_TASK_TIME_EXECUTE)
+    double time_start, time_end, time_execute;
+#endif /* PARSEC_TASK_TIME_EXECUTE */
 
     PARSEC_PINS(es, SELECT_END, task);
 
@@ -441,16 +450,21 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
     switch(rc) {
     case PARSEC_HOOK_RETURN_DONE: {
         if(task->status <= PARSEC_TASK_STATUS_HOOK) {
-#if defined(PARSEC_STATS_SCHED) || defined(PARSEC_STATS_TC)
-            time_execute = parsec_stat_time(&parsec_stat_clock_model);
-#endif /* PARSEC_STATS_SCHED || PARSEC_STATS_TC */
+#if defined(PARSEC_TASK_TIME_EXECUTE)
+            time_start = parsec_stat_time(&parsec_stat_clock_model);
+#endif /* PARSEC_TASK_TIME_EXECUTE */
             rc = __parsec_execute( es, task );
-#if defined(PARSEC_STATS_SCHED) || defined(PARSEC_STATS_TC)
-            time_execute = parsec_stat_time(&parsec_stat_clock_model) - time_execute;
-#endif /* PARSEC_STATS_SCHED || PARSEC_STATS_TC */
+#if defined(PARSEC_TASK_TIME_EXECUTE)
+            time_end = parsec_stat_time(&parsec_stat_clock_model);
+            time_execute = time_end - time_start;
+#endif /* PARSEC_TASK_TIME_EXECUTE */
 #if defined(PARSEC_STATS_SCHED)
-            kahan_sum(&es->time.execute, time_execute);
+            /* add time for tasks that aren't internal startup */
+            if (task->task_class->task_class_id < task->taskpool->nb_task_classes) {
+                kahan_sum(&es->time.execute, time_execute);
+            }
 #endif /* PARSEC_STATS_SCHED */
+
 #if defined(PARSEC_STATS_TC)
             /* task->task_class is const, so we need to cast that away
              * this is safe, since it should always be in dynamic memory */
@@ -606,8 +620,12 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
 #if defined(PARSEC_STATS_GRAPH)
             /* mark self busy */
             parsec_graph_stat_busy();
-            /* increment executed tasks */
-            parsec_graph_stat_exec();
+            /* don't count startup tasks or tasks that were rescheduled */
+            if (task->task_class->task_class_id < task->taskpool->nb_task_classes &&
+                task->status <= PARSEC_TASK_STATUS_PREPARE_INPUT) {
+                /* increment executed tasks */
+                parsec_graph_stat_executed();
+            }
 #endif /* PARSEC_STATS_GRAPH */
 
             rc = __parsec_task_progress(es, task, distance);
@@ -639,6 +657,10 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     /* We're all done ? */
     parsec_barrier_wait( &(parsec_context->barrier) );
 
+#if defined(PARSEC_STATS_SCHED)
+    time_now = parsec_stat_time(&parsec_stat_clock_model);
+#endif /* PARSEC_STATS_SCHED */
+
 #if defined(PARSEC_SIM)
     if( PARSEC_THREAD_IS_MASTER(es) ) {
         parsec_vp_t *vp;
@@ -656,6 +678,13 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     parsec_barrier_wait( &(parsec_context->barrier) );
     es->largest_simulation_date = 0;
 #endif
+
+#if defined(PARSEC_STATS_GRAPH)
+    /* pause stats graph thread, must be before we reset sim time */
+    if( PARSEC_THREAD_IS_MASTER(es) ) {
+        parsec_graph_stat_end();
+    }
+#endif /* PARSEC_STATS_GRAPH */
 
     if( !PARSEC_THREAD_IS_MASTER(es) ) {
         my_barrier_counter++;
@@ -798,11 +827,6 @@ int parsec_context_wait( parsec_context_t* context )
     }
 
     ret = __parsec_context_wait( context->virtual_processes[0]->execution_streams[0] );
-
-#if defined(PARSEC_STATS_GRAPH)
-    /* pause stats graph thread */
-    parsec_graph_stat_end();
-#endif /* PARSEC_STATS_GRAPH */
 
     context->__parsec_internal_finalization_counter++;
     (void)parsec_remote_dep_off(context);

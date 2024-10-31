@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <math.h>
 #include <time.h>
 #include <pthread.h>
 
@@ -28,69 +29,112 @@ static inline void timespec_add_ns(struct timespec *ts, long nsec)
     }
 }
 
-typedef struct {
-    double time_start;
-    double prior_execute;
-    double prior_select;
-    double prior_wait;
-    FILE   *outfile;
-} pgs_config_t;
-
-extern pgs_thrd_info_t pgs_thrd = {
+pgs_thrd_info_t pgs_thrd = {
     .mtx = PTHREAD_MUTEX_INITIALIZER,
     .status = PGS_RESET,
     .waitns = 1000000L,
     .filename = NULL,
     .context = NULL,
     .enable = false,
-    .sched = 0,
-    .exec = 0,
-    .idle = 0,
+    .data = {
+        .known     = 0,
+        .ready     = 0,
+        .executed  = 0,
+        .completed = 0,
+        .retired   = 0,
+        .idle      = 0,
+    },
 };
 
+typedef struct {
+    double time_current;
+    double time_execution;
+    double time_select;
+    double time_wait;
+    size_t tasks_known;
+    size_t tasks_ready;
+    size_t tasks_executed;
+    size_t tasks_completed;
+    size_t tasks_retired;
+    int threads_idle;
+} pgs_record_t;
+
+static inline void parsec_graph_stat_print_header(FILE *outfile)
+{
+    /* always print tab-separated header */
+    const char *header =
+        "Time"
+        "\tExecution\tSelect\tWait"
+        "\tKnown\tReady\tExecuted\tCompleted\tRetired"
+        "\tIdle"
+        "\n";
+    fputs(header, outfile);
+}
+
+static inline void parsec_graph_stat_print_record(FILE *outfile,
+                                                  pgs_record_t *rcd)
+{
+    /* write as formated tab-separated values */
+    const char *format =
+        "%f"                        /* time_current */
+        "\t%f\t%f\t%f"              /* time: execution, select, wait */
+        "\t%zu\t%zu\t%zu\t%zu\t%zu" /* tasks: known, ready, executed, completed, retired */
+        "\t%d"                      /* threads_idle */
+        "\n";
+    fprintf(outfile, format
+            , rcd->time_current
+            , rcd->time_execution, rcd->time_select, rcd->time_wait
+            , rcd->tasks_known, rcd->tasks_ready, rcd->tasks_executed,
+                                rcd->tasks_completed, rcd->tasks_retired
+            , rcd->threads_idle
+           );
+}
+
 static inline void parsec_graph_stat_record(const parsec_context_t* context,
-                                            pgs_config_t *config,
+                                            double time_start, FILE *outfile,
                                             pgs_status_t status)
 {
+    pgs_record_t rcd;
+
     if (status != PGS_CONTINUE)
         return;
 
-    double time_execute = 0.0;
-    double time_select  = 0.0;
-    double time_wait = parsec_stat_time(&parsec_stat_clock_model) - config->time_start;
-    size_t tasks_sched = atomic_load_explicit(&pgs_thrd.sched, memory_order_acquire);
-    size_t tasks_exec  = atomic_load_explicit(&pgs_thrd.exec,  memory_order_acquire);
-    int threads_idle   = atomic_load_explicit(&pgs_thrd.idle,  memory_order_acquire);
+    rcd.time_current    = parsec_stat_time(&parsec_stat_clock_model) - time_start;
+    rcd.time_execution  = 0.0;
+    rcd.time_select     = 0.0;
+    /* time_current is on single thread, we need to multiply by all threads */
+    rcd.time_wait       = rcd.time_current * vpmap_get_nb_total_threads();
+    /* load task info */
+    rcd.tasks_known     = atomic_load_explicit(&pgs_thrd.data.known,     memory_order_acquire);
+    rcd.tasks_ready     = atomic_load_explicit(&pgs_thrd.data.ready,     memory_order_acquire);
+    rcd.tasks_executed  = atomic_load_explicit(&pgs_thrd.data.executed,  memory_order_acquire);
+    rcd.tasks_completed = atomic_load_explicit(&pgs_thrd.data.completed, memory_order_acquire);
+    rcd.tasks_retired   = atomic_load_explicit(&pgs_thrd.data.retired,   memory_order_acquire);
+    rcd.threads_idle    = atomic_load_explicit(&pgs_thrd.data.idle,      memory_order_acquire);
+
     for (int32_t vpid = 0; vpid < context->nb_vp; vpid++) {
         parsec_vp_t *vp = context->virtual_processes[vpid];
         for (int32_t thid = 0; thid < vp->nb_cores; thid++) {
             parsec_execution_stream_t *es = vp->execution_streams[thid];
             /* load sums atomically */
-            time_execute += atomic_load_explicit((_Atomic(double) *)&es->time.execute.sum, memory_order_relaxed);
-            time_select  += atomic_load_explicit((_Atomic(double) *)&es->time.select.sum,  memory_order_relaxed);
+            rcd.time_execution += atomic_load_explicit((_Atomic(double) *)&es->time.execute.sum, memory_order_relaxed);
+            rcd.time_select    += atomic_load_explicit((_Atomic(double) *)&es->time.select.sum,  memory_order_relaxed);
         }
     }
-    double diff_execute = time_execute - config->prior_execute;
-    double diff_select  = time_select  - config->prior_select;
-    double diff_wait    = time_wait    - config->prior_wait;
-    /* diff_wait is on single thread, we need to multiply by all threads */
-    diff_wait *= vpmap_get_nb_total_threads();
-    fprintf(config->outfile, "%f\t%f\t%f\t%f\t%zu\t%zu\t%d\n",
-            time_wait, diff_execute, diff_select, diff_wait,
-            tasks_sched, tasks_exec, threads_idle);
-    config->prior_execute = time_execute;
-    config->prior_select  = time_select;
-    config->prior_wait    = time_wait;
+
+    parsec_graph_stat_print_record(outfile, &rcd);
 }
 
 static inline void parsec_graph_stat_continue(void)
 {
     int ret = 0;
     struct timespec timeout;
+    /* use the clock model to determine how long the timeout is locally */
+    long nsec = lround((double)pgs_thrd.waitns * parsec_stat_clock_model.skew);
     /* get current time */
     clock_gettime(CLOCK_MONOTONIC, &timeout);
     /* add timeout to current time */
-    timespec_add_ns(&timeout, pgs_thrd.waitns);
+    timespec_add_ns(&timeout, nsec);
     /* wait until we're signaled or time out */
     do {
         ret = pthread_cond_timedwait(&pgs_thrd.cond, &pgs_thrd.mtx, &timeout);
@@ -102,12 +146,24 @@ static void * parsec_graph_stat_thread(void *arg)
 {
     _Bool stop = false;
     pgs_status_t prior_status;
-    pgs_config_t pgs_config;
+    pgs_record_t zero_rcd = { .time_current    = 0.0,
+                              .time_execution  = 0.0,
+                              .time_select     = 0.0,
+                              .time_wait       = 0.0,
+                              .tasks_known     = 0,
+                              .tasks_ready     = 0,
+                              .tasks_executed  = 0,
+                              .tasks_completed = 0,
+                              .tasks_retired   = 0,
+                              .threads_idle    = 0,
+    };
+    /* we start with all threads idle */
+    zero_rcd.threads_idle = vpmap_get_nb_total_threads();
 
-    pgs_config.outfile = fopen(pgs_thrd.filename, "w");
+    double time_start = 0.0;
+    FILE *outfile = fopen(pgs_thrd.filename, "w");
 
-    fprintf(pgs_config.outfile,
-            "Time\tExecution\tSelect\tWait\tSched\tExec\tIdle\n");
+    parsec_graph_stat_print_header(outfile);
 
     /* lock mutex */
     pthread_mutex_lock(&pgs_thrd.mtx);
@@ -123,7 +179,7 @@ static void * parsec_graph_stat_thread(void *arg)
         switch (pgs_thrd.status) {
         case PGS_CONTINUE:
             /* always record stats for current epoch */
-            parsec_graph_stat_record(pgs_thrd.context, &pgs_config,
+            parsec_graph_stat_record(pgs_thrd.context, time_start, outfile,
                                      PGS_CONTINUE);
             prior_status = PGS_CONTINUE;
             /* wait for status change or timeout */
@@ -131,22 +187,25 @@ static void * parsec_graph_stat_thread(void *arg)
             break;
         case PGS_PAUSE:
             /* record stats for last epoch, if necessary */
-            parsec_graph_stat_record(pgs_thrd.context, &pgs_config,
+            parsec_graph_stat_record(pgs_thrd.context, time_start, outfile,
                                      prior_status);
             prior_status = PGS_PAUSE;
             /* reset counters
              * other threads might increment these before we get to reset them,
              * so do this here at end of prior epoch
              * instead of in PGS_RESET at beginning of next epoch */
-            atomic_store_explicit(&pgs_thrd.sched, 0, memory_order_release);
-            atomic_store_explicit(&pgs_thrd.exec,  0, memory_order_release);
-            atomic_store_explicit(&pgs_thrd.idle,  0, memory_order_release);
+            atomic_store_explicit(&pgs_thrd.data.known,     0, memory_order_release);
+            atomic_store_explicit(&pgs_thrd.data.ready,     0, memory_order_release);
+            atomic_store_explicit(&pgs_thrd.data.executed,  0, memory_order_release);
+            atomic_store_explicit(&pgs_thrd.data.completed, 0, memory_order_release);
+            atomic_store_explicit(&pgs_thrd.data.retired,   0, memory_order_release);
+            atomic_store_explicit(&pgs_thrd.data.idle,      0, memory_order_release);
             /* wait until we're signaled */
             pthread_cond_wait(&pgs_thrd.cond, &pgs_thrd.mtx);
             break;
         case  PGS_STOP:
             /* record stats for last epoch, if necessary */
-            parsec_graph_stat_record(pgs_thrd.context, &pgs_config,
+            parsec_graph_stat_record(pgs_thrd.context, time_start, outfile,
                                      prior_status);
             prior_status = PGS_STOP;
             /* stop the thread */
@@ -154,17 +213,13 @@ static void * parsec_graph_stat_thread(void *arg)
             break;
         case PGS_RESET:
             /* record stats for last epoch, if necessary */
-            parsec_graph_stat_record(pgs_thrd.context, &pgs_config,
+            parsec_graph_stat_record(pgs_thrd.context, time_start, outfile,
                                      prior_status);
             prior_status = PGS_RESET;
             /* reset internal structures */
-            pgs_config.time_start = parsec_stat_time(&parsec_stat_clock_model);
-            pgs_config.prior_execute = 0.0;
-            pgs_config.prior_select  = 0.0;
-            pgs_config.prior_wait    = 0.0;
+            time_start = parsec_stat_time(&parsec_stat_clock_model);
             /* record first (zero) measurement */
-            fprintf(config->outfile, "%f\t%f\t%f\t%f\t%zu\t%zu\t%d\n",
-                    0.0, 0.0, 0.0, 0.0, 0, 0, vpmap_get_nb_total_threads());
+            parsec_graph_stat_print_record(outfile, &zero_rcd);
             /* set status to PGS_CONTINUE to start measurement */
             pgs_thrd.status = PGS_CONTINUE;
             /* wait for status change or timeout */
@@ -174,7 +229,7 @@ static void * parsec_graph_stat_thread(void *arg)
     }
     pthread_mutex_unlock(&pgs_thrd.mtx);
 
-    fclose(pgs_config.outfile);
+    fclose(outfile);
     return NULL;
 }
 
@@ -254,7 +309,7 @@ void parsec_graph_stat_start(void)
         pgs_thrd.status = PGS_RESET;
         /* signal thread to wake up */
         pthread_cond_signal(&pgs_thrd.cond);
-        /* unlock mutex and let thread stop itself */
+        /* unlock mutex and let thread reset itself */
         pthread_mutex_unlock(&pgs_thrd.mtx);
     }
 }
@@ -273,7 +328,7 @@ void parsec_graph_stat_end(void)
         pgs_thrd.status = PGS_PAUSE;
         /* signal thread to wake up */
         pthread_cond_signal(&pgs_thrd.cond);
-        /* unlock mutex and let thread stop itself */
+        /* unlock mutex and let thread pause itself */
         pthread_mutex_unlock(&pgs_thrd.mtx);
     }
 }
