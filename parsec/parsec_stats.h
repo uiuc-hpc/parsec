@@ -3,6 +3,7 @@
 
 #include <stdalign.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <math.h>
@@ -318,6 +319,7 @@ typedef struct {
     size_t waitns;
     char *filename;
     const parsec_context_t* context;
+    int bfmt;
     _Bool enable;
     struct {
         alignas(64) _Atomic(size_t) known;

@@ -35,6 +35,7 @@ pgs_thrd_info_t pgs_thrd = {
     .waitns = 1000000L,
     .filename = NULL,
     .context = NULL,
+    .bfmt = 0,
     .enable = false,
     .data = {
         .known     = 0,
@@ -59,7 +60,7 @@ typedef struct {
     int threads_idle;
 } pgs_record_t;
 
-static inline void parsec_graph_stat_print_header(FILE *outfile)
+static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
 {
     /* always print tab-separated header */
     const char *header =
@@ -69,25 +70,40 @@ static inline void parsec_graph_stat_print_header(FILE *outfile)
         "\tIdle"
         "\n";
     fputs(header, outfile);
+    if (bfmt) {
+        /* in the binary format, also print conversion format string */
+        const char *pgs_record_format =
+            "d"     /* time_current */
+            "ddd"   /* time: execution, select, wait */
+            "NNNNN" /* tasks: known, ready, executed, completed, retired */
+            "i"     /* threads_idle */
+            "\n";   /* line-end delimiter */
+        fputs(pgs_record_format, outfile);
+    }
 }
 
-static inline void parsec_graph_stat_print_record(FILE *outfile,
+static inline void parsec_graph_stat_print_record(FILE *outfile, _Bool bfmt,
                                                   pgs_record_t *rcd)
 {
-    /* write as formated tab-separated values */
-    const char *format =
-        "%f"                        /* time_current */
-        "\t%f\t%f\t%f"              /* time: execution, select, wait */
-        "\t%zu\t%zu\t%zu\t%zu\t%zu" /* tasks: known, ready, executed, completed, retired */
-        "\t%d"                      /* threads_idle */
-        "\n";
-    fprintf(outfile, format
-            , rcd->time_current
-            , rcd->time_execution, rcd->time_select, rcd->time_wait
-            , rcd->tasks_known, rcd->tasks_ready, rcd->tasks_executed,
-                                rcd->tasks_completed, rcd->tasks_retired
-            , rcd->threads_idle
-           );
+    if (bfmt) {
+        /* in the binary format, just write the record to the file as bytes */
+        fwrite(rcd, sizeof(pgs_record_t), 1, outfile);
+    } else {
+        /* write as formated tab-separated values */
+        const char *format =
+            "%f"                        /* time_current */
+            "\t%f\t%f\t%f"              /* time: execution, select, wait */
+            "\t%zu\t%zu\t%zu\t%zu\t%zu" /* tasks: known, ready, executed, completed, retired */
+            "\t%d"                      /* threads_idle */
+            "\n";
+        fprintf(outfile, format
+                , rcd->time_current
+                , rcd->time_execution, rcd->time_select, rcd->time_wait
+                , rcd->tasks_known, rcd->tasks_ready, rcd->tasks_executed,
+                                    rcd->tasks_completed, rcd->tasks_retired
+                , rcd->threads_idle
+               );
+    }
 }
 
 static inline void parsec_graph_stat_record(const parsec_context_t* context,
@@ -122,7 +138,7 @@ static inline void parsec_graph_stat_record(const parsec_context_t* context,
         }
     }
 
-    parsec_graph_stat_print_record(outfile, &rcd);
+    parsec_graph_stat_print_record(outfile, pgs_thrd.bfmt, &rcd);
 }
 
 static inline void parsec_graph_stat_continue(void)
@@ -161,9 +177,9 @@ static void * parsec_graph_stat_thread(void *arg)
     zero_rcd.threads_idle = vpmap_get_nb_total_threads();
 
     double time_start = 0.0;
-    FILE *outfile = fopen(pgs_thrd.filename, "w");
+    FILE *outfile = fopen(pgs_thrd.filename, (pgs_thrd.bfmt ? "wb" : "w"));
 
-    parsec_graph_stat_print_header(outfile);
+    parsec_graph_stat_print_header(outfile, pgs_thrd.bfmt);
 
     /* lock mutex */
     pthread_mutex_lock(&pgs_thrd.mtx);
@@ -219,7 +235,7 @@ static void * parsec_graph_stat_thread(void *arg)
             /* reset internal structures */
             time_start = parsec_stat_time(&parsec_stat_clock_model);
             /* record first (zero) measurement */
-            parsec_graph_stat_print_record(outfile, &zero_rcd);
+            parsec_graph_stat_print_record(outfile, pgs_thrd.bfmt, &zero_rcd);
             /* set status to PGS_CONTINUE to start measurement */
             pgs_thrd.status = PGS_CONTINUE;
             /* wait for status change or timeout */
@@ -244,11 +260,17 @@ void parsec_graph_stat_init(const parsec_context_t* context)
                                      "Stat graph base file name (default disabled)",
                                      false, false,
                                      filename, &filename);
+    parsec_mca_param_reg_int_name("stat", "bfmt",
+                                  "Stat graph file binary format (default TSV)",
+                                  false, false,
+                                  pgs_thrd.bfmt, &pgs_thrd.bfmt);
 
     /* only start thread if explicitly asked to do so */
     if (filename) {
         /* append rank to filename */
-        asprintf(&pgs_thrd.filename, "%s-%d.tsv", filename, context->my_rank);
+        asprintf(&pgs_thrd.filename,
+                 (pgs_thrd.bfmt ? "%s-%d.bfmt" : "%s-%d.tsv"),
+                 filename, context->my_rank);
         pgs_thrd.context = context;
 
         /* we use CLOCK_MONOTONIC_RAW for timing,
