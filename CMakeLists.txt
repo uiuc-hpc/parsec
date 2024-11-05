@@ -183,13 +183,6 @@ option(PARSEC_DEBUG_NOISIER
 option(PARSEC_DEBUG_HISTORY
   "Keep a summarized history of critical events in memory that can be dumped in gdb when deadlock occur." OFF)
 
-### Simulating Options
-option(PARSEC_SIM
-  "Enable the computation of the critical path, through simulation" OFF)
-if( PARSEC_SIM AND PARSEC_DIST_WITH_MPI )
-  message(FATAL_ERROR "PARSEC_SIM cannot be enabled with PARSEC_DIST_WITH_MPI, please select only one")
-endif()
-
 ### Profiling options
 option(PARSEC_PROF_TRACE
   "Enable the generation of the profiling information during
@@ -269,6 +262,18 @@ if(PARSEC_STATS_GRAPH AND NOT PARSEC_STATS)
 endif()
 if(PARSEC_STATS_GRAPH AND NOT PARSEC_STATS_SCHED)
   message(FATAL_ERROR "PARSEC_STATS_GRAPH requires PARSEC_STATS_SCHED.")
+endif()
+
+### Simulating Options
+option(PARSEC_SIM
+  "Enable the computation of the critical path, through simulation" OFF)
+if( PARSEC_SIM AND PARSEC_DIST_WITH_MPI )
+  message(FATAL_ERROR "PARSEC_SIM cannot be enabled with PARSEC_DIST_WITH_MPI, please select only one")
+endif()
+option(PARSEC_SIM_TIME
+  "Enable the computation of the critical path, using task execution time" OFF)
+if( PARSEC_SIM_TIME AND NOT PARSEC_STATS )
+  message(FATAL_ERROR "PARSEC_SIM_TIME depends on PARSEC_STATS for timing")
 endif()
 
 # cmake modules setup

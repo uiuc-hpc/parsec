@@ -55,6 +55,9 @@ typedef struct remote_dep_wire_activate_s {
     double               time_pred; /* time when predecesor sent activation */
     double               time_root; /* time when root sent activation */
 #endif /* PARSEC_STATS_COMM */
+#if defined(PARSEC_SIM_TIME)
+    kahan_sum_t          sim_exec_time;
+#endif /* PARSEC_SIM_TIME */
 } remote_dep_wire_activate_t;
 
 typedef struct remote_dep_wire_get_s {

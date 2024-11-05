@@ -109,6 +109,9 @@ parsec_execution_stream_t parsec_comm_es = {
     .es_profile = NULL,
 #endif /* PARSEC_PROF_TRACE */
     .scheduler_object = NULL,
+#if defined(PARSEC_SIM_TIME)
+    .largest_simulation_time = 0.0,
+#endif
 #if defined(PARSEC_SIM)
     .largest_simulation_date = 0,
 #endif
@@ -1681,6 +1684,10 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
         task.data[target->flow_index].data_in   = origin->output[i].data.data;
         task.data[target->flow_index].data_out  = origin->output[i].data.data;
     }
+
+#if defined(PARSEC_SIM_TIME)
+    task.sim_exec_time = origin->msg.sim_exec_time;
+#endif /* PARSEC_SIM_TIME */
 
 #ifdef PARSEC_DIST_COLLECTIVES
     /* Corresponding comment below on the propagation part */

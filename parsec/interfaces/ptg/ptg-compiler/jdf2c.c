@@ -1290,6 +1290,9 @@ static inline char* jdf_generate_task_typedef(void **elt, void* arg)
                             "    parsec_task_prof_info_t prof_info;\n"
                             "#endif /* defined(PARSEC_PROF_TRACE) */\n"
                             "    struct __parsec_%s_%s_assignment_s locals;\n"
+                            "#if defined(PARSEC_SIM_TIME)\n"
+                            "    kahan_sum_t                sim_exec_time;\n"
+                            "#endif\n"
                             "#if defined(PARSEC_SIM)\n"
                             "    int                        sim_exec_date;\n"
                             "#endif\n"
@@ -4124,7 +4127,7 @@ static void jdf_generate_one_function( const jdf_t *jdf, jdf_function_entry_t *f
     } else {
         string_arena_add_string(sa,
                                 "#if defined(PARSEC_SIM)\n"
-                                "  .sim_cost_fct = (parsec_sim_cost_fct_t*)NULL,\n"
+                                "  .sim_cost_fct = (parsec_sim_cost_fct_t*) NULL,\n"
                                 "#endif\n");
     }
 
@@ -6297,6 +6300,10 @@ static void jdf_generate_code_release_deps(const jdf_t *jdf, const jdf_function_
                 "#if defined(PARSEC_SIM)\n"
                 "    assert(arg.output_entry->sim_exec_date == 0);\n"
                 "    arg.output_entry->sim_exec_date = this_task->sim_exec_date;\n"
+                "#endif\n"
+                "#if defined(PARSEC_SIM_TIME)\n"
+                "    assert(arg.output_entry->sim_exec_time.sum == 0.0);\n"
+                "    arg.output_entry->sim_exec_time = this_task->sim_exec_time;\n"
                 "#endif\n"
                 "  }\n",
                f->fname, jdf_property_get_string(f->properties, JDF_PROP_UD_MAKE_KEY_FN_NAME, NULL));

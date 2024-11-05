@@ -10,6 +10,7 @@
 #include "parsec/runtime.h"
 #include "parsec/sys/atomic.h"
 #include "parsec/class/parsec_hash_table.h"
+#include "parsec/parsec_stats.h"
 
 /** @defgroup parsec_internal_datarepo Data Repositories
  *  @ingroup parsec_internal
@@ -81,6 +82,9 @@ struct data_repo_entry_s {
     volatile int32_t           retained;
 #if defined(PARSEC_SIM)
     int                        sim_exec_date;
+#endif
+#if defined(PARSEC_SIM_TIME)
+    kahan_sum_t                sim_exec_time;
 #endif
     struct parsec_data_copy_s *data[1];
 };

@@ -50,6 +50,15 @@ static inline void atomic_kahan_sum(_Atomic(kahan_sum_t) *ksum, double value,
                                                     ksum_now, rmw, load));
 }
 
+static inline void atomic_kahan_max(_Atomic(kahan_sum_t) *obj, kahan_sum_t *val,
+                                    memory_order rmw, memory_order load)
+{
+    kahan_sum_t old = atomic_load_explicit(obj, load);
+    while (val->sum > old.sum &&
+           !atomic_compare_exchange_weak_explicit(obj, &old, *val, rmw, load))
+        continue;
+}
+
 #define KAHAN_SUM_INITIALIZER (const kahan_sum_t){ 0.0, 0.0 }
 
 /* returns time in ns */

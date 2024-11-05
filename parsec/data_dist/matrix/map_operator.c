@@ -532,6 +532,9 @@ parsec_map_operator_New(const parsec_tiled_matrix_dc_t* src,
                                                 (int*)&tp->super.profiling_array[1 + 2 * parsec_map_operator.task_class_id]);
     }
 #  endif /* defined(PARSEC_PROF_TRACE) */
+#if defined(PARSEC_SIM_TIME)
+    tp->super.largest_simulation_time = KAHAN_SUM_INITIALIZER;
+#endif /* PARSEC_SIM_TIME */
 
     tp->super.taskpool_id = 1111;
     tp->super.nb_tasks = src->nb_local_tiles;

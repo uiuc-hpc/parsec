@@ -288,6 +288,9 @@ static void* __parsec_thread_init( __parsec_temporary_thread_initialization_t* s
 
     PARSEC_PINS_THREAD_INIT(es);
 
+#if defined(PARSEC_SIM_TIME)
+    es->largest_simulation_time = 0.0;
+#endif
 #if defined(PARSEC_SIM)
     es->largest_simulation_date = 0;
 #endif
@@ -594,6 +597,9 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
     context->nb_vp               = nb_vp;
     /* initialize dtd taskpool list */
     context->taskpool_list       = NULL;
+#if defined(PARSEC_SIM_TIME)
+    context->largest_simulation_time = 0.0;
+#endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM)
     context->largest_simulation_date = 0;
 #endif /* PARSEC_SIM */
@@ -957,6 +963,9 @@ int parsec_version_ex( size_t len, char* version_string) {
 #endif
 #if defined(PARSEC_PROF_GRAPHER)
         "+grapher"
+#endif
+#if defined(PARSEC_SIM_TIME)
+        "+simtime"
 #endif
 #if defined(PARSEC_SIM)
         "+sim"
@@ -2485,6 +2494,12 @@ static int parsec_parse_comm_binding_parameter(const char* option, parsec_contex
     return -1;
 #endif  /* PARSEC_HAVE_HWLOC */
 }
+
+#if defined(PARSEC_SIM_TIME)
+double parsec_getsimulationtime( parsec_context_t *parsec_context ){
+    return parsec_context->largest_simulation_time;
+}
+#endif
 
 #if defined(PARSEC_SIM)
 int parsec_getsimulationdate( parsec_context_t *parsec_context ){

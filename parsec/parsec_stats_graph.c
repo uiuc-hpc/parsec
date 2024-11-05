@@ -58,6 +58,9 @@ typedef struct {
     size_t tasks_completed;
     size_t tasks_retired;
     int threads_idle;
+#if defined(PARSEC_SIM_TIME)
+    double sim_path;
+#endif /* PARSEC_SIM_TIME */
 } pgs_record_t;
 
 static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
@@ -68,6 +71,9 @@ static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
         "\tExecution\tSelect\tWait"
         "\tKnown\tReady\tExecuted\tCompleted\tRetired"
         "\tIdle"
+#if defined(PARSEC_SIM_TIME)
+        "\tSimPath"
+#endif /* PARSEC_SIM_TIME */
         "\n";
     fputs(header, outfile);
     if (bfmt) {
@@ -77,6 +83,9 @@ static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
             "ddd"   /* time: execution, select, wait */
             "NNNNN" /* tasks: known, ready, executed, completed, retired */
             "i"     /* threads_idle */
+#if defined(PARSEC_SIM_TIME)
+            "d"     /* sim_path */
+#endif /* PARSEC_SIM_TIME */
             "\n";   /* line-end delimiter */
         fputs(pgs_record_format, outfile);
     }
@@ -95,6 +104,9 @@ static inline void parsec_graph_stat_print_record(FILE *outfile, _Bool bfmt,
             "\t%f\t%f\t%f"              /* time: execution, select, wait */
             "\t%zu\t%zu\t%zu\t%zu\t%zu" /* tasks: known, ready, executed, completed, retired */
             "\t%d"                      /* threads_idle */
+#if defined(PARSEC_SIM_TIME)
+            "\t%f"                      /* sim_path */
+#endif /* PARSEC_SIM_TIME */
             "\n";
         fprintf(outfile, format
                 , rcd->time_current
@@ -102,6 +114,9 @@ static inline void parsec_graph_stat_print_record(FILE *outfile, _Bool bfmt,
                 , rcd->tasks_known, rcd->tasks_ready, rcd->tasks_executed,
                                     rcd->tasks_completed, rcd->tasks_retired
                 , rcd->threads_idle
+#if defined(PARSEC_SIM_TIME)
+                , rcd->sim_path
+#endif /* PARSEC_SIM_TIME */
                );
     }
 }
@@ -127,6 +142,9 @@ static inline void parsec_graph_stat_record(const parsec_context_t* context,
     rcd.tasks_completed = atomic_load_explicit(&pgs_thrd.data.completed, memory_order_acquire);
     rcd.tasks_retired   = atomic_load_explicit(&pgs_thrd.data.retired,   memory_order_acquire);
     rcd.threads_idle    = atomic_load_explicit(&pgs_thrd.data.idle,      memory_order_acquire);
+#if defined(PARSEC_SIM_TIME)
+    rcd.sim_path        = 0.0;
+#endif /* PARSEC_SIM_TIME */
 
     for (int32_t vpid = 0; vpid < context->nb_vp; vpid++) {
         parsec_vp_t *vp = context->virtual_processes[vpid];
@@ -135,6 +153,11 @@ static inline void parsec_graph_stat_record(const parsec_context_t* context,
             /* load sums atomically */
             rcd.time_execution += atomic_load_explicit((_Atomic(double) *)&es->time.execute.sum, memory_order_relaxed);
             rcd.time_select    += atomic_load_explicit((_Atomic(double) *)&es->time.select.sum,  memory_order_relaxed);
+#if defined(PARSEC_SIM_TIME)
+            double sim_path = atomic_load_explicit((_Atomic(double) *)&es->largest_simulation_time, memory_order_relaxed);
+            if ( rcd.sim_path < sim_path )
+                rcd.sim_path = sim_path;
+#endif /* PARSEC_SIM_TIME */
         }
     }
 
@@ -172,6 +195,9 @@ static void * parsec_graph_stat_thread(void *arg)
                               .tasks_completed = 0,
                               .tasks_retired   = 0,
                               .threads_idle    = 0,
+#if defined(PARSEC_SIM_TIME)
+                              .sim_path        = 0.0,
+#endif /* PARSEC_SIM_TIME */
     };
     /* we start with all threads idle */
     zero_rcd.threads_idle = vpmap_get_nb_total_threads();

@@ -46,6 +46,9 @@ struct parsec_execution_stream_s {
 
     void *scheduler_object;
 
+#if defined(PARSEC_SIM_TIME)
+    double largest_simulation_time;
+#endif
 #if defined(PARSEC_SIM)
     int largest_simulation_date;
 #endif
@@ -138,6 +141,9 @@ struct parsec_context_s {
 
     parsec_list_t     *taskpool_list; /**< list of dtd taskpools registered with this context */
 
+#if defined(PARSEC_SIM_TIME)
+    double largest_simulation_time;
+#endif
 #if defined(PARSEC_SIM)
     int largest_simulation_date;
 #endif

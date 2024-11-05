@@ -182,6 +182,9 @@ parsec_execution_stream_t parsec_comm_es = {
     .es_profile = NULL,
 #endif /* PARSEC_PROF_TRACE */
     .scheduler_object = NULL,
+#if defined(PARSEC_SIM_TIME)
+    .largest_simulation_time = 0.0,
+#endif
 #if defined(PARSEC_SIM)
     .largest_simulation_date = 0,
 #endif

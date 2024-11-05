@@ -143,6 +143,9 @@ struct parsec_taskpool_s {
     const int*                  profiling_array; /**< Array of profiling keys to start/stop each of the task classes
                                                   *   The array is indexed on the same index as task_classes_array */
 #endif  /* defined(PARSEC_PROF_TRACE) */
+#if defined(PARSEC_SIM_TIME)
+    _Atomic(kahan_sum_t)         largest_simulation_time; /**< Critical path time for this taskpool */
+#endif /* PARSEC_SIM_TIME */
     parsec_event_cb_t           on_enqueue;      /**< Callback called when the taskpool is enqueued (scheduled) */
     void*                       on_enqueue_data; /**< Data to pass to on_enqueue when called */
     parsec_event_cb_t           on_complete;     /**< Callback called when the taskpool is completed */
@@ -455,6 +458,9 @@ struct parsec_task_s {
     /* WARNING: The following locals field must ABSOLUTELY stay contiguous with
      * prof_info so that the locals are part of the event specific infos */
     parsec_assignment_t        locals[MAX_LOCAL_COUNT];
+#if defined(PARSEC_SIM_TIME)
+    kahan_sum_t                sim_exec_time;
+#endif
 #if defined(PARSEC_SIM)
     int                        sim_exec_date;
 #endif
@@ -560,6 +566,10 @@ parsec_release_local_OUT_dependencies(parsec_execution_stream_t* es,
                                       parsec_task_t** pready_list);
 
 #define parsec_execution_context_priority_comparator offsetof(parsec_task_t, priority)
+
+#if defined(PARSEC_SIM_TIME)
+double parsec_getsimulationtime( parsec_context_t *parsec_context );
+#endif
 
 #if defined(PARSEC_SIM)
 int parsec_getsimulationdate( parsec_context_t *parsec_context );
