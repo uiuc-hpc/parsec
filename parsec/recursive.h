@@ -119,6 +119,9 @@ parsec_recursivecall( parsec_task_t                *task,
     }
     va_end(ap);
 
+    /* Increase priority of recursive tasks to that of parent */
+    parsec_taskpool_set_priority(tp, task->priority);
+
     parsec_taskpool_set_complete_callback( tp, &parsec_recursivecall_callback,
                                            (void *)cbdata );
 
