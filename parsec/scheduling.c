@@ -462,7 +462,7 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
         if(task->status <= PARSEC_TASK_STATUS_HOOK) {
 #if defined(PARSEC_SIM_TIME)
             /* compute critical path simulation time */
-            kahan_sum_t sim_exec_time = 0.0;
+            kahan_sum_t sim_exec_time = task->taskpool->initial_simulation_time;
             /* get max time from input flows */
             for(int i = 0; i < task->task_class->nb_flows; i++) {
                 /* control flows have NULL data repo */
@@ -470,6 +470,8 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
                 if( (NULL != repo) && (repo->sim_exec_time.sum > sim_exec_time.sum) )
                     sim_exec_time = repo->sim_exec_time;
             }
+            /* store to task, for recursive */
+            task->sim_exec_time = sim_exec_time;
 #endif /* PARSEC_SIM_TIME */
 
 #if defined(PARSEC_TASK_TIME_EXECUTE)

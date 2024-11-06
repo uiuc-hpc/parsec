@@ -145,6 +145,7 @@ struct parsec_taskpool_s {
 #endif  /* defined(PARSEC_PROF_TRACE) */
 #if defined(PARSEC_SIM_TIME)
     _Atomic(kahan_sum_t)         largest_simulation_time; /**< Critical path time for this taskpool */
+    kahan_sum_t                  initial_simulation_time; /**< Initial critical path time, for recursive */
 #endif /* PARSEC_SIM_TIME */
     parsec_event_cb_t           on_enqueue;      /**< Callback called when the taskpool is enqueued (scheduled) */
     void*                       on_enqueue_data; /**< Data to pass to on_enqueue when called */

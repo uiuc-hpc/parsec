@@ -1241,6 +1241,7 @@ parsec_dtd_taskpool_new(void)
     __tp->super.context            = NULL;
 #if defined(PARSEC_SIM_TIME)
     __tp->super.largest_simulation_time = KAHAN_SUM_INITIALIZER;
+    __tp->super.initial_simulation_time = KAHAN_SUM_INITIALIZER;
 #endif /* PARSEC_SIM_TIME */
     __tp->super.on_enqueue         = parsec_dtd_enqueue_taskpool;
     __tp->super.on_enqueue_data    = NULL;
