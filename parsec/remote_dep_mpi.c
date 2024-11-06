@@ -185,6 +185,9 @@ parsec_execution_stream_t parsec_comm_es = {
 #if defined(PARSEC_SIM_TIME)
     .largest_simulation_time = 0.0,
 #endif
+#if defined(PARSEC_SIM_COMM)
+    .largest_simulation_comm = 0.0,
+#endif
 #if defined(PARSEC_SIM)
     .largest_simulation_date = 0,
 #endif

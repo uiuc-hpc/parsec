@@ -272,8 +272,13 @@ if( PARSEC_SIM AND PARSEC_DIST_WITH_MPI )
 endif()
 option(PARSEC_SIM_TIME
   "Enable the computation of the critical path, using task execution time" OFF)
+option(PARSEC_SIM_COMM
+  "Enable the computation of the critical path, using task execution and communication time" OFF)
 if( PARSEC_SIM_TIME AND NOT PARSEC_STATS )
   message(FATAL_ERROR "PARSEC_SIM_TIME depends on PARSEC_STATS for timing")
+endif()
+if( PARSEC_SIM_COMM AND NOT PARSEC_STATS_COMM )
+  message(FATAL_ERROR "PARSEC_SIM_COMM depends on PARSEC_STATS_COMM for timing")
 endif()
 
 # cmake modules setup

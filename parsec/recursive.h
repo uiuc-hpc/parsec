@@ -63,6 +63,23 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
                      memory_order_relaxed, memory_order_relaxed);
 #endif /* PARSEC_SIM_TIME */
 
+#if defined(PARSEC_SIM_COMM)
+    /* retrieve taskpool critical + comm path */
+    kahan_sum_t sim_exec_comm = atomic_load_explicit(&tp->largest_simulation_comm,
+                                                     memory_order_relaxed);
+    /* store to task */
+    task->sim_exec_comm = sim_exec_comm;
+    /* update max time on this execution stream */
+    if( es->largest_simulation_comm < sim_exec_comm.sum ) {
+        /* atomic store to prevent tearing */
+        atomic_store_explicit((_Atomic(double) *)&es->largest_simulation_comm,
+                              sim_exec_comm.sum, memory_order_relaxed);
+    }
+    /* update max time for parent taskpool */
+    atomic_kahan_max(&task->taskpool->largest_simulation_comm, &sim_exec_comm,
+                     memory_order_relaxed, memory_order_relaxed);
+#endif /* PARSEC_SIM_COMM */
+
     /* call user callback *before* we complete and release the task */
     data->callback( tp, data );
     rc = __parsec_complete_execution(es, task);
@@ -109,6 +126,11 @@ parsec_recursivecall( parsec_task_t                *task,
 #if defined(PARSEC_SIM_TIME)
     tp->initial_simulation_time = task->sim_exec_time;
 #endif /* PARSEC_SIM_TIME */
+
+    /* set initial critical path + comm time for recursive taskpool */
+#if defined(PARSEC_SIM_COMM)
+    tp->initial_simulation_comm = task->sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
 
     parsec_context_add_taskpool( task->taskpool->context, tp );
 

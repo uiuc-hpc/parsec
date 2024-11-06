@@ -291,6 +291,9 @@ static void* __parsec_thread_init( __parsec_temporary_thread_initialization_t* s
 #if defined(PARSEC_SIM_TIME)
     es->largest_simulation_time = 0.0;
 #endif
+#if defined(PARSEC_SIM_COMM)
+    es->largest_simulation_comm = 0.0;
+#endif
 #if defined(PARSEC_SIM)
     es->largest_simulation_date = 0;
 #endif
@@ -600,6 +603,9 @@ parsec_context_t* parsec_init( int nb_cores, int* pargc, char** pargv[] )
 #if defined(PARSEC_SIM_TIME)
     context->largest_simulation_time = 0.0;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+    context->largest_simulation_comm = 0.0;
+#endif /* PARSEC_SIM_COMM */
 #if defined(PARSEC_SIM)
     context->largest_simulation_date = 0;
 #endif /* PARSEC_SIM */

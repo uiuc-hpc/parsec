@@ -58,6 +58,9 @@ typedef struct remote_dep_wire_activate_s {
 #if defined(PARSEC_SIM_TIME)
     kahan_sum_t          sim_exec_time;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+    kahan_sum_t          sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
 } remote_dep_wire_activate_t;
 
 typedef struct remote_dep_wire_get_s {
@@ -66,7 +69,18 @@ typedef struct remote_dep_wire_get_s {
     remote_dep_datakey_t       output_mask;
     uintptr_t                  callback_fn;
     parsec_ce_mem_reg_handle_t remote_memory_handle;
+#if defined(PARSEC_SIM_COMM)
+    double                     time;
+#endif /* PARSEC_SIM_COMM */
 } remote_dep_wire_get_t;
+
+typedef struct remote_dep_wire_put_s {
+    remote_dep_datakey_t remote_callback_data;
+#if defined(PARSEC_SIM_COMM)
+    double               time_get; /* duration of get */
+    double               time_put; /* start time of put */
+#endif /* PARSEC_SIM_COMM */
+} remote_dep_wire_put_t;
 
 typedef struct remote_dep_cb_data_s {
     parsec_list_item_t        super;
@@ -126,6 +140,9 @@ struct parsec_remote_deps_s {
     int32_t                          forwarded; /* has this activation been forwarded? */
     double                           time_recv; /* time when this activation was received */
 #endif /* PARSEC_STATS_COMM */
+#if defined(PARSEC_SIM_COMM)
+    kahan_sum_t                      sim_exec_comm; /* max critical path time with comm for all deps */
+#endif /* PARSEC_SIM_COMM */
     remote_dep_wire_activate_t       msg;     /**< A copy of the message control */
     void                            *eager_msg; /**< A pointer to the eager buffer if this is an eager msg, otherwise NULL */
     int32_t                          max_priority;

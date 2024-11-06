@@ -437,7 +437,8 @@ int __parsec_complete_execution( parsec_execution_stream_t *es,
 
 #if defined(PARSEC_STATS_SCHED) || \
     defined(PARSEC_STATS_TC)    || \
-    defined(PARSEC_SIM_TIME)
+    defined(PARSEC_SIM_TIME)    || \
+    defined(PARSEC_SIM_COMM)
 #define PARSEC_TASK_TIME_EXECUTE
 #endif
 
@@ -473,6 +474,19 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
             /* store to task, for recursive */
             task->sim_exec_time = sim_exec_time;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+            /* compute critical path simulation time */
+            kahan_sum_t sim_exec_comm = task->taskpool->initial_simulation_comm;
+            /* get max time from input flows */
+            for(int i = 0; i < task->task_class->nb_flows; i++) {
+                /* control flows have NULL data repo */
+                data_repo_entry_t *repo = task->data[i].data_repo;
+                if ( (NULL != repo) && (repo->sim_exec_comm.sum > sim_exec_comm.sum) )
+                    sim_exec_comm = repo->sim_exec_comm;
+            }
+            /* store to task, for recursive */
+            task->sim_exec_comm = sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
 
 #if defined(PARSEC_TASK_TIME_EXECUTE)
             time_start = parsec_stat_time(&parsec_stat_clock_model);
@@ -511,6 +525,21 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
             atomic_kahan_max(&task->taskpool->largest_simulation_time, &sim_exec_time,
                              memory_order_relaxed, memory_order_relaxed);
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+            /* add this task's execution time */
+            kahan_sum(&sim_exec_comm, time_execute);
+            /* store to task */
+            task->sim_exec_comm = sim_exec_comm;
+            /* update max time on this execution stream */
+            if( es->largest_simulation_comm < sim_exec_comm.sum ) {
+                /* atomic store to prevent tearing */
+                atomic_store_explicit((_Atomic(double) *)&es->largest_simulation_comm,
+                                      sim_exec_comm.sum, memory_order_relaxed);
+            }
+            /* update max time for this taskpool */
+            atomic_kahan_max(&task->taskpool->largest_simulation_comm, &sim_exec_comm,
+                             memory_order_relaxed, memory_order_relaxed);
+#endif /* PARSEC_SIM_COMM */
         }
         /* We're good to go ... */
         switch(rc) {
@@ -558,9 +587,8 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
     PARSEC_PINS(es, SELECT_BEGIN, NULL);
     return rc;
 }
-#if defined(PARSEC_SIM_TIME) && \
-    defined(DISTRIBUTED)     && \
-    defined(PARSEC_HAVE_LCI)
+#if (defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)) && \
+    (defined(DISTRIBUTED)     && defined(PARSEC_HAVE_LCI))
 static void lci_max_op(void *dst, const void *src, size_t count)
 {
     double *d = dst;
@@ -759,6 +787,29 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     parsec_barrier_wait( &(parsec_context->barrier) );
     es->largest_simulation_time = 0.0;
 #endif /* PARSEC_SIM_TIME */
+
+#if defined(PARSEC_SIM_COMM)
+    if( PARSEC_THREAD_IS_MASTER(es) ) {
+        parsec_vp_t *vp;
+        int32_t my_vpid, my_idx;
+        double largest_comm = 0.0;
+        for(my_vpid = 0; my_vpid < parsec_context->nb_vp; my_vpid++) {
+            vp = parsec_context->virtual_processes[my_vpid];
+            for(my_idx = 0; my_idx < vp->nb_cores; my_idx++) {
+                if( vp->execution_streams[my_idx]->largest_simulation_comm > largest_comm )
+                    largest_comm = vp->execution_streams[my_idx]->largest_simulation_comm;
+            }
+        }
+#if defined(DISTRIBUTED) && defined(PARSEC_HAVE_MPI)
+        MPI_Allreduce( MPI_IN_PLACE, &largest_comm, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD );
+#elif defined(DISTRIBUTED) && defined(PARSEC_HAVE_LCI)
+        lci_allreducem(&largest_comm, sizeof(double), lci_max_op);
+#endif /* DISTRIBUTED */
+        parsec_context->largest_simulation_comm = largest_comm;
+    }
+    parsec_barrier_wait( &(parsec_context->barrier) );
+    es->largest_simulation_comm = 0.0;
+#endif /* PARSEC_SIM_COMM */
 
     if( !PARSEC_THREAD_IS_MASTER(es) ) {
         my_barrier_counter++;

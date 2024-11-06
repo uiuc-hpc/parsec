@@ -99,6 +99,7 @@
 /* Simulating */
 #cmakedefine PARSEC_SIM
 #cmakedefine PARSEC_SIM_TIME
+#cmakedefine PARSEC_SIM_COMM
 
 /* Stats */
 #cmakedefine PARSEC_STATS

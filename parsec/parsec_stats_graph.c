@@ -45,6 +45,13 @@ pgs_thrd_info_t pgs_thrd = {
         .retired   = 0,
         .idle      = 0,
     },
+#if defined(PARSEC_SIM_COMM)
+    .time = {
+        .activate = KAHAN_SUM_INITIALIZER,
+        .get      = KAHAN_SUM_INITIALIZER,
+        .put      = KAHAN_SUM_INITIALIZER,
+    },
+#endif /* PARSEC_SIM_COMM */
 };
 
 typedef struct {
@@ -61,6 +68,12 @@ typedef struct {
 #if defined(PARSEC_SIM_TIME)
     double sim_path;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+    double sim_comm_path;
+    double time_activate;
+    double time_get;
+    double time_put;
+#endif /* PARSEC_SIM_COMM */
 } pgs_record_t;
 
 static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
@@ -74,6 +87,12 @@ static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
 #if defined(PARSEC_SIM_TIME)
         "\tSimPath"
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+        "\tSimCommPath"
+        "\tActivate"
+        "\tGet"
+        "\tPut"
+#endif /* PARSEC_SIM_COMM */
         "\n";
     fputs(header, outfile);
     if (bfmt) {
@@ -86,6 +105,12 @@ static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
 #if defined(PARSEC_SIM_TIME)
             "d"     /* sim_path */
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+            "d"     /* sim_comm_path */
+            "d"     /* time_activate */
+            "d"     /* time_get */
+            "d"     /* time_put */
+#endif /* PARSEC_SIM_COMM */
             "\n";   /* line-end delimiter */
         fputs(pgs_record_format, outfile);
     }
@@ -107,6 +132,12 @@ static inline void parsec_graph_stat_print_record(FILE *outfile, _Bool bfmt,
 #if defined(PARSEC_SIM_TIME)
             "\t%f"                      /* sim_path */
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+            "\t%f"                      /* sim_comm_path */
+            "\t%f"                      /* time_activate */
+            "\t%f"                      /* time_get */
+            "\t%f"                      /* time_put */
+#endif /* PARSEC_SIM_COMM */
             "\n";
         fprintf(outfile, format
                 , rcd->time_current
@@ -117,6 +148,12 @@ static inline void parsec_graph_stat_print_record(FILE *outfile, _Bool bfmt,
 #if defined(PARSEC_SIM_TIME)
                 , rcd->sim_path
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+                , rcd->sim_comm_path
+                , rcd->time_activate
+                , rcd->time_get
+                , rcd->time_put
+#endif /* PARSEC_SIM_COMM */
                );
     }
 }
@@ -145,6 +182,12 @@ static inline void parsec_graph_stat_record(const parsec_context_t* context,
 #if defined(PARSEC_SIM_TIME)
     rcd.sim_path        = 0.0;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+    rcd.sim_comm_path        = 0.0;
+    rcd.time_activate   = atomic_load_explicit((_Atomic(double) *)&pgs_thrd.time.activate, memory_order_relaxed);
+    rcd.time_get        = atomic_load_explicit((_Atomic(double) *)&pgs_thrd.time.get,      memory_order_relaxed);
+    rcd.time_put        = atomic_load_explicit((_Atomic(double) *)&pgs_thrd.time.put,      memory_order_relaxed);
+#endif /* PARSEC_SIM_COMM */
 
     for (int32_t vpid = 0; vpid < context->nb_vp; vpid++) {
         parsec_vp_t *vp = context->virtual_processes[vpid];
@@ -158,6 +201,11 @@ static inline void parsec_graph_stat_record(const parsec_context_t* context,
             if ( rcd.sim_path < sim_path )
                 rcd.sim_path = sim_path;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+            double sim_comm_path = atomic_load_explicit((_Atomic(double) *)&es->largest_simulation_comm, memory_order_relaxed);
+            if ( rcd.sim_comm_path < sim_comm_path )
+                rcd.sim_comm_path = sim_comm_path;
+#endif /* PARSEC_SIM_COMM */
         }
     }
 
@@ -198,6 +246,12 @@ static void * parsec_graph_stat_thread(void *arg)
 #if defined(PARSEC_SIM_TIME)
                               .sim_path        = 0.0,
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+                              .sim_comm_path   = 0.0,
+                              .time_activate   = 0.0,
+                              .time_get        = 0.0,
+                              .time_put        = 0.0,
+#endif /* PARSEC_SIM_COMM */
     };
     /* we start with all threads idle */
     zero_rcd.threads_idle = vpmap_get_nb_total_threads();
@@ -242,6 +296,14 @@ static void * parsec_graph_stat_thread(void *arg)
             atomic_store_explicit(&pgs_thrd.data.completed, 0, memory_order_release);
             atomic_store_explicit(&pgs_thrd.data.retired,   0, memory_order_release);
             atomic_store_explicit(&pgs_thrd.data.idle,      0, memory_order_release);
+#if defined(PARSEC_SIM_COMM)
+            atomic_store_explicit((_Atomic(kahan_sum_t) *)&pgs_thrd.time.activate,
+                                  KAHAN_SUM_INITIALIZER, memory_order_release);
+            atomic_store_explicit((_Atomic(kahan_sum_t) *)&pgs_thrd.time.get,
+                                  KAHAN_SUM_INITIALIZER, memory_order_release);
+            atomic_store_explicit((_Atomic(kahan_sum_t) *)&pgs_thrd.time.put,
+                                  KAHAN_SUM_INITIALIZER, memory_order_release);
+#endif /* PARSEC_SIM_COMM */
             /* wait until we're signaled */
             pthread_cond_wait(&pgs_thrd.cond, &pgs_thrd.mtx);
             break;

@@ -1293,6 +1293,9 @@ static inline char* jdf_generate_task_typedef(void **elt, void* arg)
                             "#if defined(PARSEC_SIM_TIME)\n"
                             "    kahan_sum_t                sim_exec_time;\n"
                             "#endif\n"
+                            "#if defined(PARSEC_SIM_COMM)\n"
+                            "    kahan_sum_t                sim_exec_comm;\n"
+                            "#endif\n"
                             "#if defined(PARSEC_SIM)\n"
                             "    int                        sim_exec_date;\n"
                             "#endif\n"
@@ -6304,6 +6307,10 @@ static void jdf_generate_code_release_deps(const jdf_t *jdf, const jdf_function_
                 "#if defined(PARSEC_SIM_TIME)\n"
                 "    assert(arg.output_entry->sim_exec_time.sum == 0.0);\n"
                 "    arg.output_entry->sim_exec_time = this_task->sim_exec_time;\n"
+                "#endif\n"
+                "#if defined(PARSEC_SIM_COMM)\n"
+                "    assert(arg.output_entry->sim_exec_comm.sum == 0.0);\n"
+                "    arg.output_entry->sim_exec_comm = this_task->sim_exec_comm;\n"
                 "#endif\n"
                 "  }\n",
                f->fname, jdf_property_get_string(f->properties, JDF_PROP_UD_MAKE_KEY_FN_NAME, NULL));

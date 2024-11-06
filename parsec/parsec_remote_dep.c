@@ -112,6 +112,9 @@ parsec_execution_stream_t parsec_comm_es = {
 #if defined(PARSEC_SIM_TIME)
     .largest_simulation_time = 0.0,
 #endif
+#if defined(PARSEC_SIM_COMM)
+    .largest_simulation_comm = 0.0,
+#endif
 #if defined(PARSEC_SIM)
     .largest_simulation_date = 0,
 #endif
@@ -700,7 +703,21 @@ remote_dep_mpi_save_activate_cb(parsec_comm_engine_t *ce, parsec_ce_tag_t tag,
         time_recv = parsec_stat_time(&parsec_stat_clock_model);
         duration_actv = time_recv - deps->msg.time_pred;
         deps->time_recv = time_recv;
-        parsec_comm_stat_update(&parsec_comm_actv_stat, duration_actv);
+        if (duration_actv > 0.0)
+            parsec_comm_stat_update(&parsec_comm_actv_stat, duration_actv);
+#if defined(PARSEC_SIM_COMM)
+        /* exclude negative duration due to clock drift */
+        if (duration_actv > 0.0) {
+            /* add duration for this activation to critical path time */
+            kahan_sum(&deps->msg.sim_exec_comm, duration_actv);
+            /* add duration for this activation to counter */
+            parsec_graph_time_activate(duration_actv);
+        }
+        /* copy to thread-local temporary */
+        es->sim_exec_comm = deps->msg.sim_exec_comm;
+        /* copy to max critical path time with communication */
+        deps->sim_exec_comm = deps->msg.sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
 #endif /* PARSEC_STATS_COMM */
 
         /* Retrieve the data arenas and update the msg.incoming_mask to reflect
@@ -770,6 +787,14 @@ remote_dep_mpi_save_put_cb(parsec_comm_engine_t *ce,
      * of the other side.
      */
     memcpy(task, msg, sizeof(remote_dep_wire_get_t));
+
+#if defined(PARSEC_SIM_COMM)
+    /* duration of get */
+    task->time = parsec_stat_time(&parsec_stat_clock_model) - task->time;
+    /* add duration of get to counter */
+    if (task->time > 0.0)
+        parsec_graph_time_get(task->time);
+#endif /* PARSEC_SIM_COMM */
 
     /* we are expecting exactly one wire_get_t + remote memory handle */
     assert(msg_size == sizeof(remote_dep_wire_get_t) + ce->get_mem_handle_size());
@@ -1258,7 +1283,8 @@ remote_dep_mpi_put_end_cb(parsec_comm_engine_t *ce,
 
 #if defined(PARSEC_STATS_COMM)
     double duration = parsec_stat_time(&parsec_stat_clock_model) - deps->msg.time_pred;
-    parsec_comm_stat_update(&parsec_comm_send_stat, duration);
+    if (duration > 0.0)
+        parsec_comm_stat_update(&parsec_comm_send_stat, duration);
 #endif /* PARSEC_STATS_COMM */
 
     PARSEC_DEBUG_VERBOSE(6, parsec_debug_output, "MPI:\tTO\tna\tPut END  \tunknown \tk=%d\twith deps %p\tparams bla\t(tag=bla) data ptr bla",
@@ -1283,6 +1309,7 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
                          dep_cmd_item_t* item)
 {
     remote_dep_wire_get_t* task = &(item->cmd.activate.task);
+    remote_dep_wire_put_t remote_cb_data = { task->remote_callback_data };
 #if !defined(PARSEC_PROF_DRY_DEP)
     parsec_remote_deps_t* deps = (parsec_remote_deps_t*) (uintptr_t) task->source_deps;
     int k, nbdtt;
@@ -1295,6 +1322,12 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
 #endif
 
     (void)es;
+
+#if defined(PARSEC_SIM_COMM)
+    /* duration of get, start time of put */
+    remote_cb_data.time_get = task->time;
+    remote_cb_data.time_put = parsec_stat_time(&parsec_stat_clock_model);
+#endif /* PARSEC_SIM_COMM */
 
 #if !defined(PARSEC_PROF_DRY_DEP)
     assert(task->output_mask);
@@ -1367,7 +1400,7 @@ remote_dep_mpi_put_start(parsec_execution_stream_t* es,
                       remote_memory_handle, 0,
                       0, item->cmd.activate.peer,
                       remote_dep_mpi_put_end_cb, cb_data,
-                      (parsec_ce_tag_t)task->callback_fn, &task->remote_callback_data, sizeof(uintptr_t));
+                      (parsec_ce_tag_t)task->callback_fn, &remote_cb_data, sizeof(remote_dep_wire_put_t));
 
         parsec_comm_puts++;
     }
@@ -1411,6 +1444,11 @@ remote_dep_mpi_new_taskpool(parsec_execution_stream_t* es,
                 continue;
             }
 
+#if defined(PARSEC_SIM_COMM)
+            /* copy to thread-local temporary */
+            es->sim_exec_comm = deps->msg.sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
+
             remote_dep_mpi_recv_activate(es, deps, buffer, deps->msg.length, &position);
             free(buffer);
             (void)rc;
@@ -1441,6 +1479,11 @@ remote_dep_mpi_release_delayed_deps(parsec_execution_stream_t* es,
     assert(rc != -2);
     (void)rc;
 
+#if defined(PARSEC_SIM_COMM)
+    /* copy to thread-local temporary */
+    es->sim_exec_comm = deps->msg.sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
+
     assert(deps != NULL);
     remote_dep_mpi_recv_activate(es, deps, buffer, deps->msg.length, &position);
     free(buffer);
@@ -1465,6 +1508,11 @@ remote_dep_mpi_get_start(parsec_execution_stream_t* es,
 #endif
 
     (void)es;
+
+#if defined(PARSEC_SIM_COMM)
+    /* start time of get */
+    msg.time = parsec_stat_time(&parsec_stat_clock_model);
+#endif /* PARSEC_SIM_COMM */
 
     msg.source_deps = task->deps; /* the deps copied from activate message from source */
     msg.callback_fn = (uintptr_t)remote_dep_mpi_get_end_cb; /* We let the source know to call this
@@ -1599,8 +1647,8 @@ remote_dep_mpi_get_end_cb(parsec_comm_engine_t *ce,
     /* We send 8 bytes to the source to give it back to us when the PUT is completed,
      * let's retrieve that
      */
-    uintptr_t *retrieve_pointer_to_callback = (uintptr_t *)msg;
-    remote_dep_cb_data_t *callback_data = (remote_dep_cb_data_t *)*retrieve_pointer_to_callback;
+    remote_dep_wire_put_t *put_cb_data = (remote_dep_wire_put_t*)msg;
+    remote_dep_cb_data_t *callback_data = (remote_dep_cb_data_t *)put_cb_data->remote_callback_data;
     parsec_remote_deps_t *deps = (parsec_remote_deps_t *)callback_data->deps;
     parsec_datatype_t dtt;
     int dtt_size;
@@ -1608,6 +1656,27 @@ remote_dep_mpi_get_end_cb(parsec_comm_engine_t *ce,
 #if defined(PARSEC_DEBUG_NOISIER)
     char tmp[MAX_TASK_STRLEN];
 #endif
+
+#if defined(PARSEC_SIM_COMM)
+    /* critical path time for task + time for activation */
+    kahan_sum_t sim_exec_comm = deps->msg.sim_exec_comm;
+    /* duration of put */
+    put_cb_data->time_put = parsec_stat_time(&parsec_stat_clock_model) - put_cb_data->time_put;
+    /* add duration of get to critical path time */
+    if (put_cb_data->time_get > 0.0)
+        kahan_sum(&sim_exec_comm, put_cb_data->time_get);
+    /* add duration of put to critical path time */
+    if (put_cb_data->time_put > 0.0) {
+        kahan_sum(&sim_exec_comm, put_cb_data->time_put);
+        /* add duration of put to counter */
+        parsec_graph_time_put(put_cb_data->time_put);
+    }
+    /* copy to thread-local temporary */
+    es->sim_exec_comm = sim_exec_comm;
+    /* update max time for this task */
+    if (sim_exec_comm.sum > deps->sim_exec_comm.sum)
+        deps->sim_exec_comm = sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
 
     PARSEC_DEBUG_VERBOSE(6, parsec_debug_output, "MPI:\tFROM\t%d\tGet END  \t% -8s\tk=%d\twith datakey na        \tparams %lx\t(tag=%d)",
             src, remote_dep_cmd_to_string(&deps->msg, tmp, MAX_TASK_STRLEN),
@@ -1652,9 +1721,12 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
     duration_recv = time_end - origin->time_recv;
     duration_srcv = time_end - origin->msg.time_pred;
     duration_root = time_end - origin->msg.time_root;
-    parsec_comm_stat_update(&parsec_comm_recv_stat, duration_recv);
-    parsec_comm_stat_update(&parsec_comm_srcv_stat, duration_srcv);
-    parsec_comm_stat_update(&parsec_comm_root_stat, duration_root);
+    if (duration_recv > 0.0)
+        parsec_comm_stat_update(&parsec_comm_recv_stat, duration_recv);
+    if (duration_srcv > 0.0)
+        parsec_comm_stat_update(&parsec_comm_srcv_stat, duration_srcv);
+    if (duration_root > 0.0)
+        parsec_comm_stat_update(&parsec_comm_root_stat, duration_root);
 #endif /* PARSEC_STATS_COMM */
 
     /* Update the mask of remaining dependencies to avoid releasing the same outputs twice */
@@ -1688,6 +1760,9 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
 #if defined(PARSEC_SIM_TIME)
     task.sim_exec_time = origin->msg.sim_exec_time;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+    task.sim_exec_comm = es->sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
 
 #ifdef PARSEC_DIST_COLLECTIVES
     /* Corresponding comment below on the propagation part */
@@ -1732,12 +1807,19 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
     origin->outgoing_mask = 0;
 
 #if defined(PARSEC_STATS_COMM)
-    parsec_comm_stat_update(&parsec_comm_rdep_stat, duration_recv);
-    parsec_comm_stat_update(&parsec_comm_srdp_stat, duration_srcv);
-    parsec_comm_stat_update(&parsec_comm_rtdp_stat, duration_root);
+    if (duration_recv > 0.0)
+        parsec_comm_stat_update(&parsec_comm_rdep_stat, duration_recv);
+    if (duration_srcv > 0.0)
+        parsec_comm_stat_update(&parsec_comm_srdp_stat, duration_srcv);
+    if (duration_root > 0.0)
+        parsec_comm_stat_update(&parsec_comm_rtdp_stat, duration_root);
 #endif /* PARSEC_STATS_COMM */
 
 #if defined(PARSEC_DIST_COLLECTIVES)
+#if defined(PARSEC_SIM_COMM)
+    /* propagate max time for task */
+    task.sim_exec_comm = origin->sim_exec_comm;
+#endif /* PARSEC_SIM_COMM */
     if( PARSEC_TASKPOOL_TYPE_PTG == origin->taskpool->taskpool_type ) /* indicates it is a PTG taskpool */
         parsec_remote_dep_propagate(es, &task, origin);
 #endif  /* PARSEC_DIST_COLLECTIVES */

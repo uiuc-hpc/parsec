@@ -67,6 +67,9 @@ __data_repo_lookup_entry_and_create(parsec_execution_stream_t *es, data_repo_t *
 #if defined(PARSEC_SIM_TIME)
     e->sim_exec_time = KAHAN_SUM_INITIALIZER;
 #endif
+#if defined(PARSEC_SIM_COMM)
+    e->sim_exec_comm = KAHAN_SUM_INITIALIZER;
+#endif
     e->usagelmt = 0;
     e->usagecnt = 0;
     e->retained = 1; /* Until we update the usage limit */

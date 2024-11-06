@@ -536,6 +536,10 @@ parsec_map_operator_New(const parsec_tiled_matrix_dc_t* src,
     tp->super.largest_simulation_time = KAHAN_SUM_INITIALIZER;
     tp->super.initial_simulation_time = KAHAN_SUM_INITIALIZER;
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+    tp->super.largest_simulation_comm = KAHAN_SUM_INITIALIZER;
+    tp->super.initial_simulation_comm = KAHAN_SUM_INITIALIZER;
+#endif /* PARSEC_SIM_COMM */
 
     tp->super.taskpool_id = 1111;
     tp->super.nb_tasks = src->nb_local_tiles;

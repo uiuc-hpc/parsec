@@ -49,6 +49,10 @@ struct parsec_execution_stream_s {
 #if defined(PARSEC_SIM_TIME)
     double largest_simulation_time;
 #endif
+#if defined(PARSEC_SIM_COMM)
+    double largest_simulation_comm;
+    kahan_sum_t sim_exec_comm; /* thread-local temporary, I don't have a better solution right now */
+#endif
 #if defined(PARSEC_SIM)
     int largest_simulation_date;
 #endif
@@ -143,6 +147,9 @@ struct parsec_context_s {
 
 #if defined(PARSEC_SIM_TIME)
     double largest_simulation_time;
+#endif
+#if defined(PARSEC_SIM_COMM)
+    double largest_simulation_comm;
 #endif
 #if defined(PARSEC_SIM)
     int largest_simulation_date;

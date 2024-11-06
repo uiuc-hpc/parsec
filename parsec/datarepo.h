@@ -86,6 +86,9 @@ struct data_repo_entry_s {
 #if defined(PARSEC_SIM_TIME)
     kahan_sum_t                sim_exec_time;
 #endif
+#if defined(PARSEC_SIM_COMM)
+    kahan_sum_t                sim_exec_comm;
+#endif
     struct parsec_data_copy_s *data[1];
 };
 

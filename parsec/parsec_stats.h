@@ -338,6 +338,14 @@ typedef struct {
         alignas(64) _Atomic(size_t) retired;
         alignas(64) _Atomic(int)    idle;
     } data;
+#if defined(PARSEC_SIM_COMM)
+    alignas(64) struct {
+        /* these are only written by comm thread, no need for atomic */
+        kahan_sum_t activate;
+        kahan_sum_t get;
+        kahan_sum_t put;
+    } time;
+#endif /* PARSEC_SIM_COMM */
 } pgs_thrd_info_t;
 extern pgs_thrd_info_t pgs_thrd;
 
@@ -362,6 +370,14 @@ static inline void parsec_graph_stat_completed(void) { atomic_fetch_add_explicit
 static inline void parsec_graph_stat_retired(void)   { atomic_fetch_add_explicit(&pgs_thrd.data.retired,   1, memory_order_acq_rel); }
 static inline void parsec_graph_stat_idle(void)      { atomic_fetch_add_explicit(&pgs_thrd.data.idle,      1, memory_order_acq_rel); }
 static inline void parsec_graph_stat_busy(void)      { atomic_fetch_add_explicit(&pgs_thrd.data.idle,     -1, memory_order_acq_rel); }
+
+#if defined(PARSEC_SIM_COMM)
+/* add to time data */
+static inline void parsec_graph_time_activate(double time) { kahan_sum(&pgs_thrd.time.activate, time); }
+static inline void parsec_graph_time_get(double time)      { kahan_sum(&pgs_thrd.time.get,      time); }
+static inline void parsec_graph_time_put(double time)      { kahan_sum(&pgs_thrd.time.put,      time); }
+#endif /* PARSEC_SIM_COMM */
+
 #endif /* PARSEC_STATS_GRAPH */
 
 #endif /* PARSEC_STATS */

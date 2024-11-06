@@ -147,6 +147,10 @@ struct parsec_taskpool_s {
     _Atomic(kahan_sum_t)         largest_simulation_time; /**< Critical path time for this taskpool */
     kahan_sum_t                  initial_simulation_time; /**< Initial critical path time, for recursive */
 #endif /* PARSEC_SIM_TIME */
+#if defined(PARSEC_SIM_COMM)
+    _Atomic(kahan_sum_t)         largest_simulation_comm; /**< Critical path time+comm for this taskpool */
+    kahan_sum_t                  initial_simulation_comm; /**< Initial critical path time+comm, for recursive */
+#endif /* PARSEC_SIM_COMM */
     parsec_event_cb_t           on_enqueue;      /**< Callback called when the taskpool is enqueued (scheduled) */
     void*                       on_enqueue_data; /**< Data to pass to on_enqueue when called */
     parsec_event_cb_t           on_complete;     /**< Callback called when the taskpool is completed */
@@ -461,6 +465,9 @@ struct parsec_task_s {
     parsec_assignment_t        locals[MAX_LOCAL_COUNT];
 #if defined(PARSEC_SIM_TIME)
     kahan_sum_t                sim_exec_time;
+#endif
+#if defined(PARSEC_SIM_COMM)
+    kahan_sum_t                sim_exec_comm;
 #endif
 #if defined(PARSEC_SIM)
     int                        sim_exec_date;
