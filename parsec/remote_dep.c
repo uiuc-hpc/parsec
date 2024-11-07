@@ -500,6 +500,9 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
 #if defined(PARSEC_SIM_COMM)
     remote_deps->msg.sim_exec_comm = task->sim_exec_comm;
 #endif /* PARSEC_SIM_COMM */
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+    remote_deps->msg.critical = task->critical;
+#endif /* PARSEC_SIM_TIME || PARSEC_SIM_COMM */
 
     /* Mark the root of the collective as rank 0 */
     remote_dep_mark_forwarded(es, remote_deps, remote_deps->root);

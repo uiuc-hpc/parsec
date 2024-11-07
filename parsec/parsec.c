@@ -290,9 +290,13 @@ static void* __parsec_thread_init( __parsec_temporary_thread_initialization_t* s
 
 #if defined(PARSEC_SIM_TIME)
     es->largest_simulation_time = 0.0;
+    es->critical_simulation_time = 0.0;
+    es->critical_simulation_time_wall = 0.0;
 #endif
 #if defined(PARSEC_SIM_COMM)
     es->largest_simulation_comm = 0.0;
+    es->critical_simulation_comm = 0.0;
+    es->critical_simulation_comm_wall = 0.0;
 #endif
 #if defined(PARSEC_SIM)
     es->largest_simulation_date = 0;
@@ -1859,6 +1863,24 @@ parsec_release_dep_fct(parsec_execution_stream_t *es,
     return PARSEC_ITERATE_CONTINUE;
 }
 
+parsec_ontask_iterate_t
+parsec_max_priority(parsec_execution_stream_t *es,
+                    const parsec_task_t *newcontext,
+                    const parsec_task_t *oldcontext,
+                    const parsec_dep_t* dep,
+                    parsec_dep_data_description_t* data,
+                    int src_rank, int dst_rank, int dst_vpid,
+                    void *param)
+{
+    int32_t *priority = (int32_t *)param;
+    /* ignore CTL flows */
+    uint8_t flow_access_flags = (dep->flow->flow_flags & PARSEC_FLOW_ACCESS_MASK);
+    bool is_ctl_flow = (PARSEC_FLOW_ACCESS_NONE == flow_access_flags);
+    if( !is_ctl_flow && (newcontext->priority > *priority) )
+        *priority = newcontext->priority;
+    return PARSEC_ITERATE_CONTINUE;
+}
+
 /*
  * Convert the execution context to a string.
  */
@@ -2504,6 +2526,12 @@ static int parsec_parse_comm_binding_parameter(const char* option, parsec_contex
 #if defined(PARSEC_SIM_TIME)
 double parsec_getsimulationtime( parsec_context_t *parsec_context ){
     return parsec_context->largest_simulation_time;
+}
+#endif
+
+#if defined(PARSEC_SIM_COMM)
+double parsec_getsimulationcomm( parsec_context_t *parsec_context ){
+    return parsec_context->largest_simulation_comm;
 }
 #endif
 

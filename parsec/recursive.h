@@ -46,6 +46,10 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
                      tp_time_execute, memory_order_relaxed, memory_order_relaxed);
 #endif /* PARSEC_STATS_TC */
 
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+    double time_end = 0.0;
+#endif /* PARSEC_SIM_TIME || PARSEC_SIM_COMM */
+
 #if defined(PARSEC_SIM_TIME)
     /* retrieve taskpool critical path */
     kahan_sum_t sim_exec_time = atomic_load_explicit(&tp->largest_simulation_time,
@@ -57,6 +61,15 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
         /* atomic store to prevent tearing */
         atomic_store_explicit((_Atomic(double) *)&es->largest_simulation_time,
                               sim_exec_time.sum, memory_order_relaxed);
+    }
+    /* update max critical time on this execution stream */
+    if( task->critical && es->critical_simulation_time < sim_exec_time.sum ) {
+        time_end = parsec_stat_time(&parsec_stat_clock_model);
+        /* atomic store to prevent tearing */
+        atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_time,
+                              sim_exec_time.sum, memory_order_release);
+        atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_time_wall,
+                              time_end, memory_order_release);
     }
     /* update max time for parent taskpool */
     atomic_kahan_max(&task->taskpool->largest_simulation_time, &sim_exec_time,
@@ -74,6 +87,16 @@ static inline int parsec_recursivecall_callback(parsec_taskpool_t* tp, void* cb_
         /* atomic store to prevent tearing */
         atomic_store_explicit((_Atomic(double) *)&es->largest_simulation_comm,
                               sim_exec_comm.sum, memory_order_relaxed);
+    }
+    /* update max critical time on this execution stream */
+    if( task->critical && es->critical_simulation_comm < sim_exec_comm.sum ) {
+        if( time_end == 0.0 )
+            time_end = parsec_stat_time(&parsec_stat_clock_model);
+        /* atomic store to prevent tearing */
+        atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_comm,
+                              sim_exec_comm.sum, memory_order_release);
+        atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_comm_wall,
+                              time_end, memory_order_release);
     }
     /* update max time for parent taskpool */
     atomic_kahan_max(&task->taskpool->largest_simulation_comm, &sim_exec_comm,

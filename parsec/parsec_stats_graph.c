@@ -67,9 +67,13 @@ typedef struct {
     int threads_idle;
 #if defined(PARSEC_SIM_TIME)
     double sim_path;
+    double crit_path;
+    double crit_time;
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
     double sim_comm_path;
+    double crit_comm_path;
+    double crit_comm_time;
     double time_activate;
     double time_get;
     double time_put;
@@ -86,9 +90,13 @@ static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
         "\tIdle"
 #if defined(PARSEC_SIM_TIME)
         "\tSimPath"
+        "\tCritPath"
+        "\tCritTime"
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
         "\tSimCommPath"
+        "\tCritCommPath"
+        "\tCritCommTime"
         "\tActivate"
         "\tGet"
         "\tPut"
@@ -104,9 +112,13 @@ static inline void parsec_graph_stat_print_header(FILE *outfile, _Bool bfmt)
             "i"     /* threads_idle */
 #if defined(PARSEC_SIM_TIME)
             "d"     /* sim_path */
+            "d"     /* crit_path */
+            "d"     /* crit_time */
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
             "d"     /* sim_comm_path */
+            "d"     /* crit_comm_path */
+            "d"     /* crit_comm_time */
             "d"     /* time_activate */
             "d"     /* time_get */
             "d"     /* time_put */
@@ -131,9 +143,13 @@ static inline void parsec_graph_stat_print_record(FILE *outfile, _Bool bfmt,
             "\t%d"                      /* threads_idle */
 #if defined(PARSEC_SIM_TIME)
             "\t%f"                      /* sim_path */
+            "\t%f"                      /* crit_path */
+            "\t%f"                      /* crit_time */
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
             "\t%f"                      /* sim_comm_path */
+            "\t%f"                      /* crit_comm_path */
+            "\t%f"                      /* crit_comm_time */
             "\t%f"                      /* time_activate */
             "\t%f"                      /* time_get */
             "\t%f"                      /* time_put */
@@ -147,9 +163,13 @@ static inline void parsec_graph_stat_print_record(FILE *outfile, _Bool bfmt,
                 , rcd->threads_idle
 #if defined(PARSEC_SIM_TIME)
                 , rcd->sim_path
+                , rcd->crit_path
+                , rcd->crit_time
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
                 , rcd->sim_comm_path
+                , rcd->crit_comm_path
+                , rcd->crit_comm_time
                 , rcd->time_activate
                 , rcd->time_get
                 , rcd->time_put
@@ -181,9 +201,13 @@ static inline void parsec_graph_stat_record(const parsec_context_t* context,
     rcd.threads_idle    = atomic_load_explicit(&pgs_thrd.data.idle,      memory_order_acquire);
 #if defined(PARSEC_SIM_TIME)
     rcd.sim_path        = 0.0;
+    rcd.crit_path       = 0.0;
+    rcd.crit_time       = rcd.time_current;
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
     rcd.sim_comm_path        = 0.0;
+    rcd.crit_comm_path       = 0.0;
+    rcd.crit_comm_time       = rcd.time_current;
     rcd.time_activate   = atomic_load_explicit((_Atomic(double) *)&pgs_thrd.time.activate, memory_order_relaxed);
     rcd.time_get        = atomic_load_explicit((_Atomic(double) *)&pgs_thrd.time.get,      memory_order_relaxed);
     rcd.time_put        = atomic_load_explicit((_Atomic(double) *)&pgs_thrd.time.put,      memory_order_relaxed);
@@ -200,11 +224,23 @@ static inline void parsec_graph_stat_record(const parsec_context_t* context,
             double sim_path = atomic_load_explicit((_Atomic(double) *)&es->largest_simulation_time, memory_order_relaxed);
             if ( rcd.sim_path < sim_path )
                 rcd.sim_path = sim_path;
+            double crit_path = atomic_load_explicit((_Atomic(double) *)&es->critical_simulation_time, memory_order_acquire);
+            double crit_wall = atomic_load_explicit((_Atomic(double) *)&es->critical_simulation_time_wall, memory_order_acquire);
+            if ( rcd.crit_path < crit_path ) {
+                rcd.crit_path = crit_path;
+                rcd.crit_time = crit_wall - time_start;
+            }
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
             double sim_comm_path = atomic_load_explicit((_Atomic(double) *)&es->largest_simulation_comm, memory_order_relaxed);
             if ( rcd.sim_comm_path < sim_comm_path )
                 rcd.sim_comm_path = sim_comm_path;
+            double crit_comm_path = atomic_load_explicit((_Atomic(double) *)&es->critical_simulation_comm, memory_order_acquire);
+            double crit_comm_wall = atomic_load_explicit((_Atomic(double) *)&es->critical_simulation_comm_wall, memory_order_acquire);
+            if ( rcd.crit_comm_path < crit_comm_path ) {
+                rcd.crit_comm_path = crit_comm_path;
+                rcd.crit_comm_time = crit_comm_wall - time_start;
+            }
 #endif /* PARSEC_SIM_COMM */
         }
     }
@@ -245,9 +281,13 @@ static void * parsec_graph_stat_thread(void *arg)
                               .threads_idle    = 0,
 #if defined(PARSEC_SIM_TIME)
                               .sim_path        = 0.0,
+                              .crit_path       = 0.0,
+                              .crit_time       = 0.0,
 #endif /* PARSEC_SIM_TIME */
 #if defined(PARSEC_SIM_COMM)
                               .sim_comm_path   = 0.0,
+                              .crit_comm_path  = 0.0,
+                              .crit_comm_time  = 0.0,
                               .time_activate   = 0.0,
                               .time_get        = 0.0,
                               .time_put        = 0.0,

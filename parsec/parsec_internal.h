@@ -469,6 +469,10 @@ struct parsec_task_s {
 #if defined(PARSEC_SIM_COMM)
     kahan_sum_t                sim_exec_comm;
 #endif
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+    int32_t                    critical_priority;
+    bool                       critical;
+#endif
 #if defined(PARSEC_SIM)
     int                        sim_exec_date;
 #endif
@@ -553,6 +557,16 @@ parsec_release_dep_fct(struct parsec_execution_stream_s *es,
                        int rank_src, int rank_dst, int vpid_dst,
                        void *param);
 
+/* compute max priority of all non-CTL descendants */
+parsec_ontask_iterate_t
+parsec_max_priority(parsec_execution_stream_t *es,
+                    const parsec_task_t *newcontext,
+                    const parsec_task_t *oldcontext,
+                    const parsec_dep_t* dep,
+                    parsec_dep_data_description_t* data,
+                    int src_rank, int dst_rank, int dst_vpid,
+                    void *param);
+
 /** deps is an array of size MAX_PARAM_COUNT
  *  Returns the number of output deps on which there is a final output
  */
@@ -577,6 +591,10 @@ parsec_release_local_OUT_dependencies(parsec_execution_stream_t* es,
 
 #if defined(PARSEC_SIM_TIME)
 double parsec_getsimulationtime( parsec_context_t *parsec_context );
+#endif
+
+#if defined(PARSEC_SIM_COMM)
+double parsec_getsimulationcomm( parsec_context_t *parsec_context );
 #endif
 
 #if defined(PARSEC_SIM)

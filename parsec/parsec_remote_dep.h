@@ -62,6 +62,9 @@ typedef struct remote_dep_wire_activate_s {
 #if defined(PARSEC_SIM_COMM)
     kahan_sum_t          sim_exec_comm;
 #endif /* PARSEC_SIM_COMM */
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+    bool                 critical;
+#endif /* PARSEC_SIM_TIME || PARSEC_SIM_COMM */
 } remote_dep_wire_activate_t;
 
 typedef struct remote_dep_wire_get_s {

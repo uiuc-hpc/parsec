@@ -461,6 +461,40 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
     switch(rc) {
     case PARSEC_HOOK_RETURN_DONE: {
         if(task->status <= PARSEC_TASK_STATUS_HOOK) {
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+            /* compute max priority of successors */
+            task->critical_priority = 0;
+            if( NULL != task->task_class->iterate_successors ) {
+                task->task_class->iterate_successors(es, task, PARSEC_ACTION_DEPS_MASK,
+                        parsec_max_priority, &task->critical_priority);
+            }
+
+            /* a task is on the critical path if:
+             * 1a) successor max priority for all predecessors is this task
+             * 1b) AND at least one predecessor is on the critical path
+             * 2 ) OR this task has no predecessor */
+            task->critical = (0 == task->task_class->nb_flows);
+            for(int i = 0; i < task->task_class->nb_flows; i++) {
+                /* control flows and startup have NULL data repo */
+                data_repo_entry_t *repo = task->data[i].data_repo;
+                if( NULL != repo ) {
+                    /* not a control flow or direct data: has predecessor */
+                    if( repo->critical_priority == task->priority ) {
+                        /* this task is the highest-priority successor,
+                         * so it's critical if that predecessor was */
+                        task->critical |= repo->critical;
+                    } else {
+                        /* predecessor has higher-priority successor,
+                         * so this task must not be critical */
+                        task->critical = false;
+                        break;
+                    }
+                } else if( NULL != task->data[i].data_in ) {
+                    /* not a control flow, so direct data: no predecessor */
+                    task->critical = true;
+                }
+            }
+#endif /* PARSEC_SIM_TIME || PARSEC_SIM_COMM */
 #if defined(PARSEC_SIM_TIME)
             /* compute critical path simulation time */
             kahan_sum_t sim_exec_time = task->taskpool->initial_simulation_time;
@@ -521,6 +555,14 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
                 atomic_store_explicit((_Atomic(double) *)&es->largest_simulation_time,
                                       sim_exec_time.sum, memory_order_relaxed);
             }
+            /* update max critical time on this execution stream */
+            if( task->critical && es->critical_simulation_time < sim_exec_time.sum ) {
+                /* atomic store to prevent tearing */
+                atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_time,
+                                      sim_exec_time.sum, memory_order_release);
+                atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_time_wall,
+                                      time_end, memory_order_release);
+            }
             /* update max time for this taskpool */
             atomic_kahan_max(&task->taskpool->largest_simulation_time, &sim_exec_time,
                              memory_order_relaxed, memory_order_relaxed);
@@ -535,6 +577,14 @@ int __parsec_task_progress( parsec_execution_stream_t* es,
                 /* atomic store to prevent tearing */
                 atomic_store_explicit((_Atomic(double) *)&es->largest_simulation_comm,
                                       sim_exec_comm.sum, memory_order_relaxed);
+            }
+            /* update max critical time on this execution stream */
+            if( task->critical && es->critical_simulation_comm < sim_exec_comm.sum ) {
+                /* atomic store to prevent tearing */
+                atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_comm,
+                                      sim_exec_comm.sum, memory_order_relaxed);
+                atomic_store_explicit((_Atomic(double) *)&es->critical_simulation_comm_wall,
+                                      time_end, memory_order_release);
             }
             /* update max time for this taskpool */
             atomic_kahan_max(&task->taskpool->largest_simulation_comm, &sim_exec_comm,
@@ -786,6 +836,7 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     }
     parsec_barrier_wait( &(parsec_context->barrier) );
     es->largest_simulation_time = 0.0;
+    es->critical_simulation_time = 0.0;
 #endif /* PARSEC_SIM_TIME */
 
 #if defined(PARSEC_SIM_COMM)
@@ -809,6 +860,7 @@ int __parsec_context_wait( parsec_execution_stream_t* es )
     }
     parsec_barrier_wait( &(parsec_context->barrier) );
     es->largest_simulation_comm = 0.0;
+    es->critical_simulation_comm = 0.0;
 #endif /* PARSEC_SIM_COMM */
 
     if( !PARSEC_THREAD_IS_MASTER(es) ) {

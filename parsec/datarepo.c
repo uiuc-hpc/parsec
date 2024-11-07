@@ -64,6 +64,10 @@ __data_repo_lookup_entry_and_create(parsec_execution_stream_t *es, data_repo_t *
 #if defined(PARSEC_SIM)
     e->sim_exec_date = 0;
 #endif
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+    e->critical_priority = 0;
+    e->critical = false;
+#endif
 #if defined(PARSEC_SIM_TIME)
     e->sim_exec_time = KAHAN_SUM_INITIALIZER;
 #endif

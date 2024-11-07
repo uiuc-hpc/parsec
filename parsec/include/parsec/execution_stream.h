@@ -48,9 +48,13 @@ struct parsec_execution_stream_s {
 
 #if defined(PARSEC_SIM_TIME)
     double largest_simulation_time;
+    double critical_simulation_time;
+    double critical_simulation_time_wall;
 #endif
 #if defined(PARSEC_SIM_COMM)
     double largest_simulation_comm;
+    double critical_simulation_comm;
+    double critical_simulation_comm_wall;
     kahan_sum_t sim_exec_comm; /* thread-local temporary, I don't have a better solution right now */
 #endif
 #if defined(PARSEC_SIM)

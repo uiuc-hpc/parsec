@@ -83,6 +83,10 @@ struct data_repo_entry_s {
 #if defined(PARSEC_SIM)
     int                        sim_exec_date;
 #endif
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+    int32_t                    critical_priority;
+    bool                       critical;
+#endif
 #if defined(PARSEC_SIM_TIME)
     kahan_sum_t                sim_exec_time;
 #endif

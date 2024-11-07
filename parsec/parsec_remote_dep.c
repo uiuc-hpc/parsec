@@ -111,9 +111,13 @@ parsec_execution_stream_t parsec_comm_es = {
     .scheduler_object = NULL,
 #if defined(PARSEC_SIM_TIME)
     .largest_simulation_time = 0.0,
+    .critical_simulation_time = 0.0,
+    .critical_simulation_time_wall = 0.0,
 #endif
 #if defined(PARSEC_SIM_COMM)
     .largest_simulation_comm = 0.0,
+    .critical_simulation_comm = 0.0,
+    .critical_simulation_comm_wall = 0.0,
 #endif
 #if defined(PARSEC_SIM)
     .largest_simulation_date = 0,
@@ -1763,6 +1767,14 @@ remote_dep_release_incoming(parsec_execution_stream_t* es,
 #if defined(PARSEC_SIM_COMM)
     task.sim_exec_comm = es->sim_exec_comm;
 #endif /* PARSEC_SIM_COMM */
+#if defined(PARSEC_SIM_TIME) || defined(PARSEC_SIM_COMM)
+    task.critical_priority = 0;
+    if( NULL != task.task_class->iterate_successors ) {
+        task.task_class->iterate_successors(es, &task, PARSEC_ACTION_DEPS_MASK,
+                parsec_max_priority, &task.critical_priority);
+    }
+    task.critical = origin->msg.critical;
+#endif /* PARSEC_SIM_TIME || PARSEC_SIM_COMM */
 
 #ifdef PARSEC_DIST_COLLECTIVES
     /* Corresponding comment below on the propagation part */

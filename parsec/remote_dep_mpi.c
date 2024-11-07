@@ -184,9 +184,13 @@ parsec_execution_stream_t parsec_comm_es = {
     .scheduler_object = NULL,
 #if defined(PARSEC_SIM_TIME)
     .largest_simulation_time = 0.0,
+    .critical_simulation_time = 0.0,
+    .critical_simulation_time_wall = 0.0,
 #endif
 #if defined(PARSEC_SIM_COMM)
     .largest_simulation_comm = 0.0,
+    .critical_simulation_comm = 0.0,
+    .critical_simulation_comm_wall = 0.0,
 #endif
 #if defined(PARSEC_SIM)
     .largest_simulation_date = 0,
