@@ -467,7 +467,6 @@ remote_dep_mpi_retrieve_datatype(parsec_execution_stream_t *eu,
     }
     output->data.data = NULL;
 
-    if( deps->max_priority < newcontext->priority ) deps->max_priority = newcontext->priority;
     deps->incoming_mask |= (1U << dep->dep_datatype_index);
     deps->root           = src_rank;
     return PARSEC_ITERATE_STOP;
@@ -597,6 +596,7 @@ remote_dep_get_datatypes(parsec_execution_stream_t* es,
      * from the predecessor.
      */
     origin->outgoing_mask = origin->incoming_mask;  /* safekeeper */
+    origin->max_priority = origin->msg.max_priority;
     return 0;
 }
 

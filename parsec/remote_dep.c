@@ -200,7 +200,9 @@ inline void remote_deps_free(parsec_remote_deps_t* deps)
         if( 0 == deps->output[k].count_bits ) continue;
         for(a = 0; a < (parsec_remote_dep_context.max_nodes_number + 31)/32; a++)
             deps->output[k].rank_bits[a] = 0;
+        deps->output[k].deps_mask  = 0;
         deps->output[k].count_bits = 0;
+        deps->output[k].priority   = 0xffffffff;
 #if defined(PARSEC_DEBUG_PARANOID)
         deps->output[k].data.data   = NULL;
         deps->output[k].data.arena  = NULL;
@@ -214,6 +216,7 @@ inline void remote_deps_free(parsec_remote_deps_t* deps)
     memset( &deps->msg, 0, sizeof(remote_dep_wire_activate_t) );
 #endif
     deps->taskpool      = NULL;
+    deps->max_priority  = 0xffffffff;
     parsec_lifo_push(deps->origin, (parsec_list_item_t*)deps);
 }
 
@@ -389,21 +392,25 @@ parsec_gather_collective_pattern(parsec_execution_stream_t *es,
     struct remote_dep_output_param_s* output = &deps->output[dep->dep_datatype_index];
     uint32_t _array_mask;
     int _array_pos, _bit_pos;
-    remote_dep_rank_to_bit(dst_rank, deps->root, es->virtual_process->parsec_context->nb_nodes, &_array_pos, &_bit_pos);
-    _array_mask = ((uint32_t)1) << _bit_pos;
 
-    if( dst_rank == es->virtual_process->parsec_context->my_rank )
-        deps->outgoing_mask |= (1 << dep->dep_datatype_index);
+    if( dst_rank != src_rank ) {
+        remote_dep_rank_to_bit(dst_rank, deps->root, es->virtual_process->parsec_context->nb_nodes, &_array_pos, &_bit_pos);
+        _array_mask = ((uint32_t)1) << _bit_pos;
 
-    if( !(output->rank_bits[_array_pos] & _array_mask) ) {  /* new participant */
-        output->rank_bits[_array_pos] |= _array_mask;
-        output->deps_mask |= (1 << dep->dep_index);
-        output->count_bits++;
-    }
-    if(newcontext->priority > output->priority) {  /* select the priority */
-        output->priority = newcontext->priority;
-        if(newcontext->priority > deps->max_priority)
-            deps->max_priority = newcontext->priority;
+        if( dst_rank == es->virtual_process->parsec_context->my_rank )
+            deps->outgoing_mask |= (1 << dep->dep_datatype_index);
+
+        if( !(output->rank_bits[_array_pos] & _array_mask) ) {  /* new participant */
+            output->rank_bits[_array_pos] |= _array_mask;
+            output->deps_mask |= (1 << dep->dep_index);
+            output->count_bits++;
+        }
+
+        if(newcontext->priority > output->priority) {  /* select the priority */
+            output->priority = newcontext->priority;
+            if(newcontext->priority > deps->max_priority)
+                deps->max_priority = newcontext->priority;
+        }
     }
     (void)oldcontext; (void)dst_vpid; (void)data; (void)src_rank;
     return PARSEC_ITERATE_CONTINUE;
@@ -472,6 +479,7 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
     remote_deps->msg.deps        = (uintptr_t)remote_deps;
     remote_deps->msg.taskpool_id   = task->taskpool->taskpool_id;
     remote_deps->msg.task_class_id = tc->task_class_id;
+    remote_deps->msg.max_priority  = remote_deps->max_priority;
     for(i = 0; i < tc->nb_locals; i++) {
         remote_deps->msg.locals[i] = task->locals[i];
     }

@@ -49,6 +49,7 @@ typedef struct remote_dep_wire_activate_s {
     remote_dep_datakey_t output_mask;  /**< the mask of the output dependencies satisfied by this activation message */
     uint32_t             taskpool_id;
     uint32_t             task_class_id;
+    int32_t              max_priority;
     uint32_t             length;
     parsec_assignment_t  locals[MAX_LOCAL_COUNT];
 #if defined(PARSEC_STATS_COMM)

@@ -1817,12 +1817,12 @@ parsec_release_dep_fct(parsec_execution_stream_t *es,
                     assert(output->data.data == data->data);
                 }
                 output->count_bits++;
-                if(newcontext->priority > output->priority) {
-                    output->priority = newcontext->priority;
-                    if(newcontext->priority > arg->remote_deps->max_priority)
-                        arg->remote_deps->max_priority = newcontext->priority;
-                }
             }  /* otherwise the bit is already flipped, the peer is already part of the propagation. */
+            if(newcontext->priority > output->priority) {
+                output->priority = newcontext->priority;
+                if(newcontext->priority > arg->remote_deps->max_priority)
+                    arg->remote_deps->max_priority = newcontext->priority;
+            }
         }
     }
 #else
