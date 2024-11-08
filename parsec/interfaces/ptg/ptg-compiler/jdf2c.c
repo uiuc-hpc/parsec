@@ -4552,6 +4552,18 @@ static void jdf_generate_constructor( const jdf_t* jdf )
         coutput("#  endif /* defined(PARSEC_PROF_TRACE) */\n");
     }
 
+    /* TODO: largest_simulation_time is _Atomic(kahan_sum_t), should use atomic_init */
+    coutput("  /* If critical path execution simulation enabled, the initial time */\n"
+            "#  if defined(PARSEC_SIM_TIME)\n"
+            "  __parsec_tp->super.super.largest_simulation_time = KAHAN_SUM_INITIALIZER;\n"
+            "  __parsec_tp->super.super.initial_simulation_time = KAHAN_SUM_INITIALIZER;\n"
+            "#  endif /* defined(PARSEC_SIM_TIME) */\n");
+    coutput("  /* If critical path execution + communication simulation enabled, the initial time */\n"
+            "#  if defined(PARSEC_SIM_COMM)\n"
+            "  __parsec_tp->super.super.largest_simulation_comm = KAHAN_SUM_INITIALIZER;\n"
+            "  __parsec_tp->super.super.initial_simulation_comm = KAHAN_SUM_INITIALIZER;\n"
+            "#  endif /* defined(PARSEC_SIM_COMM) */\n");
+
     for(jdf_function_entry_t *f = jdf->functions; f != NULL; f = f->next) {
         coutput("  PARSEC_AYU_REGISTER_TASK(&%s_%s);\n",
                 jdf_basename, f->fname);
