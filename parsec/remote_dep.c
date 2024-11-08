@@ -173,6 +173,7 @@ parsec_remote_deps_t* remote_deps_allocate( parsec_lifo_t* lifo )
             remote_deps->output[i].deps_mask  = 0;
             remote_deps->output[i].count_bits = 0;
             remote_deps->output[i].priority   = 0xffffffff;
+            remote_deps->output[i].prio_rank  = -1;
             ptr += rank_bit_size;
         }
         /* fw_mask immediatly follows outputs */
@@ -203,6 +204,7 @@ inline void remote_deps_free(parsec_remote_deps_t* deps)
         deps->output[k].deps_mask  = 0;
         deps->output[k].count_bits = 0;
         deps->output[k].priority   = 0xffffffff;
+        deps->output[k].prio_rank  = -1;
 #if defined(PARSEC_DEBUG_PARANOID)
         deps->output[k].data.data   = NULL;
         deps->output[k].data.arena  = NULL;
@@ -408,6 +410,7 @@ parsec_gather_collective_pattern(parsec_execution_stream_t *es,
 
         if(newcontext->priority > output->priority) {  /* select the priority */
             output->priority = newcontext->priority;
+            output->prio_rank = dst_rank;
             if(newcontext->priority > deps->max_priority)
                 deps->max_priority = newcontext->priority;
         }
@@ -461,8 +464,8 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
                                uint32_t propagation_mask)
 {
     const parsec_task_class_t* tc = task->task_class;
-    int i, my_idx, idx, current_mask, keeper = 0;
-    unsigned int array_index, count, bit_index;
+    int i, my_idx, idx, array_index, bank, keeper = 0;
+    uint32_t current_mask, count, bit_index, start_bit;
     struct remote_dep_output_param_s* output;
 
     assert(es->virtual_process->parsec_context->nb_nodes > 1);
@@ -529,13 +532,16 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
         }
 
         for( array_index = count = 0; count < remote_deps->output[i].count_bits; array_index++ ) {
-            current_mask = output->rank_bits[array_index];
+            remote_dep_index_to_bank(array_index, output->prio_rank, es->virtual_process->parsec_context->nb_nodes, &bank);
+            current_mask = output->rank_bits[bank];
+            remote_dep_index_start_bit(array_index, output->prio_rank, es->virtual_process->parsec_context->nb_nodes, &current_mask, &start_bit);
             if( 0 == current_mask ) continue;  /* no bits here */
-            for( bit_index = 0; current_mask != 0; bit_index++ ) {
+
+            for( bit_index = start_bit; current_mask != 0; bit_index++ ) {
                 if( !(current_mask & (1 << bit_index)) ) continue;
 
                 int rank;
-                remote_dep_bit_to_rank(array_index, bit_index, remote_deps->root, es->virtual_process->parsec_context->nb_nodes, &rank);
+                remote_dep_bit_to_rank(bank, bit_index, remote_deps->root, es->virtual_process->parsec_context->nb_nodes, &rank);
                 assert((rank >= 0) && (rank < es->virtual_process->parsec_context->nb_nodes));
 
                 current_mask ^= (1 << bit_index);
@@ -547,6 +553,7 @@ int parsec_remote_dep_activate(parsec_execution_stream_t* es,
                     continue;
                 }
                 idx++;
+
                 if(my_idx == -1) {
                     PARSEC_DEBUG_VERBOSE(20, parsec_comm_output_stream, "[%d:%d] task %s my_idx %d idx %d rank %d -- skip",
                             remote_deps->root, i, tmp, my_idx, idx, rank);

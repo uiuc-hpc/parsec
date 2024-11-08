@@ -126,6 +126,10 @@
 #cmakedefine PARSEC_HAVE_LCI
 #cmakedefine PARSEC_HAVE_AYUDAME
 
+/* Bcast options */
+#cmakedefine PARSEC_BCAST_ROTATE_ROOT
+#cmakedefine PARSEC_BCAST_ROTATE_PRIO
+
 /* LCI debug */
 #cmakedefine PARSEC_LCI_RETRY_HISTOGRAM
 #cmakedefine PARSEC_LCI_HANDLER_COUNT

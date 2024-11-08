@@ -127,6 +127,7 @@ struct remote_dep_output_param_s {
                                                        propagated by this message. The bitmask uses
                                                        depedencies indexes not flow indexes. */
     int32_t                              priority;    /**< the priority of the message */
+    int32_t                              prio_rank;   /**< the rank with max priority */
     uint32_t                             count_bits;  /**< The number of participants */
     uint32_t*                            rank_bits;   /**< The array of bits representing the propagation path */
 };
@@ -450,13 +451,12 @@ extern int parsec_comm_puts;
 extern int parsec_param_enable_mpi_overtake;
 #endif
 
-#define PARSEC_BCAST_ROTATE_ROOT 0
 static inline void
 remote_dep_rank_to_bit(int rank, int root, int nb_nodes, int *bank, int *bit)
 {
     int _rank;
 
-#if       PARSEC_BCAST_ROTATE_ROOT
+#ifdef    PARSEC_BCAST_ROTATE_ROOT
     _rank = (rank + nb_nodes - root) % nb_nodes;
 #else  /* PARSEC_BCAST_ROTATE_ROOT */
     _rank = rank;
@@ -469,11 +469,54 @@ static inline void
 remote_dep_bit_to_rank(int bank, int bit, int root, int nb_nodes, int *rank)
 {
     int _rank = bank * (8 * sizeof(uint32_t)) + bit;
-#if       PARSEC_BCAST_ROTATE_ROOT
+#ifdef    PARSEC_BCAST_ROTATE_ROOT
     *rank = (_rank + root) % nb_nodes;
 #else  /* PARSEC_BCAST_ROTATE_ROOT */
     *rank = _rank;
 #endif /* PARSEC_BCAST_ROTATE_ROOT */
+}
+
+static inline void
+remote_dep_index_to_bank(int index, int prio_rank, int nb_nodes,
+                         int *bank)
+{
+#ifdef    PARSEC_BCAST_ROTATE_PRIO
+    int prio_bank = prio_rank / 32;
+    int bank_count = (nb_nodes + 31) / 32;
+    *bank = (index + prio_bank) % bank_count;
+#else  /* PARSEC_BCAST_ROTATE_PRIO */
+    *bank = index;
+#endif /* PARSEC_BCAST_ROTATE_PRIO */
+}
+
+static inline void
+remote_dep_index_start_bit(int index, int prio_rank, int nb_nodes,
+                           uint32_t *current_mask, uint32_t *start_bit)
+{
+#ifdef    PARSEC_BCAST_ROTATE_PRIO
+    uint32_t prio_bit = prio_rank % 32;
+    int bank_count = (nb_nodes + 31) / 32;
+    if( index == 0 ) {
+        /* first iteration, start at prio_rank bit */
+        *start_bit = prio_bit;
+        /* mask off bits before prio_rank */
+        *current_mask &= (UINT32_MAX << prio_bit);
+    } else if( index == bank_count ) {
+        /* last iteration, start at first bit */
+        *start_bit = 0;
+        /* mask off bits after prio_rank
+         * this has undefined behavior if prio_bit == 0,
+         * but we should never hit this code path when that happens
+         * since the loop will terminate before */
+        *current_mask &= (UINT32_MAX >> (32 - prio_bit));
+    } else {
+        /* other iterations, start at first bit
+         * we don't need to mask off anything */
+        *start_bit = 0;
+    }
+#else  /* PARSEC_BCAST_ROTATE_PRIO */
+    *start_bit = 0;
+#endif /* PARSEC_BCAST_ROTATE_PRIO */
 }
 
 #endif /* __USE_PARSEC_REMOTE_DEP_H__ */
