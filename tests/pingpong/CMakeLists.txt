@@ -11,3 +11,6 @@ target_ptg_sources(bw_overlap_test PRIVATE "bandwidth_overlap.jdf")
 
 parsec_addtest(C bcast_test)
 target_ptg_sources(bcast_test PRIVATE "bcast.jdf")
+
+parsec_addtest(C bcast_bug_test)
+target_ptg_sources(bcast_bug_test PRIVATE "bcast_bug.jdf")

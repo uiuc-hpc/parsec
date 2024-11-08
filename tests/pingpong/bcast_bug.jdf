@@ -1,0 +1,182 @@
+extern "C" %{
+/*
+ * Copyright (c) 2019 The Universiy of Tennessee and The Universiy
+ *                    of Tennessee Research Foundation. All rights
+ *                    reserved.
+ */
+
+/* includes parsec headers */
+#include <parsec.h>
+#include <parsec/data_dist/matrix/two_dim_rectangle_cyclic.h>
+#include <parsec/data_dist/matrix/matrix.h>
+#include <parsec/vpmap.h>
+#include <parsec/parsec_stats.h>
+
+/* system and io */
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <time.h>
+#include <stdalign.h>
+
+#if defined(PARSEC_HAVE_MPI)
+#include <mpi.h>
+#elif defined(PARSEC_HAVE_LCI)
+#include <lci.h>
+#endif
+
+%}
+
+descA       [ type = "parsec_tiled_matrix_dc_t*" ]
+
+start(i)
+i = 0 .. 0
+: descA(0, i)
+RW A <- descA(0, i)
+     -> A task_x(1)
+     -> A task_y(2)
+RW B <- descA(0, i)
+     -> B task_x(1)
+; 2
+BODY
+    printf("%d: have A and B\n", es->virtual_process->parsec_context->my_rank);
+    fflush(stdout);
+END
+
+task_x(i)
+i = 1 .. 1
+: descA(0, i)
+READ A <- A start(0)
+READ B <- B start(0)
+; 0
+BODY
+    printf("%d: have A and B\n", es->virtual_process->parsec_context->my_rank);
+    fflush(stdout);
+END
+
+task_y(i)
+i = 2 .. 2
+: descA(0, i)
+READ A <- A start(0)
+; 1
+BODY
+    printf("%d: have A\n", es->virtual_process->parsec_context->my_rank);
+    fflush(stdout);
+END
+
+
+extern "C" %{
+
+/**
+ * @param [inout] the parsec object to destroy
+*/
+void parsec_bcast_bug_Destruct(parsec_taskpool_t *taskpool)
+{
+  parsec_bcast_bug_taskpool_t *bcast_bug_taskpool = (parsec_bcast_bug_taskpool_t *)taskpool;
+  parsec_matrix_del2arena(&bcast_bug_taskpool->arenas_datatypes[PARSEC_bcast_bug_DEFAULT_ARENA]);
+  parsec_taskpool_free(taskpool);
+}
+
+
+int main(int argc, char *argv[])
+{
+    parsec_context_t* parsec;
+    parsec_taskpool_t* bcast_bug_taskpool;
+    parsec_bcast_bug_taskpool_t* taskpool = NULL;
+    int rank, nodes;
+    int size = 128;
+
+    /* Default */
+    int cores = 1;
+
+#if   defined(PARSEC_HAVE_MPI)
+    {
+        int provided;
+        MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    }
+    MPI_Comm_size(MPI_COMM_WORLD, &nodes);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#elif defined(PARSEC_HAVE_LCI)
+    LCI_initialize();
+    nodes = LCI_NUM_PROCESSES;
+    rank = LCI_RANK;
+#else
+    nodes = 1;
+    rank = 0;
+#endif
+
+    if( nodes != 3 ) {
+        /* need exactly 3 nodes */
+        printf("Need 3 nodes, have %d\n", nodes);
+        exit(-1);
+    }
+
+    /* Initialize PaRSEC */
+    parsec = parsec_init(cores, &argc, &argv);
+
+    if( NULL == parsec ) {
+        /* Failed to correctly initialize. In a correct scenario report
+         * upstream, but in this particular case bail out.
+         */
+        exit(-1);
+    }
+
+    printf("%d: starting\n", rank);
+
+    /* Get real number of cores */
+    cores = vpmap_get_nb_total_threads();
+
+    /* initializing matrix structure */
+    two_dim_block_cyclic_t dcA;
+    two_dim_block_cyclic_init(&dcA, matrix_RealDouble, matrix_Tile,
+                              nodes, rank, 1, size, 1, size*nodes, 0, 0,
+                              1, size*nodes, 1, 1, 1);
+    dcA.mat = parsec_data_allocate((size_t)dcA.super.nb_local_tiles *
+                                   (size_t)dcA.super.bsiz *
+                                   (size_t)parsec_datadist_getsizeoftype(dcA.super.mtype));
+    parsec_data_collection_set_key((parsec_data_collection_t*)&dcA, "dcA");
+
+    taskpool = parsec_bcast_bug_new((parsec_tiled_matrix_dc_t *)&dcA);
+    bcast_bug_taskpool = (parsec_taskpool_t*)taskpool;
+
+    parsec_matrix_add2arena( &taskpool->arenas_datatypes[PARSEC_bcast_bug_DEFAULT_ARENA],
+                             parsec_datatype_double_t, matrix_UpperLower,
+                             1, 1, size, 1,
+                             PARSEC_ARENA_ALIGNMENT_SSE, -1 );
+
+#ifdef PARSEC_STATS_SCHED
+    parsec_sched_stat_reset(parsec);
+#endif
+#ifdef PARSEC_STATS_COMM
+    parsec_comm_stat_reset(parsec);
+#endif
+
+    parsec_context_add_taskpool(parsec, bcast_bug_taskpool);
+    parsec_context_start(parsec);
+    parsec_context_wait(parsec);
+
+#ifdef PARSEC_STATS_SCHED
+    parsec_sched_stat_print(parsec);
+#endif
+#ifdef PARSEC_STATS_COMM
+    parsec_comm_stat_print(parsec);
+#endif
+
+    parsec_bcast_bug_Destruct(bcast_bug_taskpool);
+
+    parsec_tiled_matrix_dc_destroy((parsec_tiled_matrix_dc_t*)&dcA);
+
+    /* Clean up parsec*/
+    parsec_fini(&parsec);
+
+#if   defined(PARSEC_HAVE_MPI)
+    MPI_Finalize();
+#elif defined(PARSEC_HAVE_LCI)
+    LCI_finalize();
+#endif
+
+    return 0;
+}
+
+%}
