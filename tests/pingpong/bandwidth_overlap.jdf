@@ -26,8 +26,18 @@ extern "C" %{
 #include <lci.h>
 #endif
 
-static inline void kernel(const parsec_execution_stream_t *es,
-                          double *restrict T, int size, int intensity, int t)
+typedef struct {
+    alignas(64) double value;
+} double64;
+
+double64 **kernel_time;
+
+static inline double timespec_to_ns(const struct timespec *ts)
+{
+    return (double)ts->tv_sec * 1e9 + (double)ts->tv_nsec;
+}
+
+static inline void kernel(double *restrict T, int size, int intensity, int t)
 {
     for (int j = 0; j < intensity; j++)
         for (int i = 0; i < size; i++)
@@ -59,7 +69,15 @@ CTL C <- (sync > 0 && t >= sync) ? C exec_sync(t-sync, c)
       -> C exec_sync(t, c)
 ; loops-t
 BODY
-    kernel(es, T, size, intensity, t);
+    struct timespec tstart, tend;
+    double time;
+
+    clock_gettime(CLOCK_MONOTONIC, &tstart);
+    kernel(T, size, intensity, t);
+    clock_gettime(CLOCK_MONOTONIC, &tend);
+
+    time = timespec_to_ns(&tend) - timespec_to_ns(&tstart);
+    kernel_time[es->virtual_process->vp_id][es->th_id].value += time;
 END
 
 /* If sync > 0, ensures that ping_pong(t+sync, 0 .. frags-1, c) cannot start
@@ -94,10 +112,10 @@ END
 extern "C" %{
 
 /**
- * @brief bandwidth,  no-blocking 
+ * @brief bandwidth,  no-blocking
  *
- * @param [in] dcA: data 
- * @param [in] loops: loops of bandwidth 
+ * @param [in] dcA: data
+ * @param [in] loops: loops of bandwidth
  * @param [in] frags: fragments
  * @param [in] ws: number of process
  * @param [in] size: number of doubles
@@ -143,12 +161,12 @@ void parsec_bandwidth_overlap_Destruct(parsec_taskpool_t *taskpool)
 }
 
 /**
- * @brief bandwidth 
- * 
- * @param [in] dcA: data 
+ * @brief bandwidth
+ *
+ * @param [in] dcA: data
  * @param [in] loops: loops of bandwidth
  * @param [in] frags: fragments
- * @param [in] ws: number of process 
+ * @param [in] ws: number of process
  * @param [in] size: number of doubles
  */
 int parsec_bandwidth_overlap(parsec_context_t *parsec,
@@ -169,11 +187,6 @@ int parsec_bandwidth_overlap(parsec_context_t *parsec,
   }
 
   return 0;
-}
-
-static inline double timespec_to_ns(const struct timespec *ts)
-{
-    return (double)ts->tv_sec * 1e9 + (double)ts->tv_nsec;
 }
 
 typedef struct {
@@ -198,18 +211,28 @@ static inline SI_t to_SI(double value)
     return (SI_t){ value/pow(1000.0, exponent), SI_prefixes[index] };
 }
 
+#if defined(PARSEC_HAVE_LCI)
+static void lci_sum_op(void *dst, const void *src, size_t count)
+{
+    double *d = dst;
+    const double *s = src;
+    *d += *s;
+}
+#endif /* PARSEC_HAVE_LCI */
+
 int main(int argc, char *argv[])
 {
     parsec_context_t* parsec;
     parsec_taskpool_t* bandwidth_overlap_taskpool;
     parsec_bandwidth_overlap_taskpool_t* taskpool = NULL;
     int rank, nodes, ch, i;
+    int vp, th, th_arr_size;
     int pargc = 0, dashdash = -1;
     char **pargv;
     struct timespec tstart, tend;
-    double t, bw, flop;
-    size_t tasks;
-    SI_t si_bw, si_flop, si_flops;
+    double t, exec, lat, rate, bw, flop, task, efficiency;
+    size_t msize, ntasks, messages;
+    SI_t si_lat, si_rate, si_bw, si_flop, si_flops, si_task;
 
     /* Default */
     int loops = 100;
@@ -219,7 +242,7 @@ int main(int argc, char *argv[])
     int nb_runs = 1;
     int intensity = 1;
     int sync = 0;
-    int chains = 0;
+    int chains = 1;
 
 #if   defined(PARSEC_HAVE_MPI)
     {
@@ -254,6 +277,7 @@ int main(int argc, char *argv[])
                         "-l : size, size of message (default: 1024 * sizeof(double))\n"
                         "-i : intensity, number of flops per 8 bytes (default: 1)\n"
                         "-s : sync, loops ahead to sync with, 0 syncs data (default: 0)\n"
+                        "-a : chainsets, sets of chains to start round-robin (default: 1)\n"
                         "-c : number of cores used (default: 1)\n"
                         "-e : number of runs (default: 1)\n"
                         "\n");
@@ -304,6 +328,12 @@ int main(int argc, char *argv[])
     /* Get real number of cores */
     cores = vpmap_get_nb_total_threads();
 
+    kernel_time = malloc(sizeof(*kernel_time) * vpmap_get_nb_vp());
+    for(vp = 0; vp < vpmap_get_nb_vp(); vp++) {
+        th_arr_size = sizeof(**kernel_time) * vpmap_get_nb_threads_in_vp(vp);
+        kernel_time[vp] = aligned_alloc(64, th_arr_size);
+    }
+
     /* initializing matrix structure */
     two_dim_block_cyclic_t dcA;
     two_dim_block_cyclic_init(&dcA, matrix_RealDouble, matrix_Tile,
@@ -326,6 +356,9 @@ int main(int argc, char *argv[])
                                  1, 1, size, 1,
                                  PARSEC_ARENA_ALIGNMENT_SSE, -1 );
 
+        for(vp = 0; vp < vpmap_get_nb_vp(); vp++)
+            for(th = 0; th < vpmap_get_nb_threads_in_vp(vp); th++)
+                kernel_time[vp][th].value = 0.0;
 #ifdef PARSEC_STATS_SCHED
         parsec_sched_stat_reset(parsec);
 #endif
@@ -354,6 +387,16 @@ int main(int argc, char *argv[])
 #endif  /* defined(PARSEC_HAVE_MPI) */
         clock_gettime(CLOCK_MONOTONIC, &tend);
 
+        exec = 0.0;
+        for(vp = 0; vp < vpmap_get_nb_vp(); vp++)
+            for(th = 0; th < vpmap_get_nb_threads_in_vp(vp); th++)
+                exec += kernel_time[vp][th].value;
+#if defined(PARSEC_HAVE_MPI)
+        MPI_Allreduce(MPI_IN_PLACE, &exec, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+#elif defined(PARSEC_HAVE_LCI)
+        lci_allreducem(&exec, sizeof(double), lci_sum_op);
+#endif  /* defined(PARSEC_HAVE_MPI) */
+
 #ifdef PARSEC_STATS_SCHED
         parsec_sched_stat_print(parsec);
 #endif
@@ -362,22 +405,46 @@ int main(int argc, char *argv[])
 #endif
 
         if( 0 == rank ) {
+            exec *= 1e-9;
             t = (timespec_to_ns(&tend) - timespec_to_ns(&tstart)) * 1e-9;
-            tasks = (size_t)loops * (size_t)frags * (size_t)chains;
-            bw = (double)(tasks * (size_t)size * sizeof(double) * 8) / t;
-            flop = (double)(tasks * 2 * (size_t)intensity * (size_t)size);
-            si_bw = to_SI(bw);
-            si_flop = to_SI(flop);
+            msize    = sizeof(double[size]);
+            ntasks   = (size_t)loops * (size_t)frags * (size_t)chains;
+            messages = (size_t)(loops-1) * (size_t)frags * (size_t)chains;
+
+            lat  = t / (double)(loops-1);
+            rate = (double)messages / (t * (double)nodes);
+            bw   = rate * (double)(msize * 8);
+            flop = (double)(ntasks * 2 * (size_t)intensity * (size_t)size);
+            task = exec / (double)ntasks;
+            efficiency = exec / (t * (double)nodes * (double)cores);
+
+            si_lat   = to_SI(lat);
+            si_rate  = to_SI(rate);
+            si_bw    = to_SI(bw);
+            si_flop  = to_SI(flop);
             si_flops = to_SI(flop/t);
-            printf("%d %d %d %zu: %08.4g s, %7.3f %sbit/s, %7.3f %sFLOP, %7.3f %sFLOP/s\n",
-                   loops, frags, chains, (size_t)size*sizeof(double), t,
-                   si_bw.value, si_bw.prefix,
-                   si_flop.value, si_flop.prefix,
-                   si_flops.value, si_flops.prefix);
+            si_task  = to_SI(task);
+            efficiency *= 100.0;
+
+            printf("%d %d %d %zu: %#08.4g s, %7.3f %ss, %7.3f %smsg/s, "
+                   "%7.3f %sbit/s, %7.3f %sFLOP, %7.3f %sFLOP/s, "
+                   "%7.3f %ss/task, %6.3f%% efficiency\n",
+                   loops, frags, chains, msize, t,
+                   si_lat.value,   si_lat.prefix,
+                   si_rate.value,  si_rate.prefix,
+                   si_bw.value,    si_bw.prefix,
+                   si_flop.value,  si_flop.prefix,
+                   si_flops.value, si_flops.prefix,
+                   si_task.value,  si_task.prefix,
+                   efficiency);
         }
 
         parsec_bandwidth_overlap_Destruct(bandwidth_overlap_taskpool);
     }
+
+    for(vp = 0; vp < vpmap_get_nb_vp(); vp++)
+        free(kernel_time[vp]);
+    free(kernel_time);
 
     parsec_tiled_matrix_dc_destroy((parsec_tiled_matrix_dc_t*)&dcA);
 
