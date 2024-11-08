@@ -40,6 +40,7 @@ void parsec_sched_stat_print(const parsec_context_t *context)
     double time_execute = 0.0;
     double time_select  = 0.0;
     double time_wait    = 0.0;
+    double time_max     = -INFINITY;
     for (int32_t vpid = 0; vpid < context->nb_vp; vpid++) {
         parsec_vp_t *vp = context->virtual_processes[vpid];
         for (int32_t thid = 0; thid < vp->nb_cores; thid++) {
@@ -47,13 +48,17 @@ void parsec_sched_stat_print(const parsec_context_t *context)
             time_execute += es->time.execute.sum;
             time_select  += es->time.select.sum;
             time_wait    += es->time.wait.sum;
+            if (es->time.wait.sum > time_max)
+                time_max = es->time.wait.sum;
         }
     }
     for (int i = 0; i < context->nb_nodes; i++) {
         fflush(stdout);
         if (i == context->my_rank) {
-            fprintf(stdout, "[%d]:\texecute(%f)\tselect(%f)\twait(%f)\n",
-                    context->my_rank, time_execute, time_select, time_wait);
+            fprintf(stdout, "[%d]:\t"
+                            "execute(%f)\tselect(%f)\twait(%f)\tmax(%f)\n",
+                    context->my_rank,
+                    time_execute, time_select, time_wait, time_max);
             fflush(stdout);
         }
 #if defined(DISTRIBUTED)
