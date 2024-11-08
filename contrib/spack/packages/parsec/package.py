@@ -21,7 +21,7 @@ class Parsec(CMakePackage):
     patch('profile2h5.patch', when='@devel-profiling')
     version('1.1.0', '6c8b2b8d6408004bdb4c6d9134da74a4')
 
-    variant('transport', default='mpi', values=('mpi', 'lci', 'none'), multi=False,
+    variant('transport', default='mpi', values=('none', 'mpi', 'lci'), multi=False,
             description='Inter-node dependency transport backend')
     variant('lci-static', default=False, description='Static link to LCI')
     variant('lci-msg-limit', default=False, description='Limit concurrent messages')
@@ -38,6 +38,10 @@ class Parsec(CMakePackage):
     variant('graph', default=False, description='Graphing support')
     variant('stats', description='Lightweight timing statistics',
             values=any_combination_of('sched', 'comm', 'tc', 'graph'))
+    variant('sim', description='Critical path simulation',
+            values=any_combination_of('theo', 'time', 'comm'))
+    variant('bcast-rotate', default='none', values=('none', 'root', 'priority'),
+            multi=False, description='Broadcast rotation type')
 
     conflicts('+lci-static', when='transport=mpi')
     conflicts('+debug-lci', when='transport=mpi')
@@ -92,11 +96,17 @@ class Parsec(CMakePackage):
             self.define_from_variant('PARSEC_LCI_CB_HASH_TABLE', 'lci-cbtable'),
             self.define_from_variant('PARSEC_LCI_MESSAGE_LIMIT', 'lci-msg-limit'),
             self.define('PARSEC_DIST_COLLECTIVES', True),
+            self.define('PARSEC_BCAST_ROTATE',
+                        False if self.spec.variants['bcast-rotate'].value == 'none'
+                        else self.spec.variants['bcast-rotate'].value),
             self.define('PARSEC_STATS', 'none' not in self.spec.variants['stats'].value),
             self.define('PARSEC_STATS_SCHED', 'sched' in self.spec.variants['stats'].value),
             self.define('PARSEC_STATS_COMM', 'comm' in self.spec.variants['stats'].value),
             self.define('PARSEC_STATS_TC', 'tc' in self.spec.variants['stats'].value),
             self.define('PARSEC_STATS_GRAPH', 'graph' in self.spec.variants['stats'].value),
+            self.define('PARSEC_SIM', 'theo' in self.spec.variants['sim'].value),
+            self.define('PARSEC_SIM_TIME', 'time' in self.spec.variants['sim'].value),
+            self.define('PARSEC_SIM_COMM', 'comm' in self.spec.variants['sim'].value),
         ]
         # lci uses a default eager limit of 12 KiB - 108 bytes
         if self.spec.variants['transport'].value == 'lci':
